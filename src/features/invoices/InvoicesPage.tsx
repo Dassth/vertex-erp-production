@@ -5,6 +5,7 @@ import { useStore } from '../../store/store'
 import type { VertexDB } from '../../lib/types'
 import { fmtDate, fmtDateTime, moneyPaise, moneyShort } from '../../lib/format'
 import { DELIVERY_PENDING_MESSAGE, isReceived, orderInvoiceSummary } from '../../lib/billing'
+import { confirmDispatchReceived } from '../../domain/dispatch'
 import type { OrderInvoiceStatus, OrderInvoiceSummary } from '../../lib/billing'
 import { Badge, Button, Card, CardHead, EmptyState, ProgressBar, SearchInput, Select } from '../../components/ui'
 import { Detail, LinkButton, PageHeader, StatStrip, StatTile, useDocumentTitle } from '../../components/page'
@@ -170,7 +171,7 @@ export function InvoicesPage() {
 }
 
 function OrderInvoices({ row, read, onBack, onPreview }: { row: OrderInvoiceSummary; read: () => VertexDB; onBack: () => void; onPreview: (d: PreviewDoc) => void }) {
-  const { can } = useStore()
+  const { can, run, pushToast } = useStore()
   const pending = useDeliveryPendingMessage()
   const { order, shipments, dispatchedQty, receivedQty, awaitingQty, remainingQty, billed, receivedBilled, status } = row
   const receivedCount = shipments.filter((x) => isReceived(x.dispatch) && x.invoice).length
@@ -308,9 +309,13 @@ function OrderInvoices({ row, read, onBack, onPreview }: { row: OrderInvoiceSumm
                             Awaiting receipt
                           </Badge>
                           {can('dispatch') ? (
-                            <LinkButton to={`/dispatch?order=${order.id}`} variant="ghost" className="mt-1 block">
+                            <Button variant="ghost" className="mt-1 block" onClick={async () => {
+                              const r = await run(confirmDispatchReceived(d.id))
+                              if (!r.ok) pushToast({ title: 'Confirmation failed', message: r.error, level: 'danger' })
+                              else pushToast({ title: 'Delivery confirmed', message: 'The dispatch has been marked as received.', level: 'success' })
+                            }}>
                               Confirm received…
-                            </LinkButton>
+                            </Button>
                           ) : null}
                         </>
                       )}
