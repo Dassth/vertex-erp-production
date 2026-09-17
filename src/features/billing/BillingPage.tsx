@@ -5,7 +5,6 @@ import { useStore } from '../../store/store'
 import type { VertexDB } from '../../lib/types'
 import { fmtDate, fmtDateTime, moneyPaise, moneyShort } from '../../lib/format'
 import { DELIVERY_PENDING_MESSAGE, isReceived, orderInvoiceSummary } from '../../lib/billing'
-import { confirmDispatchReceived } from '../../domain/dispatch'
 import type { OrderInvoiceStatus, OrderInvoiceSummary } from '../../lib/billing'
 import { Badge, Button, Card, CardHead, EmptyState, ProgressBar, SearchInput, Select } from '../../components/ui'
 import { Detail, LinkButton, PageHeader, StatStrip, StatTile, useDocumentTitle } from '../../components/page'
@@ -171,7 +170,7 @@ export function BillingPage() {
 }
 
 function OrderInvoices({ row, read, onBack, onPreview }: { row: OrderInvoiceSummary; read: () => VertexDB; onBack: () => void; onPreview: (d: PreviewDoc) => void }) {
-  const { can, run, pushToast } = useStore()
+  const { can } = useStore()
   const pending = useDeliveryPendingMessage()
   const { order, shipments, dispatchedQty, receivedQty, awaitingQty, remainingQty, billed, receivedBilled, status } = row
   const receivedCount = shipments.filter((x) => isReceived(x.dispatch) && x.invoice).length
@@ -304,25 +303,13 @@ function OrderInvoices({ row, read, onBack, onPreview }: { row: OrderInvoiceSumm
                           </span>
                         </>
                       ) : (
-                        <>
-                          <Badge tone="amber" dot>
-                            Awaiting receipt
-                          </Badge>
-                          {can('dispatch') ? (
-                            <Button size="sm" variant="secondary" className="mt-1.5 block" icon={<PackageCheck className="h-3.5 w-3.5" />} onClick={async (e) => {
-                              e.stopPropagation();
-                              const r = await run(confirmDispatchReceived(d.id))
-                              if (!r.ok) pushToast({ title: 'Confirmation failed', message: r.error, level: 'danger' })
-                              else pushToast({ title: 'Delivery confirmed', message: 'The dispatch has been marked as received.', level: 'success' })
-                            }}>
-                              Confirm received…
-                            </Button>
-                          ) : null}
-                        </>
+                        <Badge tone="amber" dot>
+                          Awaiting receipt
+                        </Badge>
                       )}
                     </td>
                     <td className="vx-td">
-                      {inv ? <InvoiceDocActions invoice={inv} onPreview={onPreview} downloadLabel="Download this dispatch invoice" /> : <span className="text-xs text-warn">Invoice record missing</span>}
+                      {inv ? <InvoiceDocActions alwaysAllow invoice={inv} onPreview={onPreview} downloadLabel="Download this dispatch invoice" /> : <span className="text-xs text-warn">Invoice record missing</span>}
                     </td>
                   </tr>
                 ))}
