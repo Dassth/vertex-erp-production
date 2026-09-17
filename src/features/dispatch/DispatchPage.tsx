@@ -402,24 +402,19 @@ function OrderDispatch({ order, onPreview, companyBlocked }: { order: Production
         {dispatches.length === 0 ? (
           <p className="px-5 py-6 text-center text-sm text-muted">No dispatches yet.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px]">
-              <thead>
-                <tr>
-                  <th className="vx-th">#</th>
-                  <th className="vx-th">Date</th>
-                  <th className="vx-th">Dispatch</th>
-                  <th className="vx-th text-right">Quantity</th>
-                  <th className="vx-th">Invoice</th>
-                  <th className="vx-th text-right">Total</th>
-                  <th className="vx-th">Delivery</th>
-                  <th className="vx-th text-right">Documents</th>
-                </tr>
-              </thead>
-              <tbody>
-                {dispatches.map((d) => {
-                  const inv = invoices.find((i) => i.id === d.invoiceId)
-                  return (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[500px]">
+                <thead>
+                  <tr>
+                    <th className="vx-th">#</th>
+                    <th className="vx-th">Date</th>
+                    <th className="vx-th">Dispatch</th>
+                    <th className="vx-th text-right">Quantity</th>
+                    <th className="vx-th">Delivery</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dispatches.map((d) => (
                     <tr key={d.id} className="vx-row">
                       <td className="vx-td vx-code">{d.seq}</td>
                       <td className="vx-td">{fmtDate(d.date)}</td>
@@ -428,8 +423,6 @@ function OrderDispatch({ order, onPreview, companyBlocked }: { order: Production
                         <span className="block text-2xs text-faint">{d.createdBy}</span>
                       </td>
                       <td className="vx-td text-right tabular-nums">{pieces(d.quantity)}</td>
-                      <td className="vx-td vx-code">{inv?.number ?? '—'}</td>
-                      <td className="vx-td text-right tabular-nums">{inv ? moneyPaise(inv.total) : '—'}</td>
                       <td className="vx-td">
                         {isReceived(d) ? (
                           <>
@@ -453,13 +446,11 @@ function OrderDispatch({ order, onPreview, companyBlocked }: { order: Production
                           </>
                         )}
                       </td>
-                      <td className="vx-td">{inv ? <InvoiceDocActions invoice={inv} onPreview={onPreview} /> : null}</td>
                     </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
         )}
       </Card>
 
