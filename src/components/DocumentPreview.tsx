@@ -174,17 +174,19 @@ export function InvoiceDocActions({
   size = 'sm',
   downloadLabel = 'Download PDF',
   className,
+  alwaysAllow,
 }: {
   invoice: Invoice
   onPreview: (doc: PreviewDoc) => void
   size?: ComponentProps<typeof Button>['size']
   downloadLabel?: string
   className?: string
+  alwaysAllow?: boolean
 }) {
   const { db } = useStore()
   const read = useLatestDb()
   const pending = useDeliveryPendingMessage()
-  const blocked = invoiceDownloadBlock(invoice, db.dispatches)
+  const blocked = alwaysAllow ? null : invoiceDownloadBlock(invoice, db.dispatches)
   return (
     <div className={className ?? 'flex flex-col items-end gap-1'}>
       <div className="flex flex-wrap justify-end gap-1">

@@ -229,6 +229,13 @@
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  input, textarea {
+    user-select: auto;
+    -webkit-user-select: auto;
   }
 
   /* Display and body are one continuous voice; the family never changes, only

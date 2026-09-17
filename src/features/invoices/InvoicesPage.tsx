@@ -135,11 +135,11 @@ export function InvoicesPage() {
                   </thead>
                   <tbody>
                     {filtered.map((r) => (
-                      <tr key={r.order.id} className="border-t border-rule hover:bg-surface-2">
+                      <tr key={r.order.id} onClick={() => set({ order: r.order.id }, true)} className="border-t border-rule hover:bg-surface-2 cursor-pointer transition-colors group">
                         <td className="vx-td">
-                          <button type="button" onClick={() => set({ order: r.order.id }, true)} className="vx-focus vx-code rounded-xs font-semibold text-accent-text hover:underline">
+                          <span className="vx-code font-semibold text-accent-text group-hover:underline">
                             {r.order.code}
-                          </button>
+                          </span>
                         </td>
                         <td className="vx-td">{r.order.customer.company}</td>
                         <td className="vx-td">{r.order.productName}</td>
