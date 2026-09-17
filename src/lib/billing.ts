@@ -212,8 +212,8 @@ export function isReceived(dispatch: Pick<Dispatch, 'receivedAt'> | undefined | 
 }
 
 /** Null when the invoice may be previewed or downloaded; otherwise the reason it may not. */
-export function invoiceDownloadBlock(_invoice: Pick<Invoice, 'dispatchId'>, _dispatches: Dispatch[]): string | null {
-  return null
+export function invoiceDownloadBlock(invoice: Pick<Invoice, 'dispatchId'>, dispatches: Dispatch[]): string | null {
+  return isReceived(dispatches.find((d) => d.id === invoice.dispatchId)) ? null : DELIVERY_PENDING_MESSAGE
 }
 
 /** Invoices of one order whose shipment is dispatched AND confirmed received — what the cumulative summary covers. */

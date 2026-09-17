@@ -309,7 +309,8 @@ function OrderInvoices({ row, read, onBack, onPreview }: { row: OrderInvoiceSumm
                             Awaiting receipt
                           </Badge>
                           {can('dispatch') ? (
-                            <Button variant="ghost" className="mt-1 block" onClick={async () => {
+                            <Button size="sm" variant="secondary" className="mt-1.5 block" icon={<PackageCheck className="h-3.5 w-3.5" />} onClick={async (e) => {
+                              e.stopPropagation();
                               const r = await run(confirmDispatchReceived(d.id))
                               if (!r.ok) pushToast({ title: 'Confirmation failed', message: r.error, level: 'danger' })
                               else pushToast({ title: 'Delivery confirmed', message: 'The dispatch has been marked as received.', level: 'success' })
