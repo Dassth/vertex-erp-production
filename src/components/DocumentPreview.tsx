@@ -190,7 +190,7 @@ export function InvoiceDocActions({
   return (
     <div className={className ?? 'flex flex-col items-end gap-1'}>
       <div className="flex flex-wrap justify-end gap-1">
-        <Button size={size} variant="secondary" icon={<Eye className="h-3.5 w-3.5" />} disabled={!!blocked} onClick={() => onPreview(invoiceDoc(invoice, read))} aria-label={`Preview invoice ${invoice.number}`}>
+        <Button size={size} variant="secondary" icon={<Eye className="h-3.5 w-3.5" />} onClick={() => onPreview(invoiceDoc(invoice, read))} aria-label={`Preview invoice ${invoice.number}`}>
           Preview
         </Button>
         <DownloadButton size={size} icon={<Download className="h-3.5 w-3.5" />} disabled={!!blocked} doc={() => invoiceDoc(invoice, read)} aria-label={`${downloadLabel} — invoice ${invoice.number}`}>
