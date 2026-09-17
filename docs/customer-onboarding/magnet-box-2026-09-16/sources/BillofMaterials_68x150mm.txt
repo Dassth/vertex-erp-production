@@ -1,0 +1,179 @@
+PAGE 1
+ PRODUCT NAME :                      014                         SILVERA - RAKHI  BOX  - 68X150MM                                         UNIT :                            PER LOT :                                 PER BOX:NOS                                              1                                                    1 PCSNOS
+
+             BOM No.:         1                                          20-04-2023                                                      100 NOSEFFECT FROM COST FOR :   COST FOR :                    1 NOS                 Waste (%) :        5
+       Sl.          D E S C R I P T I O N                                                                            PER lot COST                            PER         1  NOS     COST                     Cost without
+                                                                                                                                       Rs.  P.                                Rs.  P.                   Grace (Waste) Qty
+          1     Case Wrapper Digital Printing                                                                                              0.00                                   0.00
+          2     Box Wrapper Making                                                                                                         0.00                                   0.00
+          3     Case Board Cutting & Scoring                                                                                           181.82                                     1.82
+          4     Case Inside Layout Digital Printing                                                                                    127.27                                     1.27
+          5     Case Making                                                                                                            400.00                                     4.00
+          6     Case Inner Sheet Pasting                                                                                                   0.00                                   0.00
+          7     Board - Box Cutting Scoring                                                                                            136.36                                     1.36
+          8     Box 4 Corner Sealing                                                                                                       0.00                                   0.00
+          9     Magnet  Pasting Work                                                                                                   130.95                                     1.31
+        10      Box Wrapper Pasting                                                                                                        0.00                                   0.00
+        11      Coin Placement Making                                                                                                  100.00                                     1.00
+        12      Box & Case Inning Work                                                                                                 150.00                                     1.50
+        13      Packing                                                                                                                  70.00                                    0.70
+                                                                               MATERIAL COST                                        1,296.40                                    12.96
+                                                                                                         20.0                              259.28                                 2.59
+
+                                                                                                                                                                                                      .00
+
+                                                                               ESTIMATED COST                                       1,555.68                                    15.55                                     43.30
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+DATE :   15-09-2026                                                                                                                                                                                                                                                               Page 1
+
+PAGE 2
+ PRODUCT NAME :              014     SILVERA - RAKHI  BOX  - 68X150MM                                                                UNIT :                          PER LOT :                              PER BOX:NOS                                             1                                            1 PCSNOS
+           BOM No.:       1                                          20-04-2023                                                      100 NOS                                                             MAIN PRODUCTEFFECT FROM COST FOR :                                                                        STATUS :
+                                                                                                             BASED ON OBSERVATIONS                                                               DERIVED FOR 1 LOT
+                 D E S C R I P T I O N                                                                                              UNITQUANTITYRATE     RATE                                QUANTITY
+                                                                                                    REQUIRED                                  Rs.         PER         VALUE                                           COST FORRs.  P.                                                   100 NOSREQUIRED
+  .1  Case Wrapper Digital Printing                                                                   COST FOR :                      110    NOS
+      203         Digital Printing 454x316mm                                                                    55.000     SHEETS             0.00             0              0.00                  55.000
+
+                                                                                                           PROCESS TOTAL :                                                  0.00                                              0.00
+
+
+
+  .2  Box Wrapper Making                                                                              COST FOR :                      110    NOS
+      196         Thermal Lamination 18x12.5 size @ 1.50sq.in                                                   74.000     SHEET              0.00             0              0.00                  74.000
+
+      192         Digital - Box Wrapper                                                                         19.000     SHEETS             0.00             0              0.00                  19.000
+
+                                                                                                           PROCESS TOTAL :                                                  0.00                                              0.00
+  .3  Case Board Cutting & Scoring                                                                    COST FOR :                      110    NOS
+      106         Scoring - Case Board                                                                         110.000     NOS                0.00             0              0.00                 110.000
+
+      38          1.5MM-950GSM SANTHANAM BOARD 79X104CM                                                           4.000    NOS               50.00             1          200.00                      4.000
+
+                                                                                                           PROCESS TOTAL :                                               200.00                                           181.82
+  .4  Case Inside Layout Digital Printing                                                             COST FOR :                      110    NOS
+      84          Digital Print Black Colour only                                                               70.000     NOS                2.00             1          140.00                    70.000
+
+                                                                                                           PROCESS TOTAL :                                               140.00                                           127.27
+
+
+
+  .5  Case Making                                                                                     COST FOR :                      110    NOS
+      85          Case Making (Pasting)                                                                        110.000     SQINC              4.00             1          440.00                   110.000
+
+                                                                                                           PROCESS TOTAL :                                               440.00                                           400.00
+
+
+
+
+
+
+
+
+DATE :   15-09-2026                                                                                                                                                                                                                                                               Page 2
+
+PAGE 3
+ PRODUCT NAME :              014     SILVERA - RAKHI  BOX  - 68X150MM                                                                UNIT :                          PER LOT :                              PER BOX:NOS                                             1                                            1 PCSNOS
+           BOM No.:       1                                          20-04-2023                                                      100 NOS                                                             MAIN PRODUCTEFFECT FROM COST FOR :                                                                        STATUS :
+                                                                                                             BASED ON OBSERVATIONS                                                                DERIVED FOR 1 LOT
+                 D E S C R I P T I O N                                                                                              UNITQUANTITYRATE     RATE                                QUANTITY
+                                                                                                     REQUIRED                                 Rs.         PER         VALUE                                           COST FORRs.  P.                                                   100 NOSREQUIRED
+  .6  Case Inner Sheet Pasting                                                                        COST FOR :                      110     NOS
+      105         Pasting - Case Inner Sheet                                                                   110.000      SQIN               0.00            0              0.00                 110.000
+
+                                                                                                           PROCESS TOTAL :                                                   0.00                                             0.00
+
+
+
+  .7  Board - Box Cutting Scoring                                                                     COST FOR :                      110     NOS
+      107         Scoring - Box                                                                                110.000      NOS                0.00            0              0.00                 110.000
+
+      38          1.5MM-950GSM SANTHANAM BOARD 79X104CM                                                           3.000     NOS              50.00             1           150.00                     3.000
+
+                                                                                                           PROCESS TOTAL :                                               150.00                                            136.36
+  .8  Box 4 Corner Sealing                                                                            COST FOR :                      110     NOS
+      197         Corner Tape -12mm                                                                            110.000      NOS                0.00            0              0.00                 110.000
+
+                                                                                                           PROCESS TOTAL :                                                   0.00                                             0.00
+
+
+
+  .9  Magnet  Pasting Work                                                                            COST FOR :                      105     NOS
+      42          MAGNET - 6MM X 1.5MM                                                                         110.000      NO                 1.25            1           137.50                  110.000
+
+                                                                                                           PROCESS TOTAL :                                               137.50                                            130.95
+
+
+ 10.  Box Wrapper Pasting                                                                             COST FOR :                      110     NOS
+      104         Pasting - Box Making                                                                         110.000      SQIN               0.00            0              0.00                 110.000
+
+                                                                                                           PROCESS TOTAL :                                                   0.00                                             0.00
+
+
+
+
+
+
+
+
+DATE :   15-09-2026                                                                                                                                                                                                                                                               Page 3
+
+PAGE 4
+ PRODUCT NAME :              014      SILVERA - RAKHI  BOX  - 68X150MM                                                               UNIT :                          PER LOT :                              PER BOX:NOS                                             1                                            1 PCSNOS
+           BOM No.:       1                                          20-04-2023                                                      100 NOS                                                             MAIN PRODUCTEFFECT FROM COST FOR :                                                                        STATUS :
+                                                                                                             BASED ON OBSERVATIONS                                                                 DERIVED FOR 1 LOT
+                 D E S C R I P T I O N                                                                                              UNITQUANTITYRATE     RATE                                 QUANTITY
+                                                                                                     REQUIRED                                 Rs.          PER         VALUE                                           COST FORRs.  P.                                                   100 NOSREQUIRED
+ 11.  Coin Placement Making                                                                           COST FOR :                       110    NOS
+      82          Man Power Charges                                                                             110.000     NOS                1.00             1          110.00                   110.000
+                       coin insert
+      131         1mm 633gsm Santhanam Board 79x104cm @ Rs45+T                                                     2.000    SHEET              0.00             0              0.00                    2.000
+
+      204         EPE FOAM 6MMX1400X65METER @ 50/METER                                                             1.000    SHEETS             0.00             0              0.00                    1.000
+
+      200         Satin Ribbon For Coin Taken                                                                   110.000     NOS                0.00             0              0.00                 110.000
+
+      111         Pasting - Coin Flat Pasting                                                                   110.000     SQIN               0.00             0              0.00                 110.000
+
+                                                                                                           PROCESS TOTAL :                                                110.00                                            100.00
+ 12.  Box & Case Inning Work                                                                          COST FOR :                       110    NOS
+      80          Boxes Fitting                                                                                 110.000     NOS                1.50             1          165.00                   110.000
+
+                                                                                                           PROCESS TOTAL :                                                165.00                                            150.00
+
+
+ 13.  Packing                                                                                         COST FOR :                       100    NOS
+      81          Corrugated Box 25x15x8 5Ply                                                                      1.000    NOS               70.00             1            70.00                     1.000
+
+                                                                                                           PROCESS TOTAL :                                                  70.00                                            70.00
+
+
+   * MARKED MATERIALS DETAILS GIVEN IN ANNEXUREs
+
+
+
+
+
+
+
+
+
+
+
+
+DATE :   15-09-2026                                                                                                                                                                                                                                                               Page 4

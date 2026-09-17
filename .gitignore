@@ -1,0 +1,9 @@
+﻿node_modules/
+dist/
+dist-server/
+dist-app-server/
+.env
+.env.*
+correct-db.json
+correct-db-v2.json
+gen-*.ts

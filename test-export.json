@@ -1,0 +1,199 @@
+{
+  "format": "vertex-erp-export-v1",
+  "exportedAt": "2026-09-16T16:30:25.184Z",
+  "source": "browser",
+  "revision": null,
+  "summary": {
+    "users": 7,
+    "products": 0
+  },
+  "db": {
+    "version": 2,
+    "revision": 0,
+    "createdAt": "2026-09-16T16:30:25.182Z",
+    "migrations": [],
+    "company": {
+      "name": "Vertex Print Pack",
+      "address": "",
+      "phone": "",
+      "email": "",
+      "gstin": "",
+      "invoicePrefix": "INV",
+      "bankDetails": "",
+      "invoiceTerms": "Goods once dispatched will not be taken back. Subject to local jurisdiction.",
+      "updatedAt": null,
+      "updatedBy": null
+    },
+    "settings": {
+      "taxLabel": "GST",
+      "taxPct": 18,
+      "profitMethod": "markup",
+      "profitPct": 20,
+      "bufferHours": 6,
+      "processCharges": [],
+      "orderCharges": [],
+      "updatedAt": null,
+      "updatedBy": null
+    },
+    "units": [
+      {
+        "id": "U1",
+        "name": "Unit 1",
+        "shortName": "Unit 1",
+        "speciality": "Production unit 1",
+        "dailyCapacityJobs": 5
+      },
+      {
+        "id": "U2",
+        "name": "Unit 2",
+        "shortName": "Unit 2",
+        "speciality": "Production unit 2",
+        "dailyCapacityJobs": 5
+      },
+      {
+        "id": "U3",
+        "name": "Unit 3",
+        "shortName": "Unit 3",
+        "speciality": "Production unit 3",
+        "dailyCapacityJobs": 5
+      },
+      {
+        "id": "U4",
+        "name": "Unit 4",
+        "shortName": "Unit 4",
+        "speciality": "Production unit 4",
+        "dailyCapacityJobs": 5
+      }
+    ],
+    "people": [],
+    "machines": [],
+    "users": [
+      {
+        "id": "USR-ADM1",
+        "name": "Administrator 1",
+        "email": "admin1@vertex.local",
+        "role": "admin",
+        "unitId": null,
+        "adminTier": "full",
+        "designation": "Workflow administrator",
+        "initials": "A1",
+        "passwordHash": null,
+        "passwordSalt": null,
+        "passwordSetAt": null,
+        "active": true
+      },
+      {
+        "id": "USR-ADM2",
+        "name": "Administrator 2",
+        "email": "admin2@vertex.local",
+        "role": "admin",
+        "unitId": null,
+        "adminTier": "operations",
+        "designation": "Production & dispatch",
+        "initials": "A2",
+        "passwordHash": null,
+        "passwordSalt": null,
+        "passwordSetAt": null,
+        "active": true
+      },
+      {
+        "id": "USR-ADM3",
+        "name": "Administrator 3",
+        "email": "admin3@vertex.local",
+        "role": "admin",
+        "unitId": null,
+        "adminTier": "billing",
+        "designation": "Billing",
+        "initials": "A3",
+        "passwordHash": null,
+        "passwordSalt": null,
+        "passwordSetAt": null,
+        "active": true
+      },
+      {
+        "id": "USR-U1",
+        "name": "Unit 1 Supervisor",
+        "email": "unit1@vertex.local",
+        "role": "unit",
+        "unitId": "U1",
+        "adminTier": null,
+        "designation": "Unit 1 shop floor",
+        "initials": "U1",
+        "passwordHash": null,
+        "passwordSalt": null,
+        "passwordSetAt": null,
+        "active": true
+      },
+      {
+        "id": "USR-U2",
+        "name": "Unit 2 Supervisor",
+        "email": "unit2@vertex.local",
+        "role": "unit",
+        "unitId": "U2",
+        "adminTier": null,
+        "designation": "Unit 2 shop floor",
+        "initials": "U2",
+        "passwordHash": null,
+        "passwordSalt": null,
+        "passwordSetAt": null,
+        "active": true
+      },
+      {
+        "id": "USR-U3",
+        "name": "Unit 3 Supervisor",
+        "email": "unit3@vertex.local",
+        "role": "unit",
+        "unitId": "U3",
+        "adminTier": null,
+        "designation": "Unit 3 shop floor",
+        "initials": "U3",
+        "passwordHash": null,
+        "passwordSalt": null,
+        "passwordSetAt": null,
+        "active": true
+      },
+      {
+        "id": "USR-U4",
+        "name": "Unit 4 Supervisor",
+        "email": "unit4@vertex.local",
+        "role": "unit",
+        "unitId": "U4",
+        "adminTier": null,
+        "designation": "Unit 4 shop floor",
+        "initials": "U4",
+        "passwordHash": null,
+        "passwordSalt": null,
+        "passwordSetAt": null,
+        "active": true
+      }
+    ],
+    "materials": [],
+    "products": [],
+    "customers": [],
+    "plans": [],
+    "costings": [],
+    "orders": [],
+    "dispatches": [],
+    "invoices": [],
+    "notifications": [],
+    "audit": [],
+    "counters": {
+      "material": 0,
+      "product": 0,
+      "customer": 0,
+      "plan": 0,
+      "costing": 0,
+      "order": 0,
+      "dispatch": 0,
+      "invoice": 0,
+      "person": 0,
+      "machine": 0
+    }
+  },
+  "drafts": [
+    {
+      "key": "vertex-erp-draft-v1:USR-ADM1:products:PRD-TEST",
+      "value": "{\"key\":\"vertex-erp-draft-v1:USR-ADM1:products:PRD-TEST\",\"userId\":\"USR-ADM1\",\"rev\":1,\"tabId\":\"test-tab\",\"savedAt\":\"2026-09-16T16:30:25.184Z\",\"baseUpdatedAt\":null,\"data\":{\"id\":\"PRD-TEST\",\"name\":\"Test Product Updated (Draft)\",\"nested\":{\"someField\":123},\"stages\":[]}}"
+    }
+  ]
+}

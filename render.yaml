@@ -1,0 +1,11 @@
+﻿services:
+  - type: web
+    name: vertex-erp
+    env: node
+    buildCommand: "npm install && npm run build:server && npm run build:server-app"
+    startCommand: "npm run server:start"
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: VITE_VERTEX_STORAGE
+        value: server

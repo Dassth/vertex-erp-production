@@ -1,0 +1,16 @@
+[
+  {
+    "file": "BillofMaterials_68x150mm.PDF",
+    "pages": 4,
+    "sha256": "9987946834648547dd28a81aa9c905eb564e439c1e6edd60832b508ce78f8893"
+  },
+  {
+    "file": "BillofMaterials_1.PDF",
+    "pages": 6,
+    "sha256": "e54a2064d2a02fac3be667b48e9ee05869813521587711cab58fd1da32c55c37"
+  },
+  {
+    "file": "customer-product-list.png",
+    "sha256": "d5334e2c878faee8577665fad345838a623b6b0e36c59b4f6f009c36394e0a74"
+  }
+]

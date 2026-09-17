@@ -1,0 +1,266 @@
+PAGE 1
+ PRODUCT NAME :                     068                        MDF BOX - 200X200MM                                                     UNIT :                            PER LOT :                                 PER BOX:NOS                                              1                                                    1 PCSNOS
+
+             BOM No.:        1                                          15-08-2025                                                      100 nosEFFECT FROM COST FOR :COST FOR :                   1 nos                 Waste (%) :
+       Sl.          D E S C R I P T I O N                                                                            PER lot COST                        PER         1  NOS     COST                    Cost without
+                                                                                                                                    Rs.  P.                                Rs.  P.                 Grace (Waste) Qty
+          1    Mdf 4mm Sheet Ripper 4' Cutting                                                                                         0.00                                  0.00
+          2    Mdf Ripper Piece Cutting                                                                                                0.00                                  0.00
+          3    Mdf 3mm Sheet Cutting - 1                                                                                               0.00                                  0.00
+          4    Mdf - 4mm Reaper & T&B 3mm Sheet Pasting                                                                                0.00                                  0.00
+          5    Mdf - 2 Pcs Cutting                                                                                                     0.00                                  0.00
+          6    Mdf - Top & Bottom Marking Work                                                                                      100.00                                   1.00
+          7    Mdf - Bottom Box Wrapper Pasting                                                                                     300.00                                   3.00
+          8    Mdf -Top Box Wrapper Pasting                                                                                         300.00                                   3.00
+          9    Mdf - Paper Joint Back & Inner At Box                                                                                476.19                                   4.76
+        10     Mdf-Top Box Inner Sheet Pasting                                                                                         0.00                                  0.00
+        11     Mdf - Base Board Making                                                                                              548.57                                   5.49
+        12     Mdf- Coin Cavity Printed Board Making                                                                                353.33                                   3.53
+        13     Mdf - Coin Cavity Rupper Making                                                                                         0.00                                  0.00
+        14     Coin Placement Making                                                                                                300.00                                   3.00
+        15     Mdf - Golden U Lock Making                                                                                           200.00                                   2.00
+        16     Packing                                                                                                              280.00                                   2.80
+                                                                             MATERIAL COST                                       2,858.09                                   28.58
+                                                                                                      30.0                              857.43                               8.57
+
+                                                                                                                                                                                                   .00
+
+                                                                             ESTIMATED COST                                      3,715.52                                   37.15                                  201.44
+
+
+
+
+
+
+
+
+
+
+
+DATE :   15-09-2026                                                                                                                                                                                                                                                               Page 1
+
+PAGE 2
+ PRODUCT NAME :              068     MDF BOX - 200X200MM                                                                           UNIT :                          PER LOT :                              PER BOX:NOS                                             1                                            1 PCSNOS
+           BOM No.:      1                                          15-08-2025                                                      100 nos                                                                MAIN PRODUCTEFFECT FROM COST FOR :                                                                        STATUS :
+                                                                                                           BASED ON OBSERVATIONS                                                               DERIVED FOR 1 LOT
+                 D E S C R I P T I O N                                                                                              UNITQUANTITYRATE     RATE                             QUANTITY
+                                                                                                   REQUIRED                                 Rs.         PER         VALUE                                           COST FORRs.  P.                                                   100 nosREQUIRED
+  .1  Mdf 4mm Sheet Ripper 4' Cutting                                                               COST FOR :                      100     nos
+           4X8 - 4MM SHEETS - 77 BOX
+           =400/77
+     102          CUTTING CHARGES                                                                                1.500    GROSS              0.00            0             0.00                    1.500
+
+     240          MDF SHEET 8X4FEET 4MM @ RS 400/SHEET                                                           3.000    SHEETS             0.00            0             0.00                    3.000
+
+                                                                                                         PROCESS TOTAL :                                                  0.00                                             0.00
+  .2  Mdf Ripper Piece Cutting                                                                      COST FOR :                      105     nos
+           4X8 SHEETS - 31+31 = 62 REAPER
+           62 REAPER X 5 PCS =310PCS
+           310/4PCS - 77.5 BOXES
+     285          MDF 4MM SHEET 31MM REAPER CUTTING WORK                                                         2.000    SHEET              0.00            0             0.00                    2.000
+
+                                                                                                         PROCESS TOTAL :                                                  0.00                                             0.00
+  .3  Mdf 3mm Sheet Cutting - 1                                                                     COST FOR :                      105     nos
+           4X8 SHEET - 50 PCS
+           50 PCS / 2 TOP&BOTTOM - 25 BOX
+     239          MDF SHEET 8X4FEET 3MM @ RS300/SHEET                                                            5.000    SHEETS             0.00            0             0.00                    5.000
+
+     286          MDF 3MM SHEET TOP & BOTTOM SHEET SIZE WISE C                                                   5.000    SHEETS             0.00            0             0.00                    5.000
+
+                                                                                                         PROCESS TOTAL :                                                  0.00                                             0.00
+  .4  Mdf - 4mm Reaper & T&B 3mm Sheet Pasting                                                      COST FOR :                      105     nos
+           PASTING
+     287          MDF - 4MM REAPER WITH T & B SHEET PASTING 200X                                              105.000     NOS                0.00            0             0.00                 105.000
+
+                                                                                                         PROCESS TOTAL :                                                  0.00                                             0.00
+
+
+
+
+
+
+
+
+DATE :   15-09-2026                                                                                                                                                                                                                                                               Page 2
+
+PAGE 3
+ PRODUCT NAME :               068     MDF BOX - 200X200MM                                                                              UNIT :                          PER LOT :                              PER BOX:NOS                                             1                                            1 PCSNOS
+           BOM No.:       1                                          15-08-2025                                                      100 nos                                                                MAIN PRODUCTEFFECT FROM COST FOR :                                                                        STATUS :
+                                                                                                               BASED ON OBSERVATIONS                                                                  DERIVED FOR 1 LOT
+                 D E S C R I P T I O N                                                                                              UNITQUANTITYRATE     RATE                                    QUANTITY
+                                                                                                       REQUIRED                                  Rs.         PER         VALUE                                           COST FORRs.  P.                                                   100 nosREQUIRED
+  .5  Mdf - 2 Pcs Cutting                                                                               COST FOR :                       105    nos
+           15MM + 20MM BOX CUTTING
+      102          CUTTING CHARGES                                                                               105.000      GROSS              0.00             0              0.00                  105.000
+
+                                                                                                             PROCESS TOTAL :                                                    0.00                                               0.00
+
+  .6  Mdf - Top & Bottom Marking Work                                                                   COST FOR :                       105    nos
+      82           Man Power Charges                                                                             105.000      NOS                1.00             1           105.00                   105.000
+
+                                                                                                             PROCESS TOTAL :                                                105.00                                             100.00
+
+
+
+  .7  Mdf - Bottom Box Wrapper Pasting                                                                  COST FOR :                       105    nos
+           12X12=144
+           PASTING - .06
+           PRICE-8.50
+      109          Scoring - Box Wrapper                                                                         105.000      NOS                0.00             0              0.00                  105.000
+
+      289          PASTING - MDF BOTTOM BOX WRAPPER                                                          14,400.000       SQ.IN              0.00             0              0.00              14,400.000
+
+      252          Digital Printing 13 x 19 Art Paper 128gsm                                                     105.000      SHEETS             0.00             0              0.00                  105.000
+
+      83           Thermal Lamination Charges 13x19                                                              105.000      SHEETS             3.00             1           315.00                   105.000
+
+                                                                                                             PROCESS TOTAL :                                                315.00                                             300.00
+
+
+
+
+
+
+
+
+
+
+
+
+DATE :   15-09-2026                                                                                                                                                                                                                                                               Page 3
+
+PAGE 4
+ PRODUCT NAME :               068     MDF BOX - 200X200MM                                                                               UNIT :                          PER LOT :                              PER BOX:NOS                                             1                                            1 PCSNOS
+           BOM No.:        1                                          15-08-2025                                                      100 nos                                                                MAIN PRODUCTEFFECT FROM COST FOR :                                                                        STATUS :
+                                                                                                                BASED ON OBSERVATIONS                                                                  DERIVED FOR 1 LOT
+                 D E S C R I P T I O N                                                                                              UNITQUANTITYRATE     RATE                                     QUANTITY
+                                                                                                       REQUIRED                                   Rs.         PER         VALUE                                           COST FORRs.  P.                                                   100 nosREQUIRED
+  .8  Mdf -Top Box Wrapper Pasting                                                                      COST FOR :                        105    nos
+           10.75X10.75=115.5
+           PASTING- .06
+           PRICE - 7
+      288          PASTING - MDF BOX TOP WRAPPER                                                              12,000.000       SQ.IN              0.00             0              0.00              12,000.000
+
+      83           Thermal Lamination Charges 13x19                                                               105.000      SHEETS             3.00             1           315.00                   105.000
+
+      252          Digital Printing 13 x 19 Art Paper 128gsm                                                      105.000      SHEETS             0.00             0              0.00                  105.000
+
+      107          Scoring - Box                                                                                  105.000      NOS                0.00             0              0.00                  105.000
+
+                                                                                                              PROCESS TOTAL :                                                315.00                                             300.00
+  .9  Mdf - Paper Joint Back & Inner At Box                                                             COST FOR :                        105    nos
+           3X8=8
+           PASTING - .15
+           PRICE - 1.5+1.5= 3
+      73           Pasting Charges (Full)                                                                         100.000      NOS                5.00             1           500.00                   100.000
+
+                                                                                                              PROCESS TOTAL :                                                500.00                                             476.19
+ 10.  Mdf-Top Box Inner Sheet Pasting                                                                   COST FOR :                        105    nos
+           7.5X7.5=56.25
+           PASTING - .05
+           PRICE - 2.8
+      105          Pasting - Case Inner Sheet                                                                  5,900.000       SQIN               0.00             0              0.00                5,900.000
+
+                                                                                                              PROCESS TOTAL :                                                    0.00                                               0.00
+
+
+
+
+
+
+
+
+
+
+DATE :   15-09-2026                                                                                                                                                                                                                                                               Page 4
+
+PAGE 5
+ PRODUCT NAME :              068     MDF BOX - 200X200MM                                                                          UNIT :                          PER LOT :                              PER BOX:NOS                                             1                                            1 PCSNOS
+           BOM No.:      1                                          15-08-2025                                                      100 nos                                                                MAIN PRODUCTEFFECT FROM COST FOR :                                                                        STATUS :
+                                                                                                           BASED ON OBSERVATIONS                                                              DERIVED FOR 1 LOT
+                 D E S C R I P T I O N                                                                                              UNITQUANTITYRATE     RATE                             QUANTITY
+                                                                                                   REQUIRED                                Rs.         PER         VALUE                                           COST FORRs.  P.                                                   100 nosREQUIRED
+ 11.  Mdf - Base Board Making                                                                       COST FOR :                      105    nos
+           79X104CM - 12 UPS
+           2MM BOARD WHITE
+     189          Scoring - coin Board                                                                       105.000     NOS                0.00            0              0.00                105.000
+
+     40           2MM-1260GSM SANTHANAM BOARD 79X104CM                                                          9.000    NOS              64.00             1           576.00                    9.000
+
+                                                                                                         PROCESS TOTAL :                                              576.00                                           548.57
+ 12.  Mdf- Coin Cavity Printed Board Making                                                         COST FOR :                      105    nos
+           79X104CM - 15 UPS
+           1MM BOARD
+     196          Thermal Lamination 18x12.5 size @ 1.50sq.in                                                  53.000    SHEET              0.00            0              0.00                  53.000
+
+     195          Digital Art Paper 454x316mm                                                                  53.000    SHEETS             0.00            0              0.00                  53.000
+
+     131          1mm 633gsm Santhanam Board 79x104cm @ Rs45+T                                                  7.000    SHEET              0.00            0              0.00                   7.000
+
+     48           Digital Ptg Own Board Ptg Cooly                                                              53.000    NOS                7.00            1           371.00                   53.000
+
+                                                                                                         PROCESS TOTAL :                                              371.00                                           353.33
+ 13.  Mdf - Coin Cavity Rupper Making                                                               COST FOR :                      105    nos
+           4MM RUBBER - 55 UPS
+           RS 200 / SHEET - SINGLE PCS RS3.65
+     189          Scoring - coin Board                                                                       105.000     NOS                0.00            0              0.00                105.000
+
+     250          Rubber sheets 4mm thick 1200x2400 @ Rs280/sheet                                               2.000    SHEETS             0.00            0              0.00                   2.000
+
+                                                                                                         PROCESS TOTAL :                                                 0.00                                             0.00
+ 14.  Coin Placement Making                                                                         COST FOR :                      105    nos
+           PASTING MANUAL WORK
+     82           Man Power Charges                                                                          105.000     NOS                3.00            1           315.00                 105.000
+
+                                                                                                         PROCESS TOTAL :                                              315.00                                           300.00
+
+DATE :   15-09-2026                                                                                                                                                                                                                                                               Page 5
+
+PAGE 6
+ PRODUCT NAME :               068      MDF BOX - 200X200MM                                                                                UNIT :                          PER LOT :                              PER BOX:NOS                                             1                                            1 PCSNOS
+            BOM No.:       1                                          15-08-2025                                                      100 nos                                                                MAIN PRODUCTEFFECT FROM COST FOR :                                                                        STATUS :
+                                                                                                                 BASED ON OBSERVATIONS                                                                   DERIVED FOR 1 LOT
+                  D E S C R I P T I O N                                                                                              UNITQUANTITYRATE     RATE                                      QUANTITY
+                                                                                                         REQUIRED                                   Rs.         PER         VALUE                                           COST FORRs.  P.                                                   100 nosREQUIRED
+ 15.   Mdf - Golden U Lock Making                                                                         COST FOR :                        102    nos
+            MANUAL WORK
+      243          LOCK - SMALL U LOCK GOLDEN COLOUR                                                               102.000      NOS                 0.00             0               0.00                  102.000
+
+      82           Man Power Charges                                                                               102.000      NOS                 2.00             1           204.00                    102.000
+
+                                                                                                               PROCESS TOTAL :                                                  204.00                                             200.00
+ 16.   Packing                                                                                            COST FOR :                        100    nos
+            CORUCATION BOX PACKING
+      81           Corrugated Box 25x15x8 5Ply                                                                         4.000    NOS                70.00             1           280.00                       4.000
+
+                                                                                                               PROCESS TOTAL :                                                  280.00                                             280.00
+
+   * MARKED MATERIALS DETAILS GIVEN IN ANNEXUREs
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+DATE :   15-09-2026                                                                                                                                                                                                                                                               Page 6

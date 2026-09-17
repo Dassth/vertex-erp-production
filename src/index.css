@@ -1,0 +1,626 @@
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import 'tailwindcss';
+
+/* Hallmark · genre: modern-minimal · macrostructure: Bento Grid
+ * theme: Linear-light (DESIGN.md) · design-system: DESIGN.md · designed-as-app
+ * nav: N5 Floating pill · footer: Ft2 Inline single line · enrichment: none
+ * pre-emit critique: P5 H5 E5 S5 R5 V4
+ *
+ * Vertex ERP — Linear identity, light
+ * source: claude_ui_skills/design-md/linear.app/DESIGN.md
+ * paper #f5f6f8 · lavender #5e6ad2 · single chromatic accent
+ *
+ * The source system is dark-only and says so. This is a deliberate departure:
+ * the palette keeps its lavender identity, its radius ladder and its hairline
+ * discipline, but runs on paper. The consequence is that DEPTH CHANGES MEDIUM.
+ * On the dark canvas elevation was lightness and shadow was banned; on paper a
+ * lift of a few percent is invisible, so elevation is a soft shadow and the
+ * surface ladder inverts its direction of travel — the tile is the brightest
+ * thing on the page and the interaction states step DOWN into grey.
+ *
+ * Type is one continuous voice — Geist carries display through caption
+ * (DESIGN.md sanctions it as a substitute for the Linear cut), with
+ * JetBrains Mono reserved for machine data: job codes, quantities, rupee figures.
+ *
+ * Documented deviations from the source DESIGN.md, all forced by the fact that
+ * this is a dense operations tool and not a marketing surface:
+ *
+ *   1. Four production status hues survive. DESIGN.md forbids a second
+ *      chromatic accent, but scopes that to marketing. Completed / approaching /
+ *      delayed / running are load-bearing semantics on a shop floor, so they are
+ *      kept and re-cut for the dark canvas. Every one is paired with a glyph in
+ *      the markup — colour is never the only signal.
+ *   2. --color-rule-3 is lighter than DESIGN.md's hairline-tertiary (#3e3e44).
+ *      Control boundaries must clear 3:1 against their surface (WCAG 1.4.11) and
+ *      #3e3e44 lands at 1.8:1 on surface-1. Decorative nesting still uses the
+ *      original value via --color-hairline-tertiary.
+ *   3. Spacing runs at operations density. Linear's 96px section rhythm and
+ *      24-48px card padding are marketing-scale; the 4px base unit and the radius
+ *      ladder are adopted exactly, the paddings are not.
+ */
+
+@theme {
+  /* ---------------------------------------------------------------- type -- */
+  /* One family from display to caption. The weight does the work: 600 on
+     display, 400 on body — Linear resists 700+ display weights.
+     DESIGN.md sanctions Inter or Geist as substitutes for Linear's undistributed
+     cut; Geist is the one the taste skill does not list as an AI tell. */
+  --font-display: 'Geist', ui-sans-serif, -apple-system, system-ui, sans-serif;
+  --font-sans: 'Geist', ui-sans-serif, -apple-system, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Linear's hierarchy, pulled down one rung for a dense operations UI. */
+  --text-2xs: 0.6875rem; /* 11px — mono machine labels, uppercase only */
+  --text-xs: 0.75rem; /*    12px — caption, meta, status               */
+  --text-sm: 0.8125rem; /*  13px — eyebrow, secondary UI               */
+  --text-base: 0.875rem; /* 14px — body-sm: tables, controls, buttons   */
+  --text-md: 1rem; /*       16px — body: reading copy, card titles      */
+  --text-lg: 1.25rem; /*    20px — subhead / section titles             */
+  --text-xl: 1.5rem; /*     24px — page titles                         */
+  --text-2xl: 1.9375rem; /* 31px — KPI figures                          */
+  --text-3xl: 2.5rem; /*    40px — display-md, the one hero figure      */
+
+  /* Aggressive negative tracking on display, positive on the eyebrow. The
+     contrast is what marks an eyebrow as taxonomy rather than a heading. */
+  --tracking-display: -0.025em;
+  --tracking-headline: -0.021em;
+  --tracking-title: -0.018em;
+  --tracking-tight: -0.011em;
+  --tracking-eyebrow: 0.03em;
+  --tracking-label: 0.08em;
+
+  /* -------------------------------------------------------------- surface -- */
+  /* Paper is the ground; a tile lifts to pure white; hover and pressed step
+     DOWN into grey. Every neutral carries a trace of the lavender anchor so the
+     greys agree with the accent — a zero-chroma grey beside a chromatic accent
+     reads as two systems that met by accident. */
+  --color-canvas: #f5f6f8;
+  --color-paper: #f5f6f8;
+  --color-surface: #ffffff;
+  --color-surface-2: #f1f2f6;
+  --color-surface-3: #e9ebf1;
+  --color-surface-4: #e1e4ec;
+
+  --color-hairline: #e4e6ec;
+  --color-hairline-strong: #d2d6e0;
+  --color-hairline-tertiary: #c2c7d4;
+  --color-rule: #e4e6ec;
+  --color-rule-2: #d2d6e0;
+  /* Control boundaries must clear 3:1 against their surface (WCAG 1.4.11).
+     Against white this is 3.2:1 — the lightest a real input border may go. */
+  --color-rule-3: #8b919e;
+
+  --color-scrim: #101828;
+
+  /* ----------------------------------------------------------------- ink -- */
+  /* Ratios quoted against surface-3 (#e9ebf1), the DARKEST ground any of these
+     land on — the worst case flips with the theme. ink-tertiary is the only one
+     below 4.5:1 and is therefore disabled-state only, never readable copy. */
+  --color-ink: #16181d;
+  --color-ink-2: #3b4048;
+  --color-muted: #5a616d;
+  --color-faint: #626976;
+  --color-ink-tertiary: #9aa0ac;
+
+  /* -------------------------------------------------------------- signal -- */
+  /* ONE accent. The same lavender the dark theme carried — the identity does
+     not change with the ground. Brand mark, primary CTA, focus ring, link
+     emphasis; never a section background, never a card fill, never a gradient. */
+  --color-accent: #5e6ad2;
+  /* Hover reverses direction with the theme: on paper a control darkens under
+     the pointer, it does not brighten. */
+  --color-accent-hover: #4f5ac2;
+  --color-accent-focus: #4d57b8;
+  --color-accent-ink: #ffffff;
+  /* The flat lavender is 4.7:1 on white but only 3.9:1 on surface-3, so
+     accent-coloured TEXT uses the deeper cut: 6.2:1 on white, 5.2:1 on grey. */
+  --color-accent-text: #4d57b8;
+  --color-accent-wash: #eef0fc;
+  --color-accent-edge: #c8cdf2;
+  --color-accent-secure: #6f74a8;
+  /* 4.7:1 against white and 3.9:1 against the deepest surface — clears the 3:1
+     a focus indicator requires on every ground it can land on. */
+  --color-focus: #5e6ad2;
+
+  /* ---------------------------------------------------------------- rail -- */
+  /* Retained names from the side-rail era; they resolve to the same ladder the
+     rest of the app uses, so the login brand panel separates from the form
+     column by paper-versus-white plus a hairline. */
+  --color-rail: #f5f6f8;
+  --color-rail-2: #f1f2f6;
+  --color-rail-3: #e9ebf1;
+  --color-rail-rule: #e4e6ec;
+  --color-rail-ink: #16181d;
+  --color-rail-muted: #5a616d;
+
+  /* ---------------------------------------------------- production status -- */
+  /* Re-cut again for paper. The dark ramp was bright ink on near-black and goes
+     to mush on white, so each hue drops to a value that clears 4.5:1 as text.
+     The fills stay dark enough that canvas ink reads on them, which is why the
+     danger and success buttons keep working unchanged. Every one is paired with
+     a glyph in the markup — colour is never the only signal. */
+  --color-ok: #0f7a3d;
+  --color-ok-wash: #e8f6ee;
+  --color-ok-edge: #b3ddc5;
+  --color-warn: #8a5a00;
+  --color-warn-wash: #fdf3e0;
+  --color-warn-edge: #ecd0a0;
+  --color-risk: #c02626;
+  --color-risk-wash: #fdecec;
+  --color-risk-edge: #f3c2c2;
+  --color-live: #0e6d8c;
+  --color-live-wash: #e6f4f9;
+  --color-live-edge: #b0d8e6;
+
+  /* Chart hues. Colour-blind-safe against each other and against the accent:
+     they separate on lightness as well as hue. */
+  --color-chart-1: #4d57b8;
+  --color-chart-2: #0e6d8c;
+  --color-chart-3: #0f7a3d;
+  --color-chart-4: #8a5a00;
+  --color-chart-5: #c02626;
+  --color-chart-6: #7340b8;
+  /* The stage-group violet. A category hue in a legend, not a second accent. */
+  --color-violet-wash: #f2ecfb;
+  --color-violet-edge: #d7c5ef;
+
+  /* -------------------------------------------------------------- motion -- */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* --------------------------------------------------------------- form --- */
+  /* Linear's radius ladder, adopted exactly. Buttons and inputs at 8px — CTAs
+     are never pill-rounded. */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+}
+
+:root {
+  color-scheme: light;
+
+  --dur-micro: 120ms;
+  --dur-short: 200ms;
+  --dur-long: 380ms;
+
+  /* Z-index has six named levels. Nothing freestyles a number. */
+  --z-base: 1;
+  --z-raised: 10;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-modal: 400;
+  --z-toast: 500;
+  --z-tooltip: 600;
+
+  /* Depth changes medium with the ground. On the dark canvas a tile lifted by
+     getting lighter and shadow was banned; on paper a few percent of lift is
+     invisible, so elevation is carried by a soft shadow instead. Each shadow is
+     tinted toward the ink hue rather than neutral black — a pure-black shadow
+     over tinted paper reads as dirt — and the deeper ones are layered pairs,
+     ambient plus direct. --edge-highlight keeps its name so the component layer
+     needs no edit; it is now the whisper every resting tile carries. */
+  --edge-highlight: 0 1px 2px rgb(16 24 40 / 0.05);
+  --shadow-whisper: 0 1px 2px rgb(16 24 40 / 0.05);
+  --shadow-lift: 0 4px 12px -2px rgb(16 24 40 / 0.10), 0 1px 2px rgb(16 24 40 / 0.06);
+  --shadow-pop: 0 12px 32px -8px rgb(16 24 40 / 0.16), 0 2px 6px -2px rgb(16 24 40 / 0.08);
+  --shadow-overlay: 0 24px 56px -12px rgb(16 24 40 / 0.22), 0 2px 8px -2px rgb(16 24 40 / 0.08);
+  --shadow-drawer: -20px 0 48px -16px rgb(16 24 40 / 0.18);
+  --shadow-rail: 0 16px 40px -12px rgb(16 24 40 / 0.18), 0 1px 2px rgb(16 24 40 / 0.06);
+}
+
+@layer base {
+  html,
+  body {
+    overflow-x: clip;
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--color-canvas);
+    color: var(--color-ink-2);
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Display and body are one continuous voice; the family never changes, only
+     the weight and the tracking. Roman only — never italic. */
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    font-style: normal;
+    font-weight: 600;
+    color: var(--color-ink);
+    letter-spacing: var(--tracking-headline);
+    line-height: 1.2;
+    /* Long hyphenated product names must break rather than push the viewport. */
+    overflow-wrap: anywhere;
+    min-width: 0;
+  }
+
+  /* Figures in an operations UI always align in their column. */
+  table,
+  .tabular,
+  [class*='tabular-nums'] {
+    font-variant-numeric: tabular-nums;
+  }
+
+  input,
+  select,
+  textarea,
+  button {
+    font-family: inherit;
+  }
+
+  /* Double-tap zoom costs 300ms on every control on the shop floor tablets. */
+  button,
+  a,
+  [role='button'],
+  input,
+  select,
+  textarea {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: color-mix(in srgb, var(--color-accent) 22%, transparent);
+  }
+
+  /* Desktop runs at operations density; a touch device gets the 44px targets
+     and the 16px input size that stops iOS zooming the page on focus. */
+  @media (pointer: coarse) {
+    button,
+    [role='button'],
+    .vx-input {
+      min-height: 44px;
+    }
+    input,
+    select,
+    textarea {
+      font-size: 16px;
+    }
+  }
+
+  /* Grid children default to min-width:auto, so a wide table inside an
+     overflow-x-auto wrapper would stretch the whole column past a phone
+     screen and get clipped. Zero lets the scroll wrapper do its job;
+     explicit min-w-* utilities still win. */
+  main .grid > * {
+    min-width: 0;
+  }
+
+  /* Anchored headings must not land under the sticky top bar. */
+  h1,
+  h2,
+  h3,
+  h4,
+  [id] {
+    scroll-margin-top: 5rem;
+  }
+
+  /* Windows renders a native select with the system light chrome unless both
+     are set explicitly. */
+  select,
+  option {
+    background-color: var(--color-surface);
+    color: var(--color-ink);
+  }
+
+  ::selection {
+    background: var(--color-accent);
+    color: var(--color-accent-ink);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-hairline-tertiary) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--color-hairline-tertiary);
+    border-radius: 999px;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--color-rule-3);
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer components {
+  /* ------------------------------------------------------------------ tile -- */
+  /* Bento tiles sit DIRECTLY on the canvas with their own hairline. There is no
+     outer card wrapping a grid of inner cards — that nesting is the card-in-card
+     tell, and on a dark ladder it also forces a third surface step nobody can
+     see. One containment layer, and it is this one. */
+  .vx-tile,
+  .vx-card {
+    @apply rounded-lg border border-rule bg-surface;
+    box-shadow: var(--edge-highlight);
+    transition:
+      background-color var(--dur-short) var(--ease-out),
+      border-color var(--dur-short) var(--ease-out);
+  }
+  /* Tiles that are themselves a control lift one step. Linear's hover is a
+     surface change, never a shadow and never a scale. */
+  /* vx-card is kept as a synonym so nothing that still says card breaks. */
+  @media (hover: hover) {
+    .vx-tile-interactive:hover,
+    .vx-card-interactive:hover {
+      background: var(--color-surface-2);
+      border-color: var(--color-hairline-strong);
+    }
+  }
+
+  /* ------------------------------------------------------------------ head -- */
+  /* S4 · inline small-caps section head. Emerges from the flow instead of being
+     announced by a coloured bar down its left edge — that stripe is the
+     side-stripe-card tell, and it was on every page header. */
+  .vx-smallcaps {
+    font-family: var(--font-display);
+    font-size: var(--text-base);
+    font-weight: 600;
+    font-variant-caps: all-small-caps;
+    letter-spacing: 0.055em;
+    line-height: 1.2;
+  }
+
+  /* The page eyebrow. Stacked ABOVE its heading, never beside it — the
+     tag-left / heading-right pair is the templated-editorial tell. */
+  .vx-eyebrow {
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+    font-weight: 500;
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+    color: var(--color-muted);
+    display: block;
+  }
+
+  /* The machine-readout voice: mono, uppercase, wide-tracked, small. */
+  .vx-mono-label {
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+    font-weight: 500;
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+
+  /* Job numbers, quantities, rupee figures — machine data, mono, aligned. */
+  .vx-code {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  /* ----------------------------------------------------------- interaction -- */
+  /* Press feedback: colour only, micro duration. Never transition-all — and
+     never the outline, because a focus ring that fades in leaves keyboard users
+     with no indicator for the length of the transition. */
+  .vx-press {
+    transition:
+      background-color var(--dur-micro) var(--ease-out),
+      border-color var(--dur-micro) var(--ease-out),
+      color var(--dur-micro) var(--ease-out);
+  }
+  .vx-press:active {
+    background-color: var(--color-surface-3);
+  }
+
+  /* Buttons carry their own eight states through utilities; this only supplies
+     the shared transition. Filter is in the list because the two semantic fills
+     shift brightness rather than hue on hover. */
+  .vx-btn {
+    transition:
+      background-color var(--dur-micro) var(--ease-out),
+      border-color var(--dur-micro) var(--ease-out),
+      color var(--dur-micro) var(--ease-out),
+      filter var(--dur-micro) var(--ease-out);
+  }
+
+  /* Declared once so nothing has to remember the recipe. Instant, never animated. */
+  .vx-focus:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  /* ---------------------------------------------------------------- inputs -- */
+  /* Border width is CONSTANT across every state and the outline slot is
+     pre-reserved at 2px transparent, so focusing a field cannot shift the
+     layout. State changes go to background and outline colour only. */
+  .vx-input {
+    @apply h-9 w-full rounded-md border border-rule-3 bg-surface px-3 text-base text-ink
+      placeholder:text-faint
+      disabled:cursor-not-allowed disabled:border-rule disabled:bg-surface-2 disabled:text-ink-tertiary disabled:opacity-55;
+    outline: 2px solid transparent;
+    outline-offset: 1px;
+    transition:
+      border-color var(--dur-micro) var(--ease-out),
+      background-color var(--dur-micro) var(--ease-out);
+  }
+  /* Hover lives behind the media query so touch users never get a stuck state. */
+  @media (hover: hover) {
+    .vx-input:hover:not(:disabled):not(:focus-visible) {
+      background: var(--color-surface-2);
+    }
+  }
+  .vx-input:focus-visible {
+    border-color: var(--color-accent);
+    outline-color: var(--color-focus);
+  }
+  .vx-input[aria-invalid='true'] {
+    border-color: var(--color-risk);
+  }
+
+  /* Every field reserves its right-edge slot for a clear button, an error glyph
+     or a spinner, so nothing reflows the moment one appears. */
+  .vx-input-slot {
+    padding-right: 2.25rem;
+  }
+
+  /* Helper text holds one line of height even when empty — validating a field
+     must not push the rest of the form down. */
+  .vx-help {
+    display: block;
+    min-height: 1lh;
+    font-size: var(--text-xs);
+    color: var(--color-muted);
+  }
+
+  .vx-label {
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+    font-weight: 500;
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+    color: var(--color-muted);
+    display: block;
+    margin-bottom: 0.375rem;
+  }
+
+  /* ----------------------------------------------------------------- table -- */
+  /* The header is canvas with a single strong rule under it, not a filled band.
+     Rows carry one hairline each — never border-t AND border-b on every row. */
+  .vx-th {
+    @apply sticky top-0 z-10 whitespace-nowrap border-b border-rule-2 bg-surface px-4 py-2.5
+      text-left text-2xs font-medium uppercase tracking-[0.08em] text-muted;
+    font-family: var(--font-mono);
+  }
+  .vx-td {
+    @apply px-4 py-3 align-middle text-base text-ink-2;
+  }
+  /* Machine data never wraps. A job code broken across three lines stops being
+     a code. Prose cells still wrap; they opt in with vx-td-wrap. */
+  .vx-td .vx-code,
+  .vx-td-nowrap {
+    white-space: nowrap;
+  }
+  .vx-td-wrap {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .vx-row {
+    @apply border-t border-rule;
+    transition: background-color var(--dur-micro) var(--ease-out);
+  }
+  @media (hover: hover) {
+    .vx-row:hover {
+      background: var(--color-surface-2);
+    }
+  }
+}
+
+/* --------------------------------------------------------------- motion --- */
+/* One orchestrated entrance per view. Nothing loops except real progress.
+   Compositor-friendly properties only — transform and opacity, never layout. */
+
+@keyframes vx-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes vx-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes vx-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.98) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.vx-anim-up {
+  animation: vx-enter var(--dur-long) var(--ease-out) both;
+}
+.vx-anim-in {
+  animation: vx-slide-in var(--dur-short) var(--ease-out) both;
+}
+.vx-anim-pop {
+  animation: vx-pop var(--dur-short) var(--ease-out) both;
+}
+
+/* The unread-alert marker. A static ring, not a pulse — an operations screen
+   that throbs at the supervisor all shift is a screen they stop looking at. */
+.vx-alert-dot {
+  box-shadow: 0 0 0 2px var(--color-surface);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Spatial motion collapses. Functional loaders — spinners and skeletons —
+     keep running, only slower: a frantic spinner is worse than no spinner. */
+  *:not(.animate-spin):not(.animate-pulse),
+  *:not(.animate-spin):not(.animate-pulse)::before,
+  *:not(.animate-spin):not(.animate-pulse)::after {
+    animation-duration: 150ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 150ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-spin {
+    animation-duration: 1.6s !important;
+  }
+  .animate-pulse {
+    animation-duration: 3s !important;
+  }
+  .vx-anim-up,
+  .vx-anim-in,
+  .vx-anim-pop {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---------------------------------------------------------------- print --- */
+/* Paper is paper. The dark canvas inverts back to ink-on-white for the shop
+   floor printouts, which are read under fluorescent light and photocopied. */
+@media print {
+  html {
+    color-scheme: light;
+  }
+  body {
+    background: #fff;
+    color: #111;
+  }
+  .vx-no-print {
+    display: none !important;
+  }
+  .vx-print-only {
+    display: block !important;
+  }
+  @page {
+    margin: 12mm;
+  }
+}
+
+.vx-print-only {
+  display: none;
+}

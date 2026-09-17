@@ -1,0 +1,172 @@
+/* Vertex ERP — design tokens
+ * Linear identity, light · source: claude_ui_skills/design-md/linear.app/DESIGN.md
+ * paper #f5f6f8 · lavender #5e6ad2 · Geist (display + text) · JetBrains Mono
+ *
+ * Portable copy of the token layer. The app consumes these through Tailwind v4's
+ * @theme block in src/index.css; this file is the framework-free export. Keep the
+ * two in step — src/index.css is the source of truth and carries the reasoning.
+ *
+ * The source system is dark-only. Running it on paper keeps the lavender, the
+ * radius ladder and the hairline discipline, but changes the medium of depth:
+ * a few percent of lift is invisible on white, so elevation is a soft shadow,
+ * and the surface ladder inverts its direction of travel — the tile is the
+ * brightest thing on the page and the interaction states step DOWN into grey.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* ---------------------------------------------------------------- type -- */
+  /* One continuous voice. Geist is a freely distributable substitute for
+     Linear's custom cut; the weight does the work, 600 display / 400 body. */
+  --font-display: 'Geist', ui-sans-serif, -apple-system, system-ui, sans-serif;
+  --font-sans: 'Geist', ui-sans-serif, -apple-system, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --text-2xs: 0.6875rem; /* 11px — mono machine labels, uppercase only */
+  --text-xs: 0.75rem; /*    12px — caption, meta, status               */
+  --text-sm: 0.8125rem; /*  13px — eyebrow, secondary UI               */
+  --text-base: 0.875rem; /* 14px — body-sm: tables, controls, buttons   */
+  --text-md: 1rem; /*       16px — body: reading copy, card titles      */
+  --text-lg: 1.25rem; /*    20px — subhead / section titles             */
+  --text-xl: 1.5rem; /*     24px — page titles                         */
+  --text-2xl: 1.9375rem; /* 31px — KPI figures                          */
+  --text-3xl: 2.5rem; /*    40px — display-md, the one hero figure      */
+
+  /* Negative tracking on display, positive on the eyebrow. */
+  --tracking-display: -0.025em;
+  --tracking-headline: -0.021em;
+  --tracking-title: -0.018em;
+  --tracking-tight: -0.011em;
+  --tracking-eyebrow: 0.03em;
+  --tracking-label: 0.08em;
+
+  /* ------------------------------------------------------------- surface -- */
+  /* Paper is the ground; a tile lifts to pure white; hover and pressed step
+     DOWN into grey. Every neutral carries a trace of the lavender anchor so the
+     greys agree with the accent rather than reading as a second system. */
+  --color-canvas: #f5f6f8;
+  --color-paper: #f5f6f8;
+  --color-surface: #ffffff;
+  --color-surface-2: #f1f2f6;
+  --color-surface-3: #e9ebf1;
+  --color-surface-4: #e1e4ec;
+
+  --color-hairline: #e4e6ec;
+  --color-hairline-strong: #d2d6e0;
+  --color-hairline-tertiary: #c2c7d4;
+  --color-rule: #e4e6ec;
+  --color-rule-2: #d2d6e0;
+  /* Control boundaries must clear 3:1 against their surface (WCAG 1.4.11).
+     Against white this is 3.2:1 — the lightest a real input border may go. */
+  --color-rule-3: #8b919e;
+
+  --color-scrim: #101828;
+
+  /* ----------------------------------------------------------------- ink -- */
+  /* Ratios are quoted against surface-3 (#e9ebf1), the DARKEST ground any of
+     these land on — the worst case flips with the theme. ink-tertiary is the
+     only one below 4.5:1 and is therefore disabled-state only. */
+  --color-ink: #16181d;
+  --color-ink-2: #3b4048;
+  --color-muted: #5a616d;
+  --color-faint: #626976;
+  --color-ink-tertiary: #9aa0ac;
+
+  /* -------------------------------------------------------------- signal -- */
+  /* ONE accent. The same lavender the dark theme carried — the identity does
+     not change with the ground. Brand mark, primary CTA, focus ring, link
+     emphasis; never a section background, never a card fill, never a gradient. */
+  --color-accent: #5e6ad2;
+  /* Hover reverses direction with the theme: on paper a control darkens under
+     the pointer, it does not brighten. */
+  --color-accent-hover: #4f5ac2;
+  --color-accent-focus: #4d57b8;
+  --color-accent-ink: #ffffff;
+  /* The flat lavender is 4.7:1 on white but only 3.9:1 on surface-3, so
+     accent-coloured TEXT uses the deeper cut: 6.2:1 on white, 5.2:1 on grey. */
+  --color-accent-text: #4d57b8;
+  --color-accent-wash: #eef0fc;
+  --color-accent-edge: #c8cdf2;
+  --color-accent-secure: #6f74a8;
+  /* 4.7:1 against white and 3.9:1 against the deepest surface — clears the 3:1
+     a focus indicator requires on every ground it can land on. */
+  --color-focus: #5e6ad2;
+
+  /* ---------------------------------------------------------------- rail -- */
+  /* Retained names from the side-rail era; they resolve to the same ladder the
+     rest of the app uses, so the login brand panel separates from the form
+     column by paper-versus-white plus a hairline. */
+  --color-rail: #f5f6f8;
+  --color-rail-2: #f1f2f6;
+  --color-rail-3: #e9ebf1;
+  --color-rail-rule: #e4e6ec;
+  --color-rail-ink: #16181d;
+  --color-rail-muted: #5a616d;
+
+  /* ---------------------------------------------------- production status -- */
+  /* Green completed · amber approaching · red delayed · teal running. Each
+     carries a glyph in the UI as well — colour is never the only signal. The
+     fills stay dark enough that canvas ink reads on them, which is why the
+     danger and success buttons work unchanged across both themes. */
+  --color-ok: #0f7a3d;
+  --color-ok-wash: #e8f6ee;
+  --color-ok-edge: #b3ddc5;
+  --color-warn: #8a5a00;
+  --color-warn-wash: #fdf3e0;
+  --color-warn-edge: #ecd0a0;
+  --color-risk: #c02626;
+  --color-risk-wash: #fdecec;
+  --color-risk-edge: #f3c2c2;
+  --color-live: #0e6d8c;
+  --color-live-wash: #e6f4f9;
+  --color-live-edge: #b0d8e6;
+
+  /* Chart hues, colour-blind-safe against each other and the accent: they
+     separate on lightness as well as hue. */
+  --color-chart-1: #4d57b8;
+  --color-chart-2: #0e6d8c;
+  --color-chart-3: #0f7a3d;
+  --color-chart-4: #8a5a00;
+  --color-chart-5: #c02626;
+  --color-chart-6: #7340b8;
+  --color-violet-wash: #f2ecfb;
+  --color-violet-edge: #d7c5ef;
+
+  /* -------------------------------------------------------------- motion -- */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-micro: 120ms;
+  --dur-short: 200ms;
+  --dur-long: 380ms;
+
+  /* --------------------------------------------------------------- form --- */
+  /* The source system's radius ladder, adopted exactly. Buttons and inputs sit
+     at 8px; CTAs are never pill-rounded. */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+
+  --z-base: 1;
+  --z-raised: 10;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-modal: 400;
+  --z-toast: 500;
+  --z-tooltip: 600;
+
+  /* Elevation is a soft shadow, tinted toward the ink hue rather than neutral
+     black — a pure-black shadow over tinted paper reads as dirt. The deeper
+     levels are layered pairs: ambient plus direct. */
+  --edge-highlight: 0 1px 2px rgb(16 24 40 / 0.05);
+  --shadow-whisper: 0 1px 2px rgb(16 24 40 / 0.05);
+  --shadow-lift: 0 4px 12px -2px rgb(16 24 40 / 0.10), 0 1px 2px rgb(16 24 40 / 0.06);
+  --shadow-pop: 0 12px 32px -8px rgb(16 24 40 / 0.16), 0 2px 6px -2px rgb(16 24 40 / 0.08);
+  --shadow-overlay: 0 24px 56px -12px rgb(16 24 40 / 0.22), 0 2px 8px -2px rgb(16 24 40 / 0.08);
+  --shadow-drawer: -20px 0 48px -16px rgb(16 24 40 / 0.18);
+  --shadow-rail: 0 16px 40px -12px rgb(16 24 40 / 0.18), 0 1px 2px rgb(16 24 40 / 0.06);
+}
