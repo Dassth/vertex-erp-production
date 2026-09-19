@@ -693,6 +693,48 @@ export interface Invoice {
   allocationNote: string
   createdAt: string
   createdBy: string
+  /** How the tax is split. Missing on older invoices, which behave as `auto`. */
+  supplyType?: SupplyType
+  /** Set when billing corrected the GST details after issue. */
+  editedAt?: string | null
+  editedBy?: string | null
+}
+
+/* ------------------------------- Purchases ------------------------------- */
+
+/**
+ * auto  — decided from the two GSTIN state codes (same state → CGST + SGST)
+ * intra — within the state: CGST + SGST, half each
+ * inter — another state: IGST
+ */
+export type SupplyType = 'auto' | 'intra' | 'inter'
+
+export interface PurchaseLine {
+  id: string
+  description: string
+  hsn: string
+  quantity: number
+  uom: string
+  rate: number
+  /** GST rate for this line, e.g. 18. Goods differ, so each line carries its own. */
+  gstPct: number
+}
+
+/** A supplier's bill for something we bought. Always editable and downloadable. */
+export interface PurchaseBill extends Stamp {
+  id: string
+  code: string
+  supplierName: string
+  supplierGstin: string
+  supplierAddress: string
+  /** The supplier's own invoice number, as printed on their bill. */
+  supplierInvoiceNo: string
+  date: string
+  lines: PurchaseLine[]
+  supplyType: SupplyType
+  /** Round the net amount to the nearest rupee, as most bills do. */
+  roundOff: boolean
+  notes: string
 }
 
 /* ----------------------------- Notifications ----------------------------- */
@@ -732,6 +774,7 @@ export type AuditEntity =
   | 'Resource'
   | 'Dispatch'
   | 'Invoice'
+  | 'Purchase'
   | 'Account'
   | 'System'
 
@@ -762,6 +805,7 @@ export type CounterKey =
   | 'order'
   | 'dispatch'
   | 'invoice'
+  | 'purchase'
   | 'person'
   | 'machine'
 
@@ -785,6 +829,7 @@ export interface VertexDB {
   orders: ProductionOrder[]
   dispatches: Dispatch[]
   invoices: Invoice[]
+  purchases: PurchaseBill[]
   notifications: Notification[]
   audit: AuditEntry[]
   counters: Record<CounterKey, number>

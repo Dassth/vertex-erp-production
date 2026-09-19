@@ -32,6 +32,7 @@ export function summariseDataset(db: VertexDB): Record<string, number> {
     orders: db.orders.length,
     dispatches: db.dispatches.length,
     invoices: db.invoices.length,
+    purchases: db.purchases?.length ?? 0,
   }
 }
 

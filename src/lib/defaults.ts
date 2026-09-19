@@ -87,7 +87,7 @@ export function defaultSettings(): CostingSettings {
 }
 
 export function emptyCounters(): VertexDB['counters'] {
-  return { material: 0, product: 0, customer: 0, plan: 0, costing: 0, order: 0, dispatch: 0, invoice: 0, person: 0, machine: 0 }
+  return { material: 0, product: 0, customer: 0, plan: 0, costing: 0, order: 0, dispatch: 0, invoice: 0, purchase: 0, person: 0, machine: 0 }
 }
 
 export function buildEmptyDB(now: Date = new Date()): VertexDB {
@@ -110,6 +110,7 @@ export function buildEmptyDB(now: Date = new Date()): VertexDB {
     orders: [],
     dispatches: [],
     invoices: [],
+    purchases: [],
     notifications: [],
     audit: [],
     counters: emptyCounters(),

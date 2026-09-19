@@ -18,9 +18,10 @@
 
 import type { Content, ContentTable, CustomTableLayout, TDocumentDefinitions, TableCell } from 'pdfmake/interfaces'
 import { format } from 'date-fns'
-import type { CompanySnapshot, Dispatch, Invoice, ProductionOrder } from './types'
+import type { CompanySnapshot, Dispatch, Invoice, ProductionOrder, PurchaseBill } from './types'
 import type { ConsolidatedStatement } from './billing'
 import { rupeesInWords } from './billing'
+import { purchaseTotals } from './gst'
 import type { ProcessWorkRow } from './selectors'
 
 export const FONT_FAMILY = 'NotoSansTamil'
@@ -293,6 +294,109 @@ export function invoiceDefinition(inv: Invoice): TDocumentDefinitions {
           { text: 'Authorised signatory', style: 'muted', alignment: 'right', margin: [0, 3, 0, 0] },
         ],
       },
+      ] as Array<Content | null>
+    ).filter(present),
+  }
+}
+
+/* ------------------------------- Purchase bill ---------------------------- */
+
+/**
+ * A supplier's bill as recorded here. Tax is worked out per line at that line's
+ * GST rate and split CGST + SGST (same state) or IGST (other state).
+ */
+export function purchaseBillDefinition(bill: PurchaseBill, company: CompanySnapshot): TDocumentDefinitions {
+  const t = purchaseTotals(bill, company.gstin)
+  const header: TableCell[] = ['#', 'Description', 'HSN/SAC', 'Qty', 'Unit', 'Rate', 'GST %', 'Amount'].map((h, i) => ({
+    text: h,
+    style: 'th',
+    alignment: i >= 3 && i !== 4 ? 'right' : 'left',
+  }))
+  const intra = t.supply === 'intra'
+  const inter = t.supply === 'inter'
+  const summaryHead = ['HSN/SAC', 'Taxable value', ...(intra ? ['CGST', 'SGST'] : inter ? ['IGST'] : ['GST']), 'Total tax'].map(
+    (h, i): TableCell => ({ text: h, style: 'th', alignment: i === 0 ? 'left' : 'right' }),
+  )
+  const taxRows: Array<[string, string]> = intra
+    ? [
+        ['CGST', rs(t.cgst)],
+        ['SGST', rs(t.sgst)],
+      ]
+    : inter
+      ? [['IGST', rs(t.igst)]]
+      : [['GST', rs(t.tax)]]
+
+  return {
+    ...base(`Purchase bill ${bill.code}`, bill.supplierName, bill.updatedAt),
+    footer: footer(`${bill.code} · Purchase record${bill.supplierInvoiceNo ? ` of supplier invoice ${bill.supplierInvoiceNo}` : ''}`),
+    content: (
+      [
+        ...companyHeader(company, 'PURCHASE BILL', [
+          ['Entry No.', bill.code],
+          ['Supplier invoice', bill.supplierInvoiceNo],
+          ['Bill date', day(bill.date)],
+        ]),
+        partyBoxes(
+          {
+            title: 'Supplier',
+            lines: [bill.supplierName, bill.supplierAddress, bill.supplierGstin ? `GSTIN ${bill.supplierGstin}` : ''],
+          },
+          { title: 'Buyer', lines: [company.name, company.address, company.gstin ? `GSTIN ${company.gstin}` : ''] },
+        ),
+        {
+          layout: rules,
+          table: {
+            headerRows: 1,
+            dontBreakRows: true,
+            widths: [14, '*', 50, 44, 30, 54, 34, 66],
+            body: [
+              header,
+              ...bill.lines.map((l, i): TableCell[] => [
+                String(i + 1),
+                { text: l.description },
+                l.hsn,
+                { text: qty(l.quantity), alignment: 'right' },
+                l.uom,
+                { text: rs(l.rate), alignment: 'right' },
+                { text: `${l.gstPct}%`, alignment: 'right' },
+                { text: rs(t.lines[i]?.amount ?? 0), alignment: 'right' },
+              ]),
+            ],
+          },
+        },
+        {
+          margin: [0, 10, 0, 0],
+          layout: rules,
+          table: {
+            headerRows: 1,
+            widths: ['*', 80, ...(intra ? [70, 70] : [80]), 80],
+            body: [
+              summaryHead,
+              ...t.summary.map((g): TableCell[] => [
+                `${g.hsn || '—'} @ ${g.gstPct}%`,
+                { text: rs(g.taxable), alignment: 'right' },
+                ...(intra
+                  ? [
+                      { text: rs(g.cgst), alignment: 'right' } as TableCell,
+                      { text: rs(g.sgst), alignment: 'right' } as TableCell,
+                    ]
+                  : [{ text: rs(inter ? g.igst : g.tax), alignment: 'right' } as TableCell]),
+                { text: rs(g.tax), alignment: 'right' },
+              ]),
+            ],
+          },
+        },
+        totals(
+          [
+            ['Taxable value', rs(t.taxable)],
+            ...taxRows,
+            ...(bill.roundOff && t.roundOff !== 0 ? ([['Round off', `${t.roundOff > 0 ? '+' : '−'} ${rs(Math.abs(t.roundOff))}`]] as Array<[string, string]>) : []),
+            ['Net amount', rs(t.net), true],
+          ],
+          { stack: [{ text: 'AMOUNT IN WORDS', style: 'label' }, { text: rupeesInWords(t.net) }] },
+        ),
+        t.supply === null ? note('GST split not decided: add both GSTINs, or choose "Within state" or "Other state" on the bill.', 'warn') : null,
+        labelled('Notes', bill.notes),
       ] as Array<Content | null>
     ).filter(present),
   }

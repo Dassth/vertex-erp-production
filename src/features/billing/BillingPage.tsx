@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Download, Eye, FileStack, PackageCheck, ReceiptText, Search, Truck } from 'lucide-react'
+import { ArrowLeft, Download, Eye, FileStack, PackageCheck, Percent, ReceiptText, Search, Truck } from 'lucide-react'
 import { useStore } from '../../store/store'
-import type { VertexDB } from '../../lib/types'
+import type { Invoice, VertexDB } from '../../lib/types'
 import { fmtDate, fmtDateTime, moneyPaise, moneyShort } from '../../lib/format'
 import { DELIVERY_PENDING_MESSAGE, isReceived, orderInvoiceSummary } from '../../lib/billing'
 import type { OrderInvoiceStatus, OrderInvoiceSummary } from '../../lib/billing'
-import { Badge, Button, Card, CardHead, EmptyState, ProgressBar, SearchInput, Select } from '../../components/ui'
+import { Badge, Button, Card, CardHead, EmptyState, ProgressBar, SearchInput, Segmented, Select } from '../../components/ui'
 import { Detail, LinkButton, PageHeader, StatStrip, StatTile, useDocumentTitle } from '../../components/page'
 import { DocumentPreview, DownloadButton, InvoiceDocActions, summaryDoc, useDeliveryPendingMessage } from '../../components/DocumentPreview'
 import type { PreviewDoc } from '../../components/DocumentPreview'
+import { HsnDatalist, PurchaseBills } from './PurchaseBills'
+import { InvoiceTaxDialog } from './InvoiceTaxDialog'
+
+type BillingTab = 'sales' | 'purchase'
 
 const STATUS_LABEL: Record<OrderInvoiceStatus, string> = { none: 'Not dispatched', partial: 'Partially dispatched', full: 'Fully dispatched' }
 const STATUS_TONE: Record<OrderInvoiceStatus, 'slate' | 'amber' | 'green'> = { none: 'slate', partial: 'amber', full: 'green' }
@@ -25,6 +29,8 @@ export function BillingPage() {
   const q = params.get('q') ?? ''
   const status = (params.get('status') ?? '') as OrderInvoiceStatus | ''
   const orderId = params.get('order')
+  const tab: BillingTab = params.get('tab') === 'purchase' ? 'purchase' : 'sales'
+  const [taxEdit, setTaxEdit] = useState<Invoice | null>(null)
 
   // Documents read the latest committed state when they are built, not the state at render time.
   const latest = useRef(db)
@@ -64,14 +70,29 @@ export function BillingPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Billing · Invoices"
-        title="Invoices"
-        subtitle="One entry per order. Download an updated cumulative summary of every confirmed dispatch, or any individual dispatch invoice, at any time. Downloads never create new invoices."
+        eyebrow={tab === 'purchase' ? 'Billing · Purchase' : 'Billing · Sales'}
+        title={tab === 'purchase' ? 'Purchase bills' : 'Sales invoices'}
+        subtitle={
+          tab === 'purchase'
+            ? 'Bills from suppliers for what we bought. Enter, edit, preview and download them at any time; GST is worked out per item.'
+            : 'One entry per order. Download an updated cumulative summary of every confirmed dispatch, or any individual dispatch invoice. Use Edit GST to correct the tax before downloading.'
+        }
         icon={<FileStack className="h-4 w-4" />}
       />
 
-      {selected ? (
-        <OrderInvoices row={selected} read={read} onBack={() => set({ order: null }, true)} onPreview={setPreview} />
+      <Segmented<BillingTab>
+        options={[
+          { value: 'sales', label: 'Sales', count: db.invoices.length },
+          { value: 'purchase', label: 'Purchase', count: (db.purchases ?? []).length },
+        ]}
+        value={tab}
+        onChange={(v) => setParams(new URLSearchParams(v === 'purchase' ? { tab: 'purchase' } : {}), { replace: false })}
+      />
+
+      {tab === 'purchase' ? (
+        <PurchaseBills q={q} onSearch={(v) => set({ q: v })} onPreview={setPreview} />
+      ) : selected ? (
+        <OrderInvoices row={selected} read={read} onBack={() => set({ order: null }, true)} onPreview={setPreview} onEditTax={setTaxEdit} />
       ) : orderId ? (
         <Card className="vx-anim-up">
           <EmptyState icon={<Search className="h-6 w-6" />} title="Order not found" message="This order does not exist in this browser's records." action={<Button variant="secondary" onClick={() => set({ order: null })}>All orders</Button>} />
@@ -165,11 +186,13 @@ export function BillingPage() {
       )}
 
       <DocumentPreview doc={preview} onClose={() => setPreview(null)} />
+      <InvoiceTaxDialog invoice={taxEdit} onClose={() => setTaxEdit(null)} />
+      <HsnDatalist />
     </div>
   )
 }
 
-function OrderInvoices({ row, read, onBack, onPreview }: { row: OrderInvoiceSummary; read: () => VertexDB; onBack: () => void; onPreview: (d: PreviewDoc) => void }) {
+function OrderInvoices({ row, read, onBack, onPreview, onEditTax }: { row: OrderInvoiceSummary; read: () => VertexDB; onBack: () => void; onPreview: (d: PreviewDoc) => void; onEditTax: (inv: Invoice) => void }) {
   const { can } = useStore()
   const pending = useDeliveryPendingMessage()
   const { order, shipments, dispatchedQty, receivedQty, awaitingQty, remainingQty, billed, receivedBilled, status } = row
@@ -309,7 +332,17 @@ function OrderInvoices({ row, read, onBack, onPreview }: { row: OrderInvoiceSumm
                       )}
                     </td>
                     <td className="vx-td">
-                      {inv ? <InvoiceDocActions alwaysAllow invoice={inv} onPreview={onPreview} downloadLabel="Download this dispatch invoice" /> : <span className="text-xs text-warn">Invoice record missing</span>}
+                      {inv ? (
+                        <div className="flex flex-col items-end gap-1">
+                          <Button size="sm" variant="ghost" icon={<Percent className="h-3.5 w-3.5" />} onClick={() => onEditTax(inv)} aria-label={`Edit GST — invoice ${inv.number}`}>
+                            Edit GST
+                          </Button>
+                          <InvoiceDocActions alwaysAllow invoice={inv} onPreview={onPreview} downloadLabel="Download this dispatch invoice" />
+                          {inv.editedAt ? <span className="text-2xs text-faint">GST {inv.taxPct}% · edited by {inv.editedBy}</span> : null}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-warn">Invoice record missing</span>
+                      )}
                     </td>
                   </tr>
                 ))}

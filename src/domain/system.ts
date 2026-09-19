@@ -136,7 +136,7 @@ export const clearBusinessData = command(
     const denied = requireCapability(ctx, 'administration')
     if (denied) return denied
     if (confirmation.trim() !== CLEAR_CONFIRMATION) return fail(`Type ${CLEAR_CONFIRMATION} to confirm.`)
-    const counts = `${db.products.length} products, ${db.materials.length} materials, ${db.customers.length} customers, ${db.plans.length} plans, ${db.orders.length} orders, ${db.invoices.length} invoices`
+    const counts = `${db.products.length} products, ${db.materials.length} materials, ${db.customers.length} customers, ${db.plans.length} plans, ${db.orders.length} orders, ${db.invoices.length} invoices, ${db.purchases.length} purchase bills`
     const next = {
       ...db,
       materials: [],
@@ -147,6 +147,7 @@ export const clearBusinessData = command(
       orders: [],
       dispatches: [],
       invoices: [],
+      purchases: [],
       notifications: [],
       settings: { ...db.settings, processCharges: [], orderCharges: [] },
     }

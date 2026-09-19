@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ComponentProps, ReactNode } from 'react'
 import { Download, Eye, FileText } from 'lucide-react'
-import type { Invoice, VertexDB } from '../lib/types'
+import type { Invoice, PurchaseBill, VertexDB } from '../lib/types'
 import { DELIVERY_PENDING_BILLING_MESSAGE, consolidatedStatement, invoiceDownloadBlock, receivedInvoices } from '../lib/billing'
 import { invoiceFileName } from '../lib/format'
 import { useStore } from '../store/store'
@@ -28,10 +28,31 @@ export const invoiceDoc = (inv: Invoice, read: () => VertexDB): PreviewDoc => ({
   title: `Invoice ${inv.number}`,
   fileName: invoiceFileName(inv.number),
   build: async () => {
-    const blocked = invoiceDownloadBlock(inv, read().dispatches)
+    const db = read()
+    const blocked = invoiceDownloadBlock(inv, db.dispatches)
     if (blocked) throw new DocumentBlockedError(blocked)
     const [{ invoiceDefinition }, { renderPdf }] = await loadPdf()
-    return renderPdf(invoiceDefinition(inv))
+    // A GST correction saved after this button rendered must still be printed.
+    return renderPdf(invoiceDefinition(db.invoices.find((i) => i.id === inv.id) ?? inv))
+  },
+})
+
+/**
+ * A purchase bill, always available. `read` supplies the latest saved version,
+ * so a download right after an edit prints the edited bill.
+ */
+export const purchaseDoc = (bill: PurchaseBill, read: () => VertexDB): PreviewDoc => ({
+  title: `Purchase bill ${bill.code}`,
+  fileName: `${bill.code}${bill.supplierInvoiceNo ? `-${bill.supplierInvoiceNo.replace(/[^A-Za-z0-9-]/g, '-')}` : ''}.pdf`,
+  build: async () => {
+    const db = read()
+    const latest = (db.purchases ?? []).find((p) => p.id === bill.id)
+    if (!latest) throw new DocumentBlockedError('This purchase bill was deleted.')
+    const { updatedAt: _u, updatedBy: _b, ...company } = db.company
+    void _u
+    void _b
+    const [{ purchaseBillDefinition }, { renderPdf }] = await loadPdf()
+    return renderPdf(purchaseBillDefinition(latest, company))
   },
 })
 

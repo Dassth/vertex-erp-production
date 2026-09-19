@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
 import type { TDocumentDefinitions } from 'pdfmake/interfaces'
-import { FONT_FAMILY, invoiceDefinition, statementDefinition, workListDefinition } from './pdfDocs'
+import { FONT_FAMILY, invoiceDefinition, purchaseBillDefinition, statementDefinition, workListDefinition } from './pdfDocs'
 import { consolidatedStatement } from './billing'
 import type { Invoice, ProductionOrder } from './types'
 
@@ -166,4 +166,19 @@ describe('PDF documents (pdfmake + embedded Noto Sans Tamil)', () => {
     const pdf = await render(def)
     expect(pageCount(pdf)).toBe(1)
   }, 30000)
+})
+
+describe('purchase bill PDF', () => {
+  it('renders a supplier bill with the GST split and round-off', async () => {
+    const bill = {
+      id: 'PUR1', code: 'PUR-0001', supplierName: 'Paper Corporation', supplierGstin: '33ACCPS0708D1Z5',
+      supplierAddress: '14, Pettai Street, Sivakasi', supplierInvoiceNo: 'G/4147/26-27', date: '2026-09-12',
+      lines: [{ id: 'l1', description: '300GSM 330*483 Gold Coin', hsn: '48102900', quantity: 9.56, uom: 'Kgs', rate: 80, gstPct: 18 }],
+      supplyType: 'auto' as const, roundOff: true, notes: '',
+      createdAt: '2026-09-12T10:00:00.000Z', createdBy: 'A', updatedAt: '2026-09-12T10:00:00.000Z', updatedBy: 'A',
+    }
+    const pdf = await render(purchaseBillDefinition(bill, { ...company, gstin: '33AMQPA8484N1ZE' }))
+    expect(pageCount(pdf)).toBe(1)
+    if (process.env.PDF_OUT) (await import('node:fs')).writeFileSync(process.env.PDF_OUT, pdf)
+  })
 })

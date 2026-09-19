@@ -82,7 +82,7 @@ const NAV: NavItem[] = [
   { to: '/production', label: 'Production', hint: 'Process progress by unit', icon: Factory, capabilities: ['production.monitor', 'production.work'] },
   { to: '/dispatch', label: 'Dispatch', hint: 'Ship completed orders', icon: Truck, capabilities: ['dispatch'] },
   { to: '/invoices', label: 'Invoices', hint: 'Order summaries and invoice downloads', icon: FileStack, capabilities: ['billing'] },
-  { to: '/billing', label: 'Billing', hint: 'Invoice register', icon: ReceiptText, capabilities: ['billing'] },
+  { to: '/billing', label: 'Billing', hint: 'Sales invoices and purchase bills', icon: ReceiptText, capabilities: ['billing'] },
 ]
 
 type Dialog = 'audit' | 'company' | 'account' | 'clear' | 'guide' | 'resources' | null

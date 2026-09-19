@@ -5,6 +5,7 @@ import './master'
 import './orderCosting'
 import './planning'
 import './production'
+import './purchases'
 import './resources'
 import './system'
 
