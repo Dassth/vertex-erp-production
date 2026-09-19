@@ -7,3 +7,26 @@ dist-app-server/
 correct-db.json
 correct-db-v2.json
 gen-*.ts
+
+# AI coding tools and their skills — local only, not part of the app
+.claude/
+.codex/
+.hallmark/
+claude_ui_skills/
+.mcp.json
+
+# Local tooling output
+.wrangler/
+e2e/.playwright-profile/
+playwright-report/
+test-results/
+
+# Local data, backups and secrets — never commit
+.vertex-data/
+backups/
+.dev.vars
+cookies.txt
+*.zip
+generated-db.json
+final-export.json
+test-export.json
