@@ -20,6 +20,8 @@ import {
   ListChecks,
   LogOut,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   ReceiptText,
   FileBarChart,
   Contact,
@@ -47,7 +49,7 @@ import { AccountDialog, ClearDataDialog, CompanyProfileDialog } from './AdminDia
 import { SetupGuide } from './SetupGuide'
 
 /* Hallmark · genre: modern-minimal · macrostructure: Bento Grid
- * nav: N5 Floating pill · footer: Ft2 Inline single line
+ * nav: collapsible left sidebar (slide-in panel on small screens) · footer: Ft2 Inline single line
  *
  * Modules follow the operational sequence left to right:
  *   Master → Planning → Costing → Production → Dispatch → Billing
@@ -97,6 +99,16 @@ export function AppShell({ children }: { children: ReactNode }) {
   const location = useLocation()
   const [sheetOpen, setSheetOpen] = useState(false)
   const [dialog, setDialog] = useState<Dialog>(null)
+  const [collapsed, setCollapsed] = useState(readCollapsed)
+  const toggleCollapsed = () =>
+    setCollapsed((v) => {
+      try {
+        localStorage.setItem(SIDEBAR_KEY, v ? '0' : '1')
+      } catch {
+        /* storage blocked — the choice lasts until the page closes */
+      }
+      return !v
+    })
 
   useEffect(() => setSheetOpen(false), [location.pathname])
 
@@ -114,44 +126,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         Skip to content
       </a>
 
-      <nav
-        aria-label="Modules"
-        className="vx-no-print fixed left-5 top-4 hidden items-center gap-0.5 rounded-full border border-rule-2 bg-surface/85 p-1 pl-3 backdrop-blur-xl lg:flex"
-        style={{ zIndex: 'var(--z-sticky)', boxShadow: 'var(--shadow-pop)' }}
-      >
-        <span className="flex items-center gap-2 pr-2">
-          <span className="flex h-6 w-6 items-center justify-center rounded-sm bg-accent" aria-hidden="true">
-            <span className="font-display text-sm font-bold leading-none text-accent-ink">V</span>
-          </span>
-          <span className="vx-smallcaps hidden text-ink xl:inline" translate="no">
-            Vertex
-          </span>
-        </span>
-        <span className="h-5 w-px bg-rule-2" aria-hidden="true" />
-        {items.map((item) =>
-          item.children ? (
-            <MasterMenu key={item.to} item={item} />
-          ) : (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                cx(
-                  'vx-press vx-focus flex items-center gap-2 whitespace-nowrap rounded-full px-3 py-1.5 text-base font-medium',
-                  isActive ? 'bg-surface-3 text-ink' : 'text-muted hover:bg-surface-2 hover:text-ink',
-                )
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <item.icon className={cx('hidden h-4 w-4 shrink-0 xl:block', isActive ? 'text-accent-text' : 'text-faint')} aria-hidden="true" />
-                  {item.label}
-                </>
-              )}
-            </NavLink>
-          ),
-        )}
-      </nav>
+      <Sidebar items={items} collapsed={collapsed} onToggle={toggleCollapsed} />
 
       <UtilityCluster
         onMenu={() => setSheetOpen(true)}
@@ -163,16 +138,18 @@ export function AppShell({ children }: { children: ReactNode }) {
         }}
       />
 
-      <main id="main" className="mx-auto w-full min-w-0 max-w-[1600px] flex-1 px-4 pb-16 pt-20 sm:px-6 lg:px-10 lg:pt-24">
-        {children}
-      </main>
+      <div className={cx('flex min-w-0 flex-1 flex-col transition-[padding] duration-200', collapsed ? 'lg:pl-[72px]' : 'lg:pl-[248px]')}>
+        <main id="main" className="mx-auto w-full min-w-0 max-w-[1600px] flex-1 px-4 pb-16 pt-20 sm:px-6 lg:px-10">
+          {children}
+        </main>
 
-      <footer className="vx-no-print mx-auto w-full max-w-[1600px] px-4 pb-6 sm:px-6 lg:px-10">
-        <p className="border-t border-rule pt-4 text-xs text-faint">
-          {db.company.name} · Vertex ERP ·{' '}
-          {storageMode === 'server' ? 'Data is stored on the Vertex server and shared by signed-in users' : 'Data is stored in this browser only and is not shared across devices'}
-        </p>
-      </footer>
+        <footer className="vx-no-print mx-auto w-full max-w-[1600px] px-4 pb-6 sm:px-6 lg:px-10">
+          <p className="border-t border-rule pt-4 text-xs text-faint">
+            {db.company.name} · Vertex ERP ·{' '}
+            {storageMode === 'server' ? 'Data is stored on the Vertex server and shared by signed-in users' : 'Data is stored in this browser only and is not shared across devices'}
+          </p>
+        </footer>
+      </div>
 
       <MobileSheet open={sheetOpen} onClose={() => setSheetOpen(false)} items={items} />
 
@@ -194,115 +171,127 @@ export function AppShell({ children }: { children: ReactNode }) {
   )
 }
 
-/* ------------------------------ Master menu ------------------------------- */
+/* -------------------------------- Sidebar --------------------------------- */
 
-function MasterMenu({ item }: { item: NavItem }) {
-  const location = useLocation()
-  const [open, setOpen] = useState(false)
-  const [focusFirst, setFocusFirst] = useState(false)
-  const wrap = useRef<HTMLDivElement>(null)
-  const button = useRef<HTMLButtonElement>(null)
-  const menu = useRef<HTMLDivElement>(null)
-  const active = location.pathname.startsWith('/master')
-
-  useEffect(() => setOpen(false), [location.pathname])
-
-  useEffect(() => {
-    if (!open) return
-    if (focusFirst) menu.current?.querySelector<HTMLElement>('a')?.focus()
-    const onDoc = (e: MouseEvent) => {
-      if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false)
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
-      setOpen(false)
-      // Return focus only when it was in the menu; never pull it back from elsewhere on the page.
-      if (wrap.current?.contains(document.activeElement)) button.current?.focus()
-    }
-    document.addEventListener('mousedown', onDoc)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDoc)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [open, focusFirst])
-
-  const moveFocus = (e: React.KeyboardEvent) => {
-    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
-    e.preventDefault()
-    const links = Array.from(menu.current?.querySelectorAll<HTMLElement>('a') ?? [])
-    const idx = links.indexOf(document.activeElement as HTMLElement)
-    const next = e.key === 'ArrowDown' ? (idx + 1) % links.length : (idx - 1 + links.length) % links.length
-    links[next]?.focus()
+const SIDEBAR_KEY = 'vx.sidebar.collapsed'
+function readCollapsed(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_KEY) === '1'
+  } catch {
+    return false
   }
+}
 
+function Brand({ compact }: { compact?: boolean }) {
   return (
-    <div
-      className="relative"
-      ref={wrap}
-      onBlur={(e) => {
-        // Tabbing past the last item (or anywhere outside) closes the menu.
-        if (e.relatedTarget && !wrap.current?.contains(e.relatedTarget as Node)) setOpen(false)
-      }}
-    >
-      <button
-        ref={button}
-        type="button"
-        aria-expanded={open}
-        aria-controls="master-menu"
-        onClick={() => {
-          setFocusFirst(false)
-          setOpen((v) => !v)
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'ArrowDown') {
-            e.preventDefault()
-            setFocusFirst(true)
-            setOpen(true)
-          }
-        }}
-        className={cx(
-          'vx-press vx-focus flex items-center gap-2 whitespace-nowrap rounded-full px-3 py-1.5 text-base font-medium',
-          active || open ? 'bg-surface-3 text-ink' : 'text-muted hover:bg-surface-2 hover:text-ink',
-        )}
-      >
-        <item.icon className={cx('hidden h-4 w-4 shrink-0 xl:block', active ? 'text-accent-text' : 'text-faint')} aria-hidden="true" />
-        {item.label}
-        <ChevronDown className="h-3.5 w-3.5 text-faint" aria-hidden="true" />
-      </button>
-      {open ? (
-        <div
-          id="master-menu"
-          ref={menu}
-          onKeyDown={moveFocus}
-          className="vx-anim-pop absolute left-0 top-11 w-80 overflow-hidden rounded-lg border border-rule-2 bg-surface p-1.5"
-          style={{ zIndex: 'var(--z-dropdown)', boxShadow: 'var(--shadow-pop)' }}
-        >
-          <p className="vx-mono-label px-2.5 pb-1 pt-1.5">Master data</p>
-          {item.children!.map((c) => (
-            <NavLink
-              key={c.to}
-              to={c.to}
-              className={({ isActive }) =>
-                cx('vx-press vx-focus block rounded-md px-2.5 py-2', isActive ? 'bg-accent-wash' : 'hover:bg-surface-2')
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <span className={cx('block text-base font-medium', isActive ? 'text-accent-text' : 'text-ink')}>{c.label}</span>
-                  <span className="block text-xs text-muted">{c.hint}</span>
-                </>
-              )}
-            </NavLink>
-          ))}
-        </div>
-      ) : null}
-    </div>
+    <span className="flex min-w-0 items-center gap-2.5">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm bg-accent" aria-hidden="true">
+        <span className="font-display text-sm font-bold leading-none text-accent-ink">V</span>
+      </span>
+      {compact ? null : (
+        <span className="vx-smallcaps truncate text-ink" translate="no">
+          Vertex ERP
+        </span>
+      )}
+    </span>
   )
 }
 
-/* ------------------------------ Mobile sheet ------------------------------ */
+/** The module list, shared by the desktop sidebar and the mobile slide-in panel. */
+function NavList({ items, compact }: { items: NavItem[]; compact?: boolean }) {
+  const location = useLocation()
+  const inMaster = location.pathname.startsWith('/master')
+  const [masterOpen, setMasterOpen] = useState(inMaster)
+  useEffect(() => {
+    if (inMaster) setMasterOpen(true)
+  }, [inMaster])
 
+  const rowClass = (active: boolean) =>
+    cx(
+      'vx-press vx-focus flex w-full items-center gap-3 rounded-md py-2 text-base font-medium',
+      compact ? 'justify-center px-0' : 'px-3',
+      active ? 'bg-surface-3 text-ink' : 'text-muted hover:bg-surface-2 hover:text-ink',
+    )
+
+  return (
+    <ul className="space-y-0.5">
+      {items.map((item) => {
+        if (item.children && !compact) {
+          return (
+            <li key={item.to}>
+              <button type="button" aria-expanded={masterOpen} onClick={() => setMasterOpen((v) => !v)} className={rowClass(inMaster && !masterOpen)}>
+                <item.icon className={cx('h-[18px] w-[18px] shrink-0', inMaster ? 'text-accent-text' : 'text-faint')} aria-hidden="true" />
+                <span className="flex-1 truncate text-left">{item.label}</span>
+                <ChevronDown className={cx('h-4 w-4 text-faint transition-transform', masterOpen && 'rotate-180')} aria-hidden="true" />
+              </button>
+              {masterOpen ? (
+                <ul className="mt-0.5 space-y-0.5 border-l border-rule pl-2" style={{ marginLeft: '1.3rem' }}>
+                  {item.children.map((c) => (
+                    <li key={c.to}>
+                      <NavLink
+                        to={c.to}
+                        title={c.hint}
+                        className={({ isActive }) =>
+                          cx('vx-press vx-focus block truncate rounded-md px-3 py-1.5 text-sm font-medium', isActive ? 'bg-accent-wash text-accent-text' : 'text-muted hover:bg-surface-2 hover:text-ink')
+                        }
+                      >
+                        {c.label}
+                      </NavLink>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </li>
+          )
+        }
+        const to = item.children ? item.children[0].to : item.to
+        const active = item.children ? inMaster : undefined
+        return (
+          <li key={item.to}>
+            <NavLink
+              to={to}
+              title={compact ? item.label : item.hint}
+              aria-label={compact ? item.label : undefined}
+              className={({ isActive }) => rowClass(active ?? isActive)}
+            >
+              {({ isActive }) => (
+                <>
+                  <item.icon className={cx('h-[18px] w-[18px] shrink-0', (active ?? isActive) ? 'text-accent-text' : 'text-faint')} aria-hidden="true" />
+                  {compact ? null : <span className="truncate">{item.label}</span>}
+                </>
+              )}
+            </NavLink>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+/** Desktop: fixed on the left, scrolls on its own, collapses to icons. */
+function Sidebar({ items, collapsed, onToggle }: { items: NavItem[]; collapsed: boolean; onToggle: () => void }) {
+  return (
+    <aside
+      className={cx(
+        'vx-no-print fixed inset-y-0 left-0 hidden flex-col border-r border-rule-2 bg-surface transition-[width] duration-200 lg:flex',
+        collapsed ? 'w-[72px]' : 'w-[248px]',
+      )}
+      style={{ zIndex: 'var(--z-sticky)' }}
+    >
+      <div className={cx('flex h-16 shrink-0 items-center border-b border-rule', collapsed ? 'justify-center px-2' : 'justify-between px-4')}>
+        {collapsed ? null : <Brand />}
+        <IconButton label={collapsed ? 'Expand menu' : 'Collapse menu'} onClick={onToggle}>
+          {collapsed ? <PanelLeftOpen className="h-[18px] w-[18px]" /> : <PanelLeftClose className="h-[18px] w-[18px]" />}
+        </IconButton>
+      </div>
+      <nav aria-label="Modules" className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
+        <NavList items={items} compact={collapsed} />
+      </nav>
+    </aside>
+  )
+}
+
+/** Phones and small windows: the same menu slides in from the left. */
 function MobileSheet({ open, onClose, items }: { open: boolean; onClose: () => void; items: NavItem[] }) {
   useEffect(() => {
     if (!open) return
@@ -316,45 +305,18 @@ function MobileSheet({ open, onClose, items }: { open: boolean; onClose: () => v
   }, [open, onClose])
 
   if (!open) return null
-  const link = (to: string, label: string, hint: string, icon?: ReactNode, nested?: boolean) => (
-    <NavLink
-      key={to}
-      to={to}
-      className={({ isActive }) =>
-        cx('vx-press vx-focus flex items-center gap-3 rounded-md px-3 py-2.5', nested && 'pl-10', isActive ? 'bg-surface-3 text-ink' : 'text-ink-2 hover:bg-surface-2')
-      }
-    >
-      {icon}
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-base font-medium leading-tight">{label}</span>
-        <span className="mt-0.5 block truncate text-2xs text-muted">{hint}</span>
-      </span>
-    </NavLink>
-  )
   return (
     <div className="vx-no-print fixed inset-0 overscroll-contain bg-scrim/70 lg:hidden" style={{ zIndex: 'var(--z-modal)' }} role="dialog" aria-modal="true" aria-label="Modules">
       <button className="absolute inset-0 cursor-default" aria-label="Close menu" onClick={onClose} />
-      <div className="vx-anim-pop relative m-3 max-h-[calc(100dvh-1.5rem)] overflow-y-auto rounded-lg border border-rule-2 bg-surface">
-        <div className="flex items-center justify-between border-b border-rule px-4 py-3">
-          <span className="vx-smallcaps text-ink">Vertex ERP</span>
+      <div className="vx-anim-in relative flex h-full w-[280px] max-w-[85vw] flex-col border-r border-rule-2 bg-surface" style={{ boxShadow: 'var(--shadow-drawer)' }}>
+        <div className="flex h-16 shrink-0 items-center justify-between border-b border-rule px-4">
+          <Brand />
           <IconButton label="Close menu" onClick={onClose}>
             <X className="h-4 w-4" />
           </IconButton>
         </div>
-        <nav aria-label="Modules" className="p-2">
-          {items.map((item) =>
-            item.children ? (
-              <div key={item.to}>
-                <p className="flex items-center gap-3 px-3 pb-1 pt-2 text-base font-medium text-ink">
-                  <item.icon className="h-[18px] w-[18px] text-faint" aria-hidden="true" />
-                  {item.label}
-                </p>
-                {item.children.map((c) => link(c.to, c.label, c.hint, undefined, true))}
-              </div>
-            ) : (
-              link(item.to, item.label, item.hint, <item.icon className="h-[18px] w-[18px] shrink-0 text-faint" aria-hidden="true" />)
-            ),
-          )}
+        <nav aria-label="Modules" className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
+          <NavList items={items} />
         </nav>
       </div>
     </div>

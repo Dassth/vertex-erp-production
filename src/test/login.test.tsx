@@ -150,7 +150,7 @@ describe('sign-in through the real UI', () => {
     const linked = within(modules)
       .getAllByRole('link')
       .map((a) => a.getAttribute('href'))
-    expect(linked.sort()).toEqual(['/billing', '/dispatch', '/invoices', '/production'])
+    expect(linked.sort()).toEqual(['/billing', '/customers', '/dispatch', '/invoices', '/production', '/reports'])
 
     // Restricted modules recover to an allowed page instead of rendering.
     for (const path of ['/master/products', '/master/costing', '/planning', '/costing', '/settings']) {

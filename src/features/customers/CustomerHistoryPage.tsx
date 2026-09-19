@@ -84,7 +84,7 @@ export function CustomerHistoryPage() {
                 </thead>
                 <tbody>
                   {matches.map((h) => (
-                    <tr key={h.customer.id} className="group border-t border-rule hover:bg-surface-2">
+                    <tr key={h.customer.id} onClick={() => set({ id: h.customer.id }, true)} className="group cursor-pointer border-t border-rule transition-colors hover:bg-surface-2">
                       <td className="vx-td">
                         <Link to={`/customers?id=${h.customer.id}`} className="vx-code font-semibold text-accent-text group-hover:underline">
                           {h.customer.code}

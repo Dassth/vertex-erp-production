@@ -85,11 +85,11 @@ describe('Invoices page', () => {
     await screen.findByRole('heading', { name: 'Invoices' })
     expect(router.state.location.pathname).toBe('/invoices')
 
-    const row = (await screen.findByRole('button', { name: 'JOB-0001' })).closest('tr')!
+    const row = (await screen.findByRole('button', { name: 'CUS-0001-20260915-01' })).closest('tr')!
     for (const t of ['10,000 pcs', '5,300 pcs', '300 pcs', '5,000 pcs', '4,700 pcs', 'Partially dispatched']) expect(within(row).getByText(t)).toBeTruthy()
 
     const records = JSON.stringify({ invoices: stored().invoices, counters: stored().counters })
-    await user.click(screen.getByRole('button', { name: 'JOB-0001' }))
+    await user.click(screen.getByRole('button', { name: 'CUS-0001-20260915-01' }))
     // 300 received → the cumulative Download PDF is available.
     const download = await screen.findByRole('button', { name: 'Download PDF — cumulative invoice summary' })
     expect((download as HTMLButtonElement).disabled).toBe(false)
@@ -108,7 +108,7 @@ describe('Invoices page', () => {
 
     // Nothing received yet: the button is visible but unavailable, with the reason.
     await user.click(screen.getByRole('button', { name: 'All orders' }))
-    await user.click(await screen.findByRole('button', { name: 'JOB-0002' }))
+    await user.click(await screen.findByRole('button', { name: 'CUS-0001-20260915-02' }))
     expect(await screen.findByText('Nothing dispatched yet')).toBeTruthy()
     expect((screen.getByRole('button', { name: 'Download PDF — cumulative invoice summary' }) as HTMLButtonElement).disabled).toBe(true)
     expect(screen.getByText(name === 'Administrator 3' ? PENDING_BILLING : PENDING)).toBeTruthy()
@@ -127,7 +127,7 @@ describe('Invoices page', () => {
   }, 90000)
 
   it('Administrator 1 confirms the 5,000 shipment in Dispatch; Invoices then covers 5,300 after a reload', async () => {
-    const orderId = stored().orders.find((o) => o.code === 'JOB-0001')!.id
+    const orderId = stored().orders.find((o) => o.code === 'CUS-0001-20260915-01')!.id
     const first = mount()
     const user = await signIn('Administrator 1')
     await screen.findByRole('heading', { name: 'Production' }, { timeout: 5000 })
@@ -135,7 +135,7 @@ describe('Invoices page', () => {
     const [, awaiting] = stored().dispatches
     await user.click(await screen.findByRole('button', { name: `Confirm received — ${awaiting.code}` }, { timeout: 5000 }))
     const dialog = await screen.findByRole('dialog', { name: 'Confirm delivery received?' })
-    expect(within(dialog).getByText('JOB-0001')).toBeTruthy()
+    expect(within(dialog).getByText('CUS-0001-20260915-01')).toBeTruthy()
     expect(within(dialog).getByText(awaiting.code)).toBeTruthy()
     expect(within(dialog).getByText('5,000 pcs')).toBeTruthy()
     await user.click(within(dialog).getByRole('button', { name: 'Confirm received' }))
