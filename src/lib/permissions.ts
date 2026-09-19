@@ -66,7 +66,7 @@ export function canAny(user: Principal, capabilities: Capability[]): boolean {
 /** Where an account belongs after signing in, and where it recovers to. */
 export function landingPath(user: Principal): string {
   if (!user) return '/login'
-  if (user.role === 'unit') return '/production'
+  if (user.role === 'unit') return '/unit'
   if (can(user, 'production.monitor')) return '/production'
   if (can(user, 'billing')) return '/billing'
   return '/account'
@@ -81,6 +81,7 @@ const ROUTE_CAPABILITIES: Array<[string, Capability]> = [
   ['/billing', 'billing'],
   ['/reports', 'billing'],
   ['/customers', 'billing'],
+  ['/unit', 'production.work'],
   ['/invoices', 'billing'],
   ['/settings', 'administration'],
 ]

@@ -58,7 +58,7 @@ describe('permission matrix', () => {
     expect(landingPath(ADMIN1)).toBe('/production')
     expect(landingPath(ADMIN2)).toBe('/production')
     expect(landingPath(ADMIN3)).toBe('/billing')
-    expect(landingPath(UNIT1)).toBe('/production')
+    expect(landingPath(UNIT1)).toBe('/unit')
     expect(landingPath(null)).toBe('/login')
     // Recovery can never loop: the landing page is always allowed.
     for (const user of [ADMIN1, ADMIN2, ADMIN3, UNIT1]) expect(canOpenPath(user, landingPath(user))).toBe(true)

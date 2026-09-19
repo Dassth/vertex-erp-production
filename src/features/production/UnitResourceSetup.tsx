@@ -22,7 +22,7 @@ export function UnitResourceSetup({ unitId, onPersonAdded, onMachineAdded }: {
   </details>
 }
 
-function ResourceAdd({ unitId, kind, onAdded }: { unitId: UnitId; kind: 'person' | 'machine'; onAdded?: (id: string) => void }) {
+export function ResourceAdd({ unitId, kind, onAdded }: { unitId: UnitId; kind: 'person' | 'machine'; onAdded?: (id: string) => void }) {
   const { run, pushToast } = useStore()
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)

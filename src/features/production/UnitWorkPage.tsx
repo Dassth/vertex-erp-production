@@ -45,8 +45,6 @@ export function UnitWorkPage({ unitId }: { unitId: UnitId }) {
         icon={<Factory className="h-4 w-4" />}
       />
 
-      <UnitResourceSetup unitId={unitId} />
-
       <StatStrip className="grid-cols-2 lg:grid-cols-4">
         <StatTile label="Ready now" value={String(work.ready.length)} icon={<Timer className="h-4 w-4" />} tone="indigo" hint="Earlier processes are done" onClick={() => setTab('ready')} active={tab === 'ready'} />
         <StatTile label="In progress" value={String(running)} icon={<Play className="h-4 w-4" />} tone="blue" hint="Started by your unit" />
@@ -321,7 +319,7 @@ function ProcessWorkCard({ row }: { row: ProcessWorkRow }) {
 
 /* --------------------------- Resource allocation -------------------------- */
 
-function ResourceDialog({ open, onClose, row }: { open: boolean; onClose: () => void; row: ProcessWorkRow }) {
+export function ResourceDialog({ open, onClose, row }: { open: boolean; onClose: () => void; row: ProcessWorkRow }) {
   const { db, run, pushToast } = useStore()
   const { order, process } = row
   const people = activePeople(db, process.unitId)

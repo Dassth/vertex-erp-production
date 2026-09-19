@@ -23,6 +23,10 @@ const CostingListPage = lazy(() => import('./features/costing/CostingListPage').
 const OrderCostingPage = lazy(() => import('./features/costing/OrderCostingPage').then((m) => ({ default: m.OrderCostingPage })))
 const DispatchPage = lazy(() => import('./features/dispatch/DispatchPage').then((m) => ({ default: m.DispatchPage })))
 const InvoicesPage = lazy(() => import('./features/invoices/InvoicesPage').then((m) => ({ default: m.InvoicesPage })))
+const UnitHomePage = lazy(() => import('./features/unit/UnitPages').then((m) => ({ default: m.UnitHomePage })))
+const UnitAllocationsPage = lazy(() => import('./features/unit/UnitPages').then((m) => ({ default: m.UnitAllocationsPage })))
+const UnitStaffPage = lazy(() => import('./features/unit/UnitPages').then((m) => ({ default: m.UnitStaffPage })))
+const UnitMachinesPage = lazy(() => import('./features/unit/UnitPages').then((m) => ({ default: m.UnitMachinesPage })))
 const CustomerHistoryPage = lazy(() => import('./features/customers/CustomerHistoryPage').then((m) => ({ default: m.CustomerHistoryPage })))
 const ReportsPage = lazy(() => import('./features/reports/ReportsPage').then((m) => ({ default: m.ReportsPage })))
 const BillingPage = lazy(() => import('./features/billing/BillingPage').then((m) => ({ default: m.BillingPage })))
@@ -116,6 +120,10 @@ export default function App() {
                   <Route path="billing" element={guarded('billing', <BillingPage />)} />
                   <Route path="reports" element={guarded('billing', <ReportsPage />)} />
                   <Route path="customers" element={guarded('billing', <CustomerHistoryPage />)} />
+                  <Route path="unit" element={guarded('production.work', <UnitHomePage />)} />
+                  <Route path="unit/allocations" element={guarded('production.work', <UnitAllocationsPage />)} />
+                  <Route path="unit/staff" element={guarded('production.work', <UnitStaffPage />)} />
+                  <Route path="unit/machines" element={guarded('production.work', <UnitMachinesPage />)} />
                   <Route path="settings" element={guarded('administration', <SettingsPage />)} />
                   <Route path="*" element={<Landing />} />
                 </Routes>

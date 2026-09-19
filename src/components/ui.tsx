@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import type { ButtonHTMLAttributes, ComponentProps, ReactNode } from 'react'
 import { AlertTriangle, Check, ChevronLeft, ChevronRight, Info, Loader2, Search, X, XCircle } from 'lucide-react'
 import { cx } from '../lib/format'
@@ -591,7 +592,9 @@ export function Modal({
 
   if (!open) return null
   const widths = { sm: 'max-w-md', md: 'max-w-2xl', lg: 'max-w-4xl', xl: 'max-w-6xl' }
-  return (
+  // Rendered on <body>: an animated or transformed ancestor would otherwise
+  // become the containing block and trap the "fixed" overlay inside it.
+  return createPortal(
     <div
       className="vx-no-print fixed inset-0 flex items-start justify-center overflow-y-auto overscroll-contain bg-scrim/70 p-4 sm:p-8"
       style={{ zIndex: 'var(--z-modal)' }}
@@ -625,7 +628,8 @@ export function Modal({
           </div>
         ) : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -697,7 +701,7 @@ export function Drawer({
   const titleId = useId()
 
   if (!open) return null
-  return (
+  return createPortal(
     <div
       className="vx-no-print fixed inset-0 flex justify-end overscroll-contain bg-scrim/70"
       style={{ zIndex: 'var(--z-modal)' }}
@@ -727,7 +731,8 @@ export function Drawer({
           {children}
         </div>
       </aside>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

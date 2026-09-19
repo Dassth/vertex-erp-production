@@ -199,11 +199,17 @@ describe('sign-in through the real UI', () => {
     await user.type(screen.getByLabelText(/New password/), TEST_PASSWORD)
     await user.type(screen.getByLabelText(/Confirm password/), TEST_PASSWORD)
     await user.click(screen.getByRole('button', { name: /Create password & sign in/ }))
-    await screen.findByRole('heading', { name: /Unit 2 — process work/ }, { timeout: 5000 })
-
-    const modules = screen.getAllByRole('navigation', { name: 'Modules' })[0]
+    // Unit accounts land on their own Home, with their unit menu.
+    await waitFor(() => expect(router.state.location.pathname).toBe('/unit'), { timeout: 5000 })
+    const modules = (await screen.findAllByRole('navigation', { name: 'Modules' }, { timeout: 5000 }))[0]
     expect(within(modules).queryByRole('link', { name: 'Planning' })).toBeNull()
-    expect(within(modules).getByRole('link', { name: 'Production' })).toBeTruthy()
+    expect(
+      within(modules)
+        .getAllByRole('link')
+        .map((a) => a.getAttribute('href')),
+    ).toEqual(['/unit', '/unit/allocations', '/production', '/unit/staff', '/unit/machines'])
+    await router.navigate('/production')
+    await screen.findByRole('heading', { name: /Unit 2 — process work/ }, { timeout: 5000 })
 
     // Unit 2 is allocated only "Die cut"; other units' processes are not shown.
     await user.click(screen.getByRole('button', { name: /Waiting on earlier work/ }))
@@ -219,7 +225,7 @@ describe('sign-in through the real UI', () => {
 
     for (const path of ['/master/products', '/costing', '/dispatch', '/billing']) {
       await router.navigate(path)
-      await waitFor(() => expect(router.state.location.pathname).toBe('/production'))
+      await waitFor(() => expect(router.state.location.pathname).toBe('/unit'))
     }
     expect(stored().audit[0]).toMatchObject({ userId: 'USR-U2', role: 'unit', action: 'Signed in' })
     expect(UNIT(2).unitId).toBe('U2')

@@ -1,6 +1,6 @@
-import type { ProductionUnit, UnitId, UnitMachine, UnitPerson, VertexDB } from '../lib/types'
+import type { JobProcess, ProductionUnit, UnitId, UnitMachine, UnitPerson, VertexDB } from '../lib/types'
 import { audit, docCode, fail, nextSeq, ok, requireCapability, sameText, stampNew, stampUpdate, validationFailure, command } from './common'
-import type { Op } from './common'
+import type { Ctx, Op } from './common'
 
 /* ---------------------------------------------------------------------------
  * Units, responsible people and machines.
@@ -26,6 +26,16 @@ export interface MachineDraft {
   unitId: UnitId
   code: string
   name: string
+}
+
+/** Unit accounts manage the staff and machines of their own unit; everything else needs administration. */
+function ownUnit(ctx: Ctx, unitId: UnitId): boolean {
+  return ctx.actor.role === 'unit' && ctx.actor.unitId === unitId
+}
+
+/** "JOB — process" labels of processes not yet completed that match. */
+function openAssignments(db: VertexDB, match: (p: JobProcess) => boolean): string[] {
+  return db.orders.flatMap((o) => o.stages.flatMap((s) => s.processes.filter((p) => p.status !== 'Completed' && match(p)).map((p) => `${o.code} ${p.name}`)))
 }
 
 export const savePerson = command(
@@ -82,11 +92,15 @@ export const setPersonActive = command(
   'setPersonActive',
   (personId: string, active: boolean): Op<UnitPerson> =>
   (db, ctx) => {
-    const denied = requireCapability(ctx, 'administration')
-    if (denied) return denied
     const person = db.people.find((p) => p.id === personId)
     if (!person) return fail('Person not found.')
+    const denied = ownUnit(ctx, person.unitId) ? null : requireCapability(ctx, 'administration')
+    if (denied) return denied
     if (person.active === active) return ok(db, person)
+    if (!active) {
+      const open = openAssignments(db, (p) => p.responsiblePersonId === personId)
+      if (open.length) return fail(`${person.name} is responsible for ${open.length} open process(es) (${open.slice(0, 3).join(', ')}). Assign someone else to them first.`)
+    }
     const updated = stampUpdate({ ...person, active }, ctx)
     return ok(
       audit({ ...db, people: db.people.map((p) => (p.id === personId ? updated : p)) }, ctx, {
@@ -154,11 +168,15 @@ export const setMachineActive = command(
   'setMachineActive',
   (machineId: string, active: boolean): Op<UnitMachine> =>
   (db, ctx) => {
-    const denied = requireCapability(ctx, 'administration')
-    if (denied) return denied
     const machine = db.machines.find((m) => m.id === machineId)
     if (!machine) return fail('Machine not found.')
+    const denied = ownUnit(ctx, machine.unitId) ? null : requireCapability(ctx, 'administration')
+    if (denied) return denied
     if (machine.active === active) return ok(db, machine)
+    if (!active) {
+      const open = openAssignments(db, (p) => p.machineId === machineId)
+      if (open.length) return fail(`${machine.name} is set on ${open.length} open process(es) (${open.slice(0, 3).join(', ')}). Choose another machine for them first.`)
+    }
     const updated = stampUpdate({ ...machine, active }, ctx)
     return ok(
       audit({ ...db, machines: db.machines.map((m) => (m.id === machineId ? updated : m)) }, ctx, {

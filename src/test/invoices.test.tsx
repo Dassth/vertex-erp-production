@@ -164,6 +164,7 @@ describe('Invoices page', () => {
     const nav = screen.getAllByRole('navigation', { name: 'Modules' })[0]
     expect(within(nav).queryByRole('link', { name: /Invoices/ })).toBeNull()
     await router.navigate('/invoices')
-    await waitFor(() => expect(router.state.location.pathname).toBe('/production'))
+    // A unit account recovers to its own Home.
+    await waitFor(() => expect(router.state.location.pathname).toBe('/unit'))
   }, 30000)
 })
