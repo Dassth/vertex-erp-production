@@ -25,6 +25,7 @@ import { purchaseTotals } from './gst'
 import type { GstRegister, MonthlyGstReport, ReportKind } from './gstReport'
 import { ITEMS_HEAD, PARTY_HEAD, REPORT_TITLE } from './gstReport'
 import type { CellValue, ReportTable } from './reportTable'
+import type { JobCard } from './jobCard'
 import type { ProcessWorkRow } from './selectors'
 
 export const FONT_FAMILY = 'NotoSansTamil'
@@ -613,6 +614,122 @@ export function reportTableDefinition(table: ReportTable, company: CompanySnapsh
         ? { layout: rules, fontSize: 7, table: { headerRows: 1, dontBreakRows: true, widths, body } }
         : note('Nothing recorded in this month.'),
     ],
+  }
+}
+
+/* --------------------------------- Job card -------------------------------- */
+
+/** A plan from A to Z for the shop floor: route, units, materials, progress, dispatch. No prices. */
+export function jobCardDefinition(card: JobCard, company: CompanySnapshot, generatedAt = new Date()): TDocumentDefinitions {
+  const p = card.plan
+  const generated = format(generatedAt, 'dd MMM yyyy, hh:mm a')
+  const th = (labels: string[], right: number[] = []): TableCell[] => labels.map((h, i) => ({ text: h, style: 'th', alignment: right.includes(i) ? 'right' : 'left' }))
+  const heading = (text: string): Content => ({ text: text.toUpperCase(), style: 'label', margin: [0, 12, 0, 4] })
+  const spec = [
+    p.dimensions ? { text: [{ text: 'Size: ', bold: true }, p.dimensions] } : null,
+    p.options ? { text: [{ text: 'Options: ', bold: true }, p.options] } : null,
+    p.instructions ? { text: [{ text: 'Instructions: ', bold: true }, p.instructions] } : null,
+  ].filter(present) as Content[]
+  return {
+    ...base(`Job card ${card.orderCode ?? p.code}`, `${card.customer.company} — ${card.product.name}`, generatedAt.toISOString()),
+    footer: footer(`Job card · ${p.code}${card.orderCode ? ` · ${card.orderCode}` : ''} · printed ${generated}`),
+    content: (
+      [
+        ...companyHeader(company, 'JOB CARD', [
+          ['Order ID', card.orderCode ?? 'Not released'],
+          ['Plan', p.code],
+          ['Priority', p.priority],
+          ['Status', card.productionStatus],
+          ['Costing', card.costing],
+        ]),
+        partyBoxes(
+          {
+            title: `Customer ${card.customer.code}`,
+            lines: [card.customer.company, card.customer.contact, card.customer.address, card.customer.gstin ? `GSTIN ${card.customer.gstin}` : '', p.customerRef ? `Customer PO / ref: ${p.customerRef}` : ''],
+          },
+          {
+            title: 'Job',
+            lines: [
+              `${card.product.name}${card.product.code ? ` (${card.product.code})` : ''}`,
+              `Quantity ${qty(p.quantity)} ${card.product.uom}`,
+              `Order date ${day(p.orderDate)} · Delivery ${day(p.deliveryDate)}`,
+              card.product.hsn ? `HSN ${card.product.hsn}` : '',
+              card.product.category,
+            ],
+          },
+        ),
+        spec.length
+          ? { layout: boxed, table: { widths: ['*'], body: [[{ stack: [{ text: 'SPECIFICATION', style: 'label', margin: [0, 0, 0, 3] }, ...spec] }]] } }
+          : null,
+        heading('Process route'),
+        card.processes.length
+          ? {
+              layout: rules,
+              fontSize: 8,
+              table: {
+                headerRows: 1,
+                dontBreakRows: true,
+                widths: [14, 72, '*', 40, 96, 74, 56, 40],
+                body: [
+                  th(['#', 'Stage', 'Process', 'Unit', 'Person / machine', 'Planned', 'Status', 'Sign']),
+                  ...card.processes.map((x, i): TableCell[] => [
+                    String(i + 1),
+                    x.stage,
+                    { text: x.method ? [x.name, { text: `\n${x.method}`, color: MUTED, fontSize: 7 }] : x.name },
+                    x.unit,
+                    x.resource,
+                    x.planned,
+                    { text: x.status, bold: x.done },
+                    '',
+                  ]),
+                ],
+              },
+            }
+          : note('The product has no stages or processes defined in Master.'),
+        heading('Materials to issue'),
+        card.materials.length
+          ? {
+              layout: rules,
+              fontSize: 8,
+              table: {
+                headerRows: 1,
+                dontBreakRows: true,
+                widths: [50, '*', 100, 80, 70, 60],
+                body: [
+                  th(['Code', 'Material', 'Used in', 'Per piece / layout', 'Required', 'Issue'], [4, 5]),
+                  ...card.materials.map((m): TableCell[] => [m.code, m.name, m.usedIn, m.perPiece, { text: m.required, alignment: 'right' }, { text: m.issue, alignment: 'right' }]),
+                ],
+              },
+            }
+          : note('No materials listed for this product.'),
+        { text: card.materialsNote, style: 'muted', margin: [0, 3, 0, 0] },
+        heading('Dispatch and invoices'),
+        card.dispatches.length
+          ? {
+              layout: rules,
+              fontSize: 8,
+              table: {
+                headerRows: 1,
+                widths: [60, 70, 70, 80, '*'],
+                body: [
+                  th(['Dispatch', 'Date', 'Quantity', 'Received', 'Invoice'], [2]),
+                  ...card.dispatches.map((d): TableCell[] => [d.code, day(d.date), { text: `${qty(d.quantity)} ${card.product.uom}`, alignment: 'right' }, d.received === 'Awaiting' ? d.received : day(d.received), d.invoice]),
+                ],
+              },
+            }
+          : { text: 'Nothing dispatched yet.', style: 'muted' },
+        {
+          unbreakable: true,
+          margin: [0, 16, 0, 0],
+          columns: ['Planned by', 'Production in-charge', 'Quality check', 'Dispatched by'].map((label) => ({
+            stack: [
+              { canvas: [{ type: 'line', x1: 0, y1: 18, x2: 110, y2: 18, lineWidth: 0.6, lineColor: RULE }] },
+              { text: label, style: 'muted', margin: [0, 3, 0, 0] },
+            ],
+          })),
+        },
+      ] as Array<Content | null>
+    ).filter(present),
   }
 }
 

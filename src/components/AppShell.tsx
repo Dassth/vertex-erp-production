@@ -47,6 +47,7 @@ import { Button, Drawer, IconButton } from './ui'
 import { AuditTrail } from './AuditTrail'
 import { AccountDialog, ClearDataDialog, CompanyProfileDialog } from './AdminDialogs'
 import { SetupGuide } from './SetupGuide'
+import { RecentPlans } from './RecentPlans'
 
 /* Hallmark · genre: modern-minimal · macrostructure: Bento Grid
  * nav: collapsible left sidebar (slide-in panel on small screens) · footer: Ft2 Inline single line
@@ -270,6 +271,7 @@ function NavList({ items, compact }: { items: NavItem[]; compact?: boolean }) {
 
 /** Desktop: fixed on the left, scrolls on its own, collapses to icons. */
 function Sidebar({ items, collapsed, onToggle }: { items: NavItem[]; collapsed: boolean; onToggle: () => void }) {
+  const showPlans = useStore().can('planning')
   return (
     <aside
       className={cx(
@@ -284,15 +286,19 @@ function Sidebar({ items, collapsed, onToggle }: { items: NavItem[]; collapsed: 
           {collapsed ? <PanelLeftOpen className="h-[18px] w-[18px]" /> : <PanelLeftClose className="h-[18px] w-[18px]" />}
         </IconButton>
       </div>
-      <nav aria-label="Modules" className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
-        <NavList items={items} compact={collapsed} />
-      </nav>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
+        <nav aria-label="Modules">
+          <NavList items={items} compact={collapsed} />
+        </nav>
+        {showPlans && !collapsed ? <RecentPlans /> : null}
+      </div>
     </aside>
   )
 }
 
 /** Phones and small windows: the same menu slides in from the left. */
 function MobileSheet({ open, onClose, items }: { open: boolean; onClose: () => void; items: NavItem[] }) {
+  const showPlans = useStore().can('planning')
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -315,9 +321,12 @@ function MobileSheet({ open, onClose, items }: { open: boolean; onClose: () => v
             <X className="h-4 w-4" />
           </IconButton>
         </div>
-        <nav aria-label="Modules" className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
-          <NavList items={items} />
-        </nav>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
+          <nav aria-label="Modules">
+            <NavList items={items} />
+          </nav>
+          {showPlans ? <RecentPlans /> : null}
+        </div>
       </div>
     </div>
   )

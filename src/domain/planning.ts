@@ -306,3 +306,30 @@ export const cancelPlan = command(
     )
   },
 )
+
+/**
+ * Pin or unpin a plan. Pinned plans are listed first — in the sidebar and in
+ * Planning — for every account. The plan's edit timestamp is left alone, so
+ * pinning never conflicts with someone editing the plan.
+ */
+export const setPlanPinned = command(
+  'setPlanPinned',
+  (planId: string, pinned: boolean): Op<Plan> =>
+  (db, ctx) => {
+    const denied = requireCapability(ctx, 'planning')
+    if (denied) return denied
+    const plan = db.plans.find((p) => p.id === planId)
+    if (!plan) return fail('Plan not found.')
+    if (!!plan.pinned === pinned) return ok(db, plan)
+    const updated: Plan = { ...plan, pinned, pinnedAt: pinned ? ctx.now.toISOString() : null }
+    return ok(
+      audit({ ...db, plans: db.plans.map((p) => (p.id === planId ? updated : p)) }, ctx, {
+        action: pinned ? 'Plan pinned' : 'Plan unpinned',
+        entity: 'Plan',
+        entityId: planId,
+        entityLabel: plan.code,
+      }),
+      updated,
+    )
+  },
+)

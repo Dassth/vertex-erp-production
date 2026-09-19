@@ -1,16 +1,18 @@
 import { useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { addDays, format } from 'date-fns'
-import { ArrowLeft, ArrowRight, CalendarRange, Lock, Save, Undo2, XCircle } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CalendarRange, ClipboardList, Eye, Lock, Pin, Save, Undo2, XCircle } from 'lucide-react'
 import { useStore } from '../../store/store'
 import type { Plan, Priority } from '../../lib/types'
 import type { PlanDraft } from '../../domain/planning'
-import { cancelPlan, planReadiness, returnPlanToDraft, savePlan, submitPlan } from '../../domain/planning'
+import { cancelPlan, planReadiness, returnPlanToDraft, savePlan, setPlanPinned, submitPlan } from '../../domain/planning'
 import { PRIORITIES, processHours, stageHours } from '../../lib/schedule'
 import { cx, fmtDateTime, qty } from '../../lib/format'
 import { Badge, Button, Card, CardHead, EmptyState, Field, Input, Modal, Select, Textarea } from '../../components/ui'
 import { ConflictNotice, Detail, IssueList, LinkButton, NumberInput, PageHeader, focusFirstInvalid, useDocumentTitle, useUnsavedChanges } from '../../components/page'
 import { PlanStatusBadge } from '../../components/status'
+import { DocumentPreview, DownloadButton, jobCardDoc, useLatestDb } from '../../components/DocumentPreview'
+import type { PreviewDoc } from '../../components/DocumentPreview'
 
 export function PlanEditorPage() {
   const { planId } = useParams()
@@ -154,6 +156,7 @@ function PlanEditor({ plan }: { plan?: Plan }) {
         actions={
           <>
             {plan ? <PlanStatusBadge status={plan.status} /> : null}
+            {plan ? <PlanHeaderActions plan={plan} /> : null}
             <LinkButton to="/planning" variant="secondary" icon={<ArrowLeft className="h-4 w-4" />}>
               Plans
             </LinkButton>
@@ -499,5 +502,30 @@ function PlanEditor({ plan }: { plan?: Plan }) {
       ) : null}
       {guard.dialog}
     </div>
+  )
+}
+
+/** Pin and job card for a saved plan — available in every status. */
+function PlanHeaderActions({ plan }: { plan: Plan }) {
+  const { run, pushToast } = useStore()
+  const read = useLatestDb()
+  const [preview, setPreview] = useState<PreviewDoc | null>(null)
+  const togglePin = async () => {
+    const r = await run(setPlanPinned(plan.id, !plan.pinned))
+    if (!r.ok) pushToast({ title: 'Could not change the pin', message: r.error, level: 'danger' })
+  }
+  return (
+    <>
+      <Button variant="secondary" icon={<Pin className={plan.pinned ? 'h-4 w-4 fill-current' : 'h-4 w-4'} />} onClick={togglePin}>
+        {plan.pinned ? 'Unpin' : 'Pin'}
+      </Button>
+      <Button variant="ghost" icon={<Eye className="h-4 w-4" />} onClick={() => setPreview(jobCardDoc(read, plan.id))}>
+        Preview
+      </Button>
+      <DownloadButton variant="secondary" icon={<ClipboardList className="h-4 w-4" />} doc={() => jobCardDoc(read, plan.id)}>
+        Job card
+      </DownloadButton>
+      <DocumentPreview doc={preview} onClose={() => setPreview(null)} />
+    </>
   )
 }

@@ -331,7 +331,9 @@ export interface Plan extends Stamp {
   submittedAt: string | null
   submittedBy: string | null
   costingId: string | null
-  orderId: string | null
+  orderId: string | null  /** Pinned plans stay at the top of the sidebar and the plan list, for everyone. */
+  pinned?: boolean
+  pinnedAt?: string | null
 }
 
 /* ----------------------------- Order costing ----------------------------- */
