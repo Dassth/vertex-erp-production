@@ -170,13 +170,6 @@ export function PurchaseBills({ q, onSearch, onPreview }: { q: string; onSearch:
 
       {editing ? <PurchaseEditor bill={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onPreview={onPreview} /> : null}
       <DeletePurchase bill={deleting} onClose={() => setDeleting(null)} />
-      <datalist id={MATERIAL_LIST_ID}>
-        {db.materials
-          .filter((m) => m.active)
-          .map((m) => (
-            <option key={m.id} value={m.name} />
-          ))}
-      </datalist>
     </>
   )
 }
@@ -203,7 +196,7 @@ function DeletePurchase({ bill, onClose }: { bill: PurchaseBill | null; onClose:
 
 /* --------------------------------- Editor --------------------------------- */
 
-function PurchaseEditor({ bill, onClose, onPreview }: { bill: PurchaseBill | null; onClose: () => void; onPreview: (d: PreviewDoc) => void }) {
+export function PurchaseEditor({ bill, onClose, onPreview }: { bill: PurchaseBill | null; onClose: () => void; onPreview: (d: PreviewDoc) => void }) {
   const { db, run, pushToast } = useStore()
   const read = useLatestDb()
   const [d, setD] = useState<PurchaseDraft>(() => toDraft(bill))
@@ -293,6 +286,13 @@ function PurchaseEditor({ bill, onClose, onPreview }: { bill: PurchaseBill | nul
         </Field>
       </div>
 
+      <datalist id={MATERIAL_LIST_ID}>
+        {db.materials
+          .filter((m) => m.active)
+          .map((m) => (
+            <option key={m.id} value={m.name} />
+          ))}
+      </datalist>
       <div className="mt-3 overflow-x-auto rounded-md border border-rule">
         <table className="w-full min-w-[960px]">
           <thead>

@@ -19,6 +19,8 @@ import { purchaseTotals, splitPaise } from './gst'
 import type { ResolvedSupply } from './gst'
 
 export interface GstRow {
+  /** The purchase bill or sales invoice this row comes from. */
+  sourceId: string
   party: string
   /** What was bought or sold on this bill — materials for purchases, products for sales. */
   items: string
@@ -213,6 +215,7 @@ export function monthlyGstReport(db: VertexDB, month: string): MonthlyGstReport 
         key: `${pct}|${t.supply}`,
         title: sectionTitle(pct, t.supply, 'PURCHASE'),
         order: t.supply === 'intra' ? pct : 1000 + pct,
+        sourceId: bill.id,
         party: bill.supplierName,
         items: [...g.items].join('; '),
         gstin: bill.supplierGstin,
@@ -246,6 +249,7 @@ export function monthlyGstReport(db: VertexDB, month: string): MonthlyGstReport 
       key: `${inv.taxPct}|${supply}`,
       title: sectionTitle(inv.taxPct, supply, 'SALES'),
       order: supply === 'inter' ? inv.taxPct : 1000 + inv.taxPct,
+      sourceId: inv.id,
       party: inv.customer.company,
       items: inv.lines.map((l) => `${l.description || inv.productName} (${qtyText(l.quantity)} ${l.uom})`).join('; '),
       gstin: inv.customer.gstin,

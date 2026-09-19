@@ -38,3 +38,35 @@ describe('monthly GST report', () => {
     expect(monthlyGstReport(db, '2026-08').purchases.sections[1].taxable).toBe(10000)
   })
 })
+
+describe('invoice full edit flows into the report', () => {
+  it('recalculates the invoice and the sales report from the edited lines', async () => {
+    const { applyInvoiceDraft, invoiceToDraft, validateInvoiceDraft } = await import('../domain/purchases')
+    const db = sampleDb()
+    const base = db.invoices[1]
+    const inv = {
+      ...base,
+      company: db.company,
+      customer: { ...base.customer, contactPerson: '', billingAddress: 'Sivakasi', phone: '', email: '' },
+      refs: { customerRef: '' },
+      discount: 0,
+      subtotal: 10000,
+      taxLabel: 'GST',
+      transporter: '',
+      vehicleNo: '',
+      notes: '',
+      paymentTerms: '',
+      deliveryAddress: '',
+    } as unknown as typeof base
+    const draft = invoiceToDraft(inv)
+    draft.lines = [{ ...draft.lines[0], quantity: 200, rate: 60 }]
+    draft.tax = { ...draft.tax, supplyType: 'intra', cgstPct: 2.5, sgstPct: 2.5 }
+    expect(validateInvoiceDraft(draft)).toEqual({})
+    const edited = applyInvoiceDraft(inv, draft)
+    expect([edited.taxableValue, edited.cgst, edited.sgst, edited.total]).toEqual([12000, 300, 300, 12600])
+    db.invoices[1] = edited
+    const local = monthlyGstReport(db, '2026-08').sales.sections.find((s) => s.title.includes('LOCAL'))!
+    expect(local.title).toBe('GST 5% LOCAL SALES')
+    expect(local.rows[0]).toMatchObject({ sourceId: inv.id, taxable: 12000, cgstPct: 2.5, total: 12600 })
+  })
+})

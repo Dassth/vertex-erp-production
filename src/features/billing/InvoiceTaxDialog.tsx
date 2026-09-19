@@ -4,6 +4,7 @@ import { useStore } from '../../store/store'
 import type { Invoice, SupplyType } from '../../lib/types'
 import { moneyPaise } from '../../lib/format'
 import { SUPPLY_CHOICES, SUPPLY_LABEL, resolveSupply, retaxInvoice } from '../../lib/gst'
+import type { ResolvedSupply } from '../../lib/gst'
 import { editInvoiceTax, validateInvoiceTax } from '../../domain/purchases'
 import type { InvoiceTaxEdit } from '../../lib/gst'
 import { Button, Field, Input, Modal, Select } from '../../components/ui'
@@ -32,16 +33,6 @@ function Editor({ invoice, onClose }: { invoice: Invoice; onClose: () => void })
   })
   // What "Auto" works out to, from the two GSTIN state codes.
   const autoSupply = resolveSupply('auto', invoice.company.gstin, invoice.customer.gstin, invoice.customer.placeOfSupply)
-  const local = edit.supplyType === 'intra' || edit.supplyType === 'none' || (edit.supplyType === 'auto' && autoSupply === 'intra')
-  const split = local && edit.supplyType !== 'none'
-  const half = (pct: number) => Math.round((pct / 2) * 1000) / 1000
-  const setTotalPct = (v: number) => setEdit((e) => ({ ...e, taxPct: v, cgstPct: half(v), sgstPct: half(v) }))
-  const setPart = (key: 'cgstPct' | 'sgstPct', v: number | null) =>
-    setEdit((e) => {
-      const next = { ...e, [key]: v ?? NaN }
-      const sum = (next.cgstPct ?? NaN) + (next.sgstPct ?? NaN)
-      return Number.isFinite(sum) ? { ...next, taxPct: Math.round(sum * 1000) / 1000 } : next
-    })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const inFlight = useRef(false)
@@ -107,6 +98,69 @@ function Editor({ invoice, onClose }: { invoice: Invoice; onClose: () => void })
       }
     >
       <div className="grid gap-x-4 sm:grid-cols-3">
+        <TaxFields edit={edit} setEdit={setEdit} errors={errors} autoSupply={autoSupply} />
+        <Field label="Tax label">
+          <Input value={edit.taxLabel} onChange={(e) => setEdit((x) => ({ ...x, taxLabel: e.target.value }))} />
+        </Field>
+        {invoice.lines.map((l, i) => (
+          <Field key={i} label={`HSN — ${l.description}`} className="sm:col-span-2">
+            <Input
+              value={edit.hsn[i] ?? ''}
+              spellCheck={false}
+              list={HSN_LIST_ID}
+              onChange={(e) => setEdit((x) => ({ ...x, hsn: x.hsn.map((h, j) => (j === i ? e.target.value : h)) }))}
+            />
+          </Field>
+        ))}
+      </div>
+
+      <table className="mt-2 w-full rounded-md border border-rule">
+        <thead>
+          <tr>
+            <th className="vx-th" />
+            <th className="vx-th text-right">As issued</th>
+            <th className="vx-th text-right">After edit</th>
+          </tr>
+        </thead>
+        <tbody>
+          {line('Taxable value', moneyPaise(invoice.taxableValue), moneyPaise(invoice.taxableValue))}
+          {line('GST', `${invoice.taxPct}% = ${moneyPaise(invoice.taxAmount)}`, preview ? `${preview.taxPct}% = ${moneyPaise(preview.taxAmount)}` : null)}
+          {line('Split', splitText(invoice), preview ? splitText(preview) : null)}
+          {line('Invoice total', moneyPaise(invoice.total), preview ? moneyPaise(preview.total) : null)}
+        </tbody>
+      </table>
+      {invoice.editedAt ? <p className="mt-2 text-xs text-muted">Last GST edit by {invoice.editedBy}.</p> : null}
+    </Modal>
+  )
+}
+
+/**
+ * GST %, GST type and — for a local sale — the CGST / SGST split. Shared by the
+ * tax-only editor and the full invoice editor so both behave the same way.
+ */
+export function TaxFields({
+  edit,
+  setEdit,
+  errors,
+  autoSupply,
+}: {
+  edit: InvoiceTaxEdit
+  setEdit: (fn: (e: InvoiceTaxEdit) => InvoiceTaxEdit) => void
+  errors: Record<string, string>
+  autoSupply: ResolvedSupply
+}) {
+  const local = edit.supplyType === 'intra' || edit.supplyType === 'none' || (edit.supplyType === 'auto' && autoSupply === 'intra')
+  const split = local && edit.supplyType !== 'none'
+  const half = (pct: number) => Math.round((pct / 2) * 1000) / 1000
+  const setTotalPct = (v: number) => setEdit((e) => ({ ...e, taxPct: v, cgstPct: half(v), sgstPct: half(v) }))
+  const setPart = (key: 'cgstPct' | 'sgstPct', v: number | null) =>
+    setEdit((e) => {
+      const next = { ...e, [key]: v ?? NaN }
+      const sum = (next.cgstPct ?? NaN) + (next.sgstPct ?? NaN)
+      return Number.isFinite(sum) ? { ...next, taxPct: Math.round(sum * 1000) / 1000 } : next
+    })
+  return (
+    <>
         <Field label="GST %" error={errors.taxPct} as="div" hint={split ? 'CGST % + SGST %' : undefined}>
           <GstPctInput label="GST %" value={edit.taxPct} invalid={!!errors.taxPct} onChange={setTotalPct} />
         </Field>
@@ -147,37 +201,6 @@ function Editor({ invoice, onClose }: { invoice: Invoice; onClose: () => void })
             )}
           </div>
         ) : null}
-        <Field label="Tax label">
-          <Input value={edit.taxLabel} onChange={(e) => setEdit((x) => ({ ...x, taxLabel: e.target.value }))} />
-        </Field>
-        {invoice.lines.map((l, i) => (
-          <Field key={i} label={`HSN — ${l.description}`} className="sm:col-span-2">
-            <Input
-              value={edit.hsn[i] ?? ''}
-              spellCheck={false}
-              list={HSN_LIST_ID}
-              onChange={(e) => setEdit((x) => ({ ...x, hsn: x.hsn.map((h, j) => (j === i ? e.target.value : h)) }))}
-            />
-          </Field>
-        ))}
-      </div>
-
-      <table className="mt-2 w-full rounded-md border border-rule">
-        <thead>
-          <tr>
-            <th className="vx-th" />
-            <th className="vx-th text-right">As issued</th>
-            <th className="vx-th text-right">After edit</th>
-          </tr>
-        </thead>
-        <tbody>
-          {line('Taxable value', moneyPaise(invoice.taxableValue), moneyPaise(invoice.taxableValue))}
-          {line('GST', `${invoice.taxPct}% = ${moneyPaise(invoice.taxAmount)}`, preview ? `${preview.taxPct}% = ${moneyPaise(preview.taxAmount)}` : null)}
-          {line('Split', splitText(invoice), preview ? splitText(preview) : null)}
-          {line('Invoice total', moneyPaise(invoice.total), preview ? moneyPaise(preview.total) : null)}
-        </tbody>
-      </table>
-      {invoice.editedAt ? <p className="mt-2 text-xs text-muted">Last GST edit by {invoice.editedBy}.</p> : null}
-    </Modal>
+    </>
   )
 }

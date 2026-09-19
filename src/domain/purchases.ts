@@ -1,4 +1,5 @@
-import type { Invoice, PurchaseBill, PurchaseLine, SupplyType } from '../lib/types'
+import type { CustomerSnapshot, Invoice, PurchaseBill, PurchaseLine, SupplyType } from '../lib/types'
+import { fromPaise, toPaise } from '../lib/costing'
 import { isValidGstin } from '../lib/billing'
 import { purchaseTotals, retaxInvoice, validGstPct } from '../lib/gst'
 import type { InvoiceTaxEdit } from '../lib/gst'
@@ -178,6 +179,144 @@ export const editInvoiceTax = command(
         field: 'GST and total',
         oldValue: `${current.taxLabel} ${current.taxPct}% = ${current.taxAmount.toFixed(2)}, total ${current.total.toFixed(2)}`,
         newValue: `${updated.taxLabel} ${updated.taxPct}% (${updated.igst !== null ? 'IGST' : updated.cgst !== null ? `CGST ${updated.cgstPct}% + SGST ${updated.sgstPct}%` : 'single line'}) = ${updated.taxAmount.toFixed(2)}, total ${updated.total.toFixed(2)}`,
+      })
+      return ok(next, updated)
+    },
+)
+
+/* --------------------------- Sales invoice full edit ------------------------ */
+
+export interface InvoiceLineDraft {
+  description: string
+  hsn: string
+  quantity: number
+  uom: string
+  rate: number
+}
+
+/** Everything billing may correct on an issued invoice. The invoice number never changes. */
+export interface InvoiceDraft {
+  issueDate: string
+  customer: Pick<CustomerSnapshot, 'company' | 'contactPerson' | 'billingAddress' | 'gstin' | 'placeOfSupply' | 'phone' | 'email'>
+  deliveryAddress: string
+  customerRef: string
+  lines: InvoiceLineDraft[]
+  discount: number
+  tax: InvoiceTaxEdit
+  paymentTerms: string
+  transporter: string
+  vehicleNo: string
+  notes: string
+}
+
+export function invoiceToDraft(inv: Invoice): InvoiceDraft {
+  return {
+    issueDate: inv.issueDate,
+    customer: {
+      company: inv.customer.company,
+      contactPerson: inv.customer.contactPerson,
+      billingAddress: inv.customer.billingAddress,
+      gstin: inv.customer.gstin,
+      placeOfSupply: inv.customer.placeOfSupply,
+      phone: inv.customer.phone,
+      email: inv.customer.email,
+    },
+    deliveryAddress: inv.deliveryAddress,
+    customerRef: inv.refs.customerRef,
+    lines: inv.lines.map((l) => ({ description: l.description, hsn: l.hsn, quantity: l.quantity, uom: l.uom, rate: l.rate })),
+    discount: inv.discount,
+    tax: {
+      taxPct: inv.taxPct,
+      supplyType: inv.supplyType ?? 'auto',
+      cgstPct: inv.cgstPct ?? inv.taxPct / 2,
+      sgstPct: inv.sgstPct ?? inv.taxPct / 2,
+      hsn: inv.lines.map((l) => l.hsn),
+      taxLabel: inv.taxLabel,
+    },
+    paymentTerms: inv.paymentTerms,
+    transporter: inv.transporter,
+    vehicleNo: inv.vehicleNo,
+    notes: inv.notes,
+  }
+}
+
+export function validateInvoiceDraft(d: InvoiceDraft): Record<string, string> {
+  const e: Record<string, string> = {}
+  if (!isIsoDate(d.issueDate)) e.issueDate = 'Enter the invoice date.'
+  if (!d.customer.company.trim()) e.company = 'Enter the customer name.'
+  if (d.customer.gstin.trim() && !isValidGstin(d.customer.gstin)) e.gstin = 'GSTIN must be 15 characters, starting with the 2-digit state code.'
+  if (!d.lines.length) e.lines = 'Keep at least one line.'
+  d.lines.forEach((l, i) => {
+    if (!l.description.trim()) e[`line.${i}.description`] = 'Enter the description.'
+    if (!(Number.isFinite(l.quantity) && l.quantity > 0)) e[`line.${i}.quantity`] = 'Quantity must be more than 0.'
+    if (!(Number.isFinite(l.rate) && l.rate >= 0)) e[`line.${i}.rate`] = 'Enter the rate.'
+  })
+  if (!(Number.isFinite(d.discount) && d.discount >= 0)) e.discount = 'Discount cannot be negative.'
+  Object.assign(e, validateInvoiceTax({ lines: d.lines.map(() => null) } as unknown as Invoice, { ...d.tax, hsn: d.lines.map((l) => l.hsn) }))
+  return e
+}
+
+/** The invoice rebuilt from a draft: line amounts, taxable value, GST and total are recalculated. */
+export function applyInvoiceDraft(inv: Invoice, d: InvoiceDraft): Invoice {
+  const lines = d.lines.map((l) => ({
+    description: l.description.trim(),
+    hsn: l.hsn.trim(),
+    quantity: l.quantity,
+    uom: l.uom.trim(),
+    rate: l.rate,
+    amount: fromPaise(Math.round(l.quantity * toPaise(l.rate))),
+  }))
+  const subtotal = lines.reduce((s, l) => s + toPaise(l.amount), 0)
+  const discount = Math.min(toPaise(d.discount), subtotal)
+  const base: Invoice = {
+    ...inv,
+    issueDate: d.issueDate,
+    customer: {
+      ...inv.customer,
+      ...d.customer,
+      company: d.customer.company.trim(),
+      gstin: d.customer.gstin.trim().toUpperCase(),
+      billingAddress: d.customer.billingAddress.trim(),
+    },
+    deliveryAddress: d.deliveryAddress.trim(),
+    refs: { ...inv.refs, customerRef: d.customerRef.trim() },
+    lines,
+    subtotal: fromPaise(subtotal),
+    discount: fromPaise(discount),
+    taxableValue: fromPaise(subtotal - discount),
+    paymentTerms: d.paymentTerms.trim(),
+    transporter: d.transporter.trim(),
+    vehicleNo: d.vehicleNo.trim(),
+    notes: d.notes.trim(),
+  }
+  return retaxInvoice(base, { ...d.tax, hsn: lines.map((l) => l.hsn) })
+}
+
+/**
+ * Full correction of an issued sales invoice. The same record is updated, so the
+ * Billing list, the Invoices page, the PDF and the monthly Sales report all show
+ * the corrected figures. Dispatch quantities and balances are not touched.
+ */
+export const editInvoice = command(
+  'editInvoice',
+  (invoiceId: string, draft: InvoiceDraft): Op<Invoice> =>
+    (db, ctx) => {
+      const denied = requireCapability(ctx, 'billing')
+      if (denied) return denied
+      const current = db.invoices.find((i) => i.id === invoiceId)
+      if (!current) return fail('Invoice not found.')
+      const errors = validateInvoiceDraft(draft)
+      if (hasFieldErrors(errors)) return validationFailure(errors)
+      const updated: Invoice = { ...applyInvoiceDraft(current, draft), editedAt: ctx.now.toISOString(), editedBy: ctx.actor.name }
+      let next = { ...db, invoices: db.invoices.map((i) => (i.id === invoiceId ? updated : i)) }
+      next = audit(next, ctx, {
+        action: 'Invoice edited',
+        entity: 'Invoice',
+        entityId: updated.id,
+        entityLabel: `${updated.number} — ${updated.customer.company}`,
+        field: 'Invoice',
+        oldValue: `${current.issueDate}, ${current.customer.company}, taxable ${current.taxableValue.toFixed(2)}, ${current.taxLabel} ${current.taxPct}%, total ${current.total.toFixed(2)}`,
+        newValue: `${updated.issueDate}, ${updated.customer.company}, taxable ${updated.taxableValue.toFixed(2)}, ${updated.taxLabel} ${updated.taxPct}%, total ${updated.total.toFixed(2)}`,
       })
       return ok(next, updated)
     },

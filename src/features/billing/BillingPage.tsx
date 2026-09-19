@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Download, Eye, FileStack, PackageCheck, Percent, ReceiptText, Search, Truck } from 'lucide-react'
+import { ArrowLeft, Download, Eye, FilePenLine, FileStack, PackageCheck, Percent, ReceiptText, Search, Truck } from 'lucide-react'
 import { useStore } from '../../store/store'
 import type { Invoice, VertexDB } from '../../lib/types'
 import { fmtDate, fmtDateTime, moneyPaise, moneyShort } from '../../lib/format'
@@ -12,10 +12,9 @@ import { DocumentPreview, DownloadButton, InvoiceDocActions, summaryDoc, useDeli
 import type { PreviewDoc } from '../../components/DocumentPreview'
 import { HsnDatalist, PurchaseBills } from './PurchaseBills'
 import { InvoiceTaxDialog } from './InvoiceTaxDialog'
-import { GstReport } from './GstReport'
-import { defaultReportMonth } from '../../lib/gstReport'
+import { InvoiceEditDialog } from './InvoiceEditDialog'
 
-type BillingTab = 'sales' | 'purchase' | 'report'
+type BillingTab = 'sales' | 'purchase'
 
 const STATUS_LABEL: Record<OrderInvoiceStatus, string> = { none: 'Not dispatched', partial: 'Partially dispatched', full: 'Fully dispatched' }
 const STATUS_TONE: Record<OrderInvoiceStatus, 'slate' | 'amber' | 'green'> = { none: 'slate', partial: 'amber', full: 'green' }
@@ -31,9 +30,8 @@ export function BillingPage() {
   const q = params.get('q') ?? ''
   const status = (params.get('status') ?? '') as OrderInvoiceStatus | ''
   const orderId = params.get('order')
-  const rawTab = params.get('tab')
-  const tab: BillingTab = rawTab === 'purchase' || rawTab === 'report' ? rawTab : 'sales'
-  const month = /^\d{4}-\d{2}$/.test(params.get('month') ?? '') ? params.get('month')! : defaultReportMonth()
+  const tab: BillingTab = params.get('tab') === 'purchase' ? 'purchase' : 'sales'
+  const [fullEdit, setFullEdit] = useState<Invoice | null>(null)
   const [taxEdit, setTaxEdit] = useState<Invoice | null>(null)
 
   // Documents read the latest committed state when they are built, not the state at render time.
@@ -74,12 +72,10 @@ export function BillingPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow={tab === 'purchase' ? 'Billing · Purchase' : tab === 'report' ? 'Billing · Reports' : 'Billing · Sales'}
-        title={tab === 'purchase' ? 'Purchase bills' : tab === 'report' ? 'Monthly GST reports' : 'Sales invoices'}
+        eyebrow={tab === 'purchase' ? 'Billing · Purchase' : 'Billing · Sales'}
+        title={tab === 'purchase' ? 'Purchase bills' : 'Sales invoices'}
         subtitle={
-          tab === 'report'
-            ? 'Purchase and sales reports (Annexure-I) for the month, always up to date with every saved bill. Pick the month and download.'
-            : tab === 'purchase'
+          tab === 'purchase'
             ? 'Bills from suppliers for what we bought. Enter, edit, preview and download them at any time; GST is worked out per item.'
             : 'One entry per order. Download an updated cumulative summary of every confirmed dispatch, or any individual dispatch invoice. Use Edit GST to correct the tax before downloading.'
         }
@@ -90,18 +86,15 @@ export function BillingPage() {
         options={[
           { value: 'sales', label: 'Sales', count: db.invoices.length },
           { value: 'purchase', label: 'Purchase', count: (db.purchases ?? []).length },
-          { value: 'report', label: 'Reports' },
         ]}
         value={tab}
         onChange={(v) => setParams(new URLSearchParams(v === 'sales' ? {} : { tab: v }), { replace: false })}
       />
 
-      {tab === 'report' ? (
-        <GstReport month={month} onMonth={(m) => set({ month: m })} onPreview={setPreview} />
-      ) : tab === 'purchase' ? (
+      {tab === 'purchase' ? (
         <PurchaseBills q={q} onSearch={(v) => set({ q: v })} onPreview={setPreview} />
       ) : selected ? (
-        <OrderInvoices row={selected} read={read} onBack={() => set({ order: null }, true)} onPreview={setPreview} onEditTax={setTaxEdit} />
+        <OrderInvoices row={selected} read={read} onBack={() => set({ order: null }, true)} onPreview={setPreview} onEditTax={setTaxEdit} onEdit={setFullEdit} />
       ) : orderId ? (
         <Card className="vx-anim-up">
           <EmptyState icon={<Search className="h-6 w-6" />} title="Order not found" message="This order does not exist in this browser's records." action={<Button variant="secondary" onClick={() => set({ order: null })}>All orders</Button>} />
@@ -196,12 +189,13 @@ export function BillingPage() {
 
       <DocumentPreview doc={preview} onClose={() => setPreview(null)} />
       <InvoiceTaxDialog invoice={taxEdit} onClose={() => setTaxEdit(null)} />
+      <InvoiceEditDialog invoice={fullEdit} onClose={() => setFullEdit(null)} />
       <HsnDatalist />
     </div>
   )
 }
 
-function OrderInvoices({ row, read, onBack, onPreview, onEditTax }: { row: OrderInvoiceSummary; read: () => VertexDB; onBack: () => void; onPreview: (d: PreviewDoc) => void; onEditTax: (inv: Invoice) => void }) {
+function OrderInvoices({ row, read, onBack, onPreview, onEditTax, onEdit }: { row: OrderInvoiceSummary; read: () => VertexDB; onBack: () => void; onPreview: (d: PreviewDoc) => void; onEditTax: (inv: Invoice) => void; onEdit: (inv: Invoice) => void }) {
   const { can } = useStore()
   const pending = useDeliveryPendingMessage()
   const { order, shipments, dispatchedQty, receivedQty, awaitingQty, remainingQty, billed, receivedBilled, status } = row
@@ -343,11 +337,16 @@ function OrderInvoices({ row, read, onBack, onPreview, onEditTax }: { row: Order
                     <td className="vx-td">
                       {inv ? (
                         <div className="flex flex-col items-end gap-1">
-                          <Button size="sm" variant="ghost" icon={<Percent className="h-3.5 w-3.5" />} onClick={() => onEditTax(inv)} aria-label={`Edit GST — invoice ${inv.number}`}>
-                            Edit GST
-                          </Button>
+                          <div className="flex gap-1">
+                            <Button size="sm" variant="ghost" icon={<Percent className="h-3.5 w-3.5" />} onClick={() => onEditTax(inv)} aria-label={`Edit GST — invoice ${inv.number}`}>
+                              Edit GST
+                            </Button>
+                            <Button size="sm" variant="ghost" icon={<FilePenLine className="h-3.5 w-3.5" />} onClick={() => onEdit(inv)} aria-label={`Edit invoice ${inv.number}`}>
+                              Edit invoice
+                            </Button>
+                          </div>
                           <InvoiceDocActions alwaysAllow invoice={inv} onPreview={onPreview} downloadLabel="Download this dispatch invoice" />
-                          {inv.editedAt ? <span className="text-2xs text-faint">GST {inv.taxPct}% · edited by {inv.editedBy}</span> : null}
+                          {inv.editedAt ? <span className="text-2xs text-faint">Edited by {inv.editedBy}</span> : null}
                         </div>
                       ) : (
                         <span className="text-xs text-warn">Invoice record missing</span>

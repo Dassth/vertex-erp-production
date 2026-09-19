@@ -275,6 +275,7 @@ export function DocumentPreview({ doc, onClose }: { doc: PreviewDoc | null; onCl
       subtitle="Preview — download the PDF to send it to the customer"
       icon={<FileText className="h-5 w-5" />}
       size="xl"
+      pinnedFooter
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
@@ -294,7 +295,7 @@ export function DocumentPreview({ doc, onClose }: { doc: PreviewDoc | null; onCl
       }
     >
       {file && doc ? (
-        <iframe title={doc.title} src={file.url} className="h-[72vh] w-full rounded-md border border-rule bg-surface-2" />
+        <iframe title={doc.title} src={file.url} className="block h-[calc(100dvh-15rem)] min-h-[280px] w-full rounded-md border border-rule bg-surface-2 sm:h-[calc(100dvh-17rem)]" />
       ) : failed ? (
         <p role="alert" className="rounded-md bg-risk-wash px-4 py-6 text-center text-base text-risk ring-1 ring-inset ring-risk-edge">
           {failed}
@@ -302,7 +303,7 @@ export function DocumentPreview({ doc, onClose }: { doc: PreviewDoc | null; onCl
       ) : (
         <div role="status" aria-busy="true">
           <span className="sr-only">Preparing PDF…</span>
-          <Skeleton className="h-[72vh] w-full" />
+          <Skeleton className="h-[calc(100dvh-15rem)] min-h-[280px] w-full sm:h-[calc(100dvh-17rem)]" />
         </div>
       )}
     </Modal>
