@@ -12,8 +12,10 @@ import { DocumentPreview, DownloadButton, InvoiceDocActions, summaryDoc, useDeli
 import type { PreviewDoc } from '../../components/DocumentPreview'
 import { HsnDatalist, PurchaseBills } from './PurchaseBills'
 import { InvoiceTaxDialog } from './InvoiceTaxDialog'
+import { GstReport } from './GstReport'
+import { defaultReportMonth } from '../../lib/gstReport'
 
-type BillingTab = 'sales' | 'purchase'
+type BillingTab = 'sales' | 'purchase' | 'report'
 
 const STATUS_LABEL: Record<OrderInvoiceStatus, string> = { none: 'Not dispatched', partial: 'Partially dispatched', full: 'Fully dispatched' }
 const STATUS_TONE: Record<OrderInvoiceStatus, 'slate' | 'amber' | 'green'> = { none: 'slate', partial: 'amber', full: 'green' }
@@ -29,7 +31,9 @@ export function BillingPage() {
   const q = params.get('q') ?? ''
   const status = (params.get('status') ?? '') as OrderInvoiceStatus | ''
   const orderId = params.get('order')
-  const tab: BillingTab = params.get('tab') === 'purchase' ? 'purchase' : 'sales'
+  const rawTab = params.get('tab')
+  const tab: BillingTab = rawTab === 'purchase' || rawTab === 'report' ? rawTab : 'sales'
+  const month = /^\d{4}-\d{2}$/.test(params.get('month') ?? '') ? params.get('month')! : defaultReportMonth()
   const [taxEdit, setTaxEdit] = useState<Invoice | null>(null)
 
   // Documents read the latest committed state when they are built, not the state at render time.
@@ -70,10 +74,12 @@ export function BillingPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow={tab === 'purchase' ? 'Billing · Purchase' : 'Billing · Sales'}
-        title={tab === 'purchase' ? 'Purchase bills' : 'Sales invoices'}
+        eyebrow={tab === 'purchase' ? 'Billing · Purchase' : tab === 'report' ? 'Billing · Reports' : 'Billing · Sales'}
+        title={tab === 'purchase' ? 'Purchase bills' : tab === 'report' ? 'Monthly GST reports' : 'Sales invoices'}
         subtitle={
-          tab === 'purchase'
+          tab === 'report'
+            ? 'Purchase and sales reports (Annexure-I) for the month, always up to date with every saved bill. Pick the month and download.'
+            : tab === 'purchase'
             ? 'Bills from suppliers for what we bought. Enter, edit, preview and download them at any time; GST is worked out per item.'
             : 'One entry per order. Download an updated cumulative summary of every confirmed dispatch, or any individual dispatch invoice. Use Edit GST to correct the tax before downloading.'
         }
@@ -84,12 +90,15 @@ export function BillingPage() {
         options={[
           { value: 'sales', label: 'Sales', count: db.invoices.length },
           { value: 'purchase', label: 'Purchase', count: (db.purchases ?? []).length },
+          { value: 'report', label: 'Reports' },
         ]}
         value={tab}
-        onChange={(v) => setParams(new URLSearchParams(v === 'purchase' ? { tab: 'purchase' } : {}), { replace: false })}
+        onChange={(v) => setParams(new URLSearchParams(v === 'sales' ? {} : { tab: v }), { replace: false })}
       />
 
-      {tab === 'purchase' ? (
+      {tab === 'report' ? (
+        <GstReport month={month} onMonth={(m) => set({ month: m })} onPreview={setPreview} />
+      ) : tab === 'purchase' ? (
         <PurchaseBills q={q} onSearch={(v) => set({ q: v })} onPreview={setPreview} />
       ) : selected ? (
         <OrderInvoices row={selected} read={read} onBack={() => set({ order: null }, true)} onPreview={setPreview} onEditTax={setTaxEdit} />

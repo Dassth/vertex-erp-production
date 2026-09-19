@@ -22,6 +22,8 @@ import type { CompanySnapshot, Dispatch, Invoice, ProductionOrder, PurchaseBill 
 import type { ConsolidatedStatement } from './billing'
 import { rupeesInWords } from './billing'
 import { purchaseTotals } from './gst'
+import type { GstRegister, MonthlyGstReport, ReportKind } from './gstReport'
+import { ITEMS_HEAD, PARTY_HEAD, REPORT_TITLE } from './gstReport'
 import type { ProcessWorkRow } from './selectors'
 
 export const FONT_FAMILY = 'NotoSansTamil'
@@ -210,8 +212,8 @@ export function invoiceDefinition(inv: Invoice): TDocumentDefinitions {
   const taxRows: Array<[string, string]> =
     inv.cgst !== null && inv.sgst !== null
       ? [
-          [`CGST @ ${inv.taxPct / 2}%`, rs(inv.cgst)],
-          [`SGST @ ${inv.taxPct / 2}%`, rs(inv.sgst)],
+          [`CGST @ ${inv.cgstPct ?? inv.taxPct / 2}%`, rs(inv.cgst)],
+          [`SGST @ ${inv.sgstPct ?? inv.taxPct / 2}%`, rs(inv.sgst)],
         ]
       : inv.igst !== null
         ? [[`IGST @ ${inv.taxPct}%`, rs(inv.igst)]]
@@ -493,6 +495,79 @@ export function statementDefinition(
           ],
         },
       ),
+    ],
+  }
+}
+
+/* ----------------------------- Monthly GST report -------------------------- */
+
+const num = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const pctText = (n: number | null) => (n === null ? '' : `${n}`)
+
+/**
+ * One Annexure-I register (purchases or sales) for a month, in the auditor's
+ * layout with an added column naming the materials bought / products sold.
+ */
+export function gstReportDefinition(report: MonthlyGstReport, company: CompanySnapshot, kind: ReportKind, generatedAt = new Date()): TDocumentDefinitions {
+  const reg: GstRegister = report[kind]
+  const generated = format(generatedAt, 'dd MMM yyyy, hh:mm a')
+  const r = (text: string, extra: Record<string, unknown> = {}): TableCell => ({ text, alignment: 'right', ...extra })
+  const head: TableCell[] = ['Sl.', PARTY_HEAD[kind], ITEMS_HEAD[kind], 'Bill no / Date', 'GST TIN No', 'HSN/SAC', 'Goods amount', 'CGST %', 'CGST', 'SGST %', 'SGST', 'IGST', 'Total'].map((h, i) => ({
+    text: h,
+    style: 'th',
+    alignment: i >= 6 ? 'right' : 'left',
+  }))
+  const totalRow = (label: string, x: { taxable: number; cgst: number; sgst: number; igst: number; gst: number; total: number }, fill?: string): TableCell[] => [
+    { text: label, bold: true, colSpan: 6, alignment: 'right', fillColor: fill },
+    '',
+    '',
+    '',
+    '',
+    '',
+    r(num(x.taxable), { bold: true, fillColor: fill }),
+    { text: '', fillColor: fill },
+    r(num(x.cgst), { bold: true, fillColor: fill }),
+    { text: '', fillColor: fill },
+    r(num(x.sgst), { bold: true, fillColor: fill }),
+    r(num(x.igst + x.gst), { bold: true, fillColor: fill }),
+    r(num(x.total), { bold: true, fillColor: fill }),
+  ]
+  const body: TableCell[][] = [head]
+  for (const s of reg.sections) {
+    body.push([{ text: s.title, bold: true, colSpan: 13, margin: [0, 4, 0, 0] }, ...Array(12).fill('')])
+    s.rows.forEach((x, i) =>
+      body.push([
+        String(i + 1),
+        x.party,
+        { text: x.items, fontSize: 7 },
+        `${x.billNo}\n${day(x.date)}`,
+        x.gstin,
+        x.hsn,
+        r(num(x.taxable)),
+        r(pctText(x.cgstPct)),
+        r(num(x.cgst)),
+        r(pctText(x.sgstPct)),
+        r(num(x.sgst)),
+        r(x.igstPct !== null ? `${num(x.igst)}\n@ ${x.igstPct}%` : num(x.igst + x.gst)),
+        r(num(x.total)),
+      ]),
+    )
+    body.push(totalRow(`Total for ${s.title}`, s))
+  }
+  body.push(totalRow('Grand Total', reg, WASH))
+
+  return {
+    ...base(`${REPORT_TITLE[kind]} ${report.label}`, company.name, generatedAt.toISOString(), true),
+    pageMargins: [30, 30, 30, 44],
+    footer: footer(`Annexure-I · ${REPORT_TITLE[kind]} · ${report.label}`, 782),
+    content: [
+      { text: 'ANNEXURE-I', style: 'h1' },
+      { text: company.name, bold: true },
+      { text: `${REPORT_TITLE[kind]} during the month ${report.label}`, style: 'muted' },
+      { text: `Generated ${generated}${company.gstin ? `  ·  GSTIN ${company.gstin}` : ''}`, style: 'muted', margin: [0, 0, 0, 8] },
+      reg.sections.length
+        ? { layout: rules, fontSize: 7.5, table: { headerRows: 1, dontBreakRows: true, widths: [16, 92, '*', 72, 72, 48, 56, 26, 48, 26, 48, 52, 58], body } }
+        : note(`No ${kind === 'purchases' ? 'purchase bills' : 'sales invoices'} in ${report.label}.`),
     ],
   }
 }

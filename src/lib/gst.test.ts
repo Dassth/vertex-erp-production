@@ -61,3 +61,26 @@ describe('sales invoice GST edit', () => {
     expect(out.lines[0].hsn).toBe('48192020')
   })
 })
+
+describe('local CGST / SGST split', () => {
+  const inv = {
+    lines: [{ description: 'Box', hsn: '48192020', quantity: 1, uom: 'Nos', rate: 1000, amount: 1000 }],
+    taxableValue: 1000, taxLabel: 'GST', taxPct: 18, taxAmount: 180, cgst: 90, sgst: 90, igst: null, total: 1180,
+    company: { gstin: VERTEX }, customer: { gstin: '33AABFL2810N1ZN', placeOfSupply: '' },
+  } as unknown as Invoice
+
+  it('accepts uneven CGST and SGST rates and adds them up', () => {
+    const out = retaxInvoice(inv, { taxPct: 18, supplyType: 'intra', cgstPct: 6, sgstPct: 12, hsn: ['48192020'], taxLabel: 'GST' })
+    expect(out.cgst).toBe(60)
+    expect(out.sgst).toBe(120)
+    expect(out.taxPct).toBe(18)
+    expect(out.total).toBe(1180)
+    expect([out.cgstPct, out.sgstPct]).toEqual([6, 12])
+  })
+
+  it('local without split prints one GST line', () => {
+    const out = retaxInvoice(inv, { taxPct: 5, supplyType: 'none', hsn: ['48191010'], taxLabel: 'GST' })
+    expect([out.cgst, out.sgst, out.igst]).toEqual([null, null, null])
+    expect(out.taxAmount).toBe(50)
+  })
+})

@@ -19,26 +19,37 @@ export const GST_RATES = [0, 5, 12, 18, 28, 40]
 
 export const SUPPLY_LABEL: Record<SupplyType, string> = {
   auto: 'Auto — from GSTIN state codes',
-  intra: 'Within state — CGST + SGST',
+  intra: 'Local (within state) — CGST + SGST',
   inter: 'Other state — IGST',
+  none: 'Local — one GST line (no split)',
 }
+
+/** Choices offered in a GST type dropdown; `none` is reached by un-ticking the split. */
+export const SUPPLY_CHOICES: SupplyType[] = ['auto', 'intra', 'inter']
 
 /**
  * HSN/SAC codes seen on this business's own bills. The rate is only a starting
  * point — confirm it against the current GST rate notification and edit it.
  */
 export const HSN_SUGGESTIONS: Array<{ hsn: string; label: string; gstPct: number }> = [
+  // What Vertex sells
   { hsn: '48192020', label: 'Folding cartons / boxes of non-corrugated paperboard', gstPct: 18 },
-  { hsn: '48191010', label: 'Corrugated paper boxes and cartons', gstPct: 18 },
-  { hsn: '48102900', label: 'Coated paper / paperboard (e.g. Gold Coin board)', gstPct: 18 },
-  { hsn: '48025690', label: 'Uncoated printing paper', gstPct: 18 },
+  { hsn: '48191010', label: 'Corrugated boxes and cartons (5% from 22 Sep 2025)', gstPct: 5 },
+  { hsn: '48211020', label: 'Printed paper labels / tags', gstPct: 18 },
   { hsn: '998912', label: 'Printing / lamination job work (SAC)', gstPct: 18 },
+  // What Vertex buys
+  { hsn: '4810', label: 'Coated paper / paperboard (art board, Gold Coin, duplex)', gstPct: 18 },
+  { hsn: '4802', label: 'Uncoated paper / board (maplitho, kraft)', gstPct: 18 },
+  { hsn: '39201012', label: 'Plastic film for lamination (BOPP / PVC)', gstPct: 18 },
+  { hsn: '3506', label: 'Glue / adhesive', gstPct: 18 },
+  { hsn: '84425020', label: 'Printing plates', gstPct: 18 },
   { hsn: '996511', label: 'Goods transport by road (SAC)', gstPct: 5 },
 ]
 
 export type ResolvedSupply = 'intra' | 'inter' | null
 
 export function resolveSupply(type: SupplyType, sellerGstin: string, buyerGstin: string, placeOfSupply = ''): ResolvedSupply {
+  if (type === 'none') return null
   if (type !== 'auto') return type
   const seller = gstinState(sellerGstin)
   const buyer = gstinState(buyerGstin) ?? (/^\d{2}$/.test(placeOfSupply.trim()) ? placeOfSupply.trim() : null)
@@ -123,6 +134,9 @@ export function purchaseTotals(bill: Pick<PurchaseBill, 'lines' | 'supplyType' |
 export interface InvoiceTaxEdit {
   taxPct: number
   supplyType: SupplyType
+  /** Local supply only: CGST and SGST rates when they are not an equal half each. */
+  cgstPct?: number | null
+  sgstPct?: number | null
   /** HSN per invoice line, same order as `invoice.lines`. */
   hsn: string[]
   taxLabel: string
@@ -130,20 +144,35 @@ export interface InvoiceTaxEdit {
 
 /** The invoice with its GST recalculated. Quantities, rates and discount are untouched. */
 export function retaxInvoice(inv: Invoice, edit: InvoiceTaxEdit): Invoice {
-  const taxPaise = Math.round((toPaise(inv.taxableValue) * edit.taxPct) / 100)
   const supply = resolveSupply(edit.supplyType, inv.company.gstin, inv.customer.gstin, inv.customer.placeOfSupply)
-  const s = splitPaise(taxPaise, supply)
+  const taxable = toPaise(inv.taxableValue)
+  const custom = supply === 'intra' && validGstPct(edit.cgstPct) && validGstPct(edit.sgstPct)
+  let taxPct = edit.taxPct
+  let taxPaise: number
+  let split: ReturnType<typeof splitPaise>
+  if (custom) {
+    const cgst = Math.round((taxable * edit.cgstPct!) / 100)
+    const sgst = Math.round((taxable * edit.sgstPct!) / 100)
+    taxPct = Math.round((edit.cgstPct! + edit.sgstPct!) * 1000) / 1000
+    taxPaise = cgst + sgst
+    split = { cgst, sgst, igst: null }
+  } else {
+    taxPaise = Math.round((taxable * taxPct) / 100)
+    split = splitPaise(taxPaise, supply)
+  }
   const opt = (p: number | null) => (p === null ? null : fromPaise(p))
   return {
     ...inv,
     lines: inv.lines.map((l, i) => ({ ...l, hsn: (edit.hsn[i] ?? l.hsn).trim() })),
     taxLabel: edit.taxLabel.trim() || inv.taxLabel,
-    taxPct: edit.taxPct,
+    taxPct,
     taxAmount: fromPaise(taxPaise),
-    cgst: opt(s.cgst),
-    sgst: opt(s.sgst),
-    igst: opt(s.igst),
-    total: fromPaise(toPaise(inv.taxableValue) + taxPaise),
+    cgst: opt(split.cgst),
+    sgst: opt(split.sgst),
+    igst: opt(split.igst),
+    cgstPct: split.cgst === null ? null : custom ? edit.cgstPct! : taxPct / 2,
+    sgstPct: split.sgst === null ? null : custom ? edit.sgstPct! : taxPct / 2,
+    total: fromPaise(taxable + taxPaise),
     supplyType: edit.supplyType,
   }
 }

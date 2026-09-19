@@ -4,7 +4,7 @@ import { Download, Eye, IndianRupee, Pencil, Plus, ReceiptText, Search, Shopping
 import { useStore } from '../../store/store'
 import type { PurchaseBill, PurchaseLine, SupplyType } from '../../lib/types'
 import { fmtDate, moneyPaise, uid } from '../../lib/format'
-import { GST_RATES, HSN_SUGGESTIONS, SUPPLY_LABEL, purchaseTotals } from '../../lib/gst'
+import { GST_RATES, HSN_SUGGESTIONS, SUPPLY_CHOICES, SUPPLY_LABEL, purchaseTotals } from '../../lib/gst'
 import { deletePurchaseBill, savePurchaseBill, validatePurchase } from '../../domain/purchases'
 import type { PurchaseDraft } from '../../domain/purchases'
 import { Button, Card, CardHead, ConfirmDialog, EmptyState, Field, IconButton, Input, Modal, SearchInput, Select, Textarea } from '../../components/ui'
@@ -13,6 +13,7 @@ import { DownloadButton, purchaseDoc, useLatestDb } from '../../components/Docum
 import type { PreviewDoc } from '../../components/DocumentPreview'
 
 export const HSN_LIST_ID = 'vx-hsn-suggestions'
+const MATERIAL_LIST_ID = 'vx-material-suggestions'
 
 /** HSN suggestions shared by the purchase editor and the invoice GST editor. */
 export function HsnDatalist() {
@@ -60,14 +61,12 @@ export function PurchaseBills({ q, onSearch, onPreview }: { q: string; onSearch:
   const read = useLatestDb()
   const [editing, setEditing] = useState<PurchaseBill | 'new' | null>(null)
   const [deleting, setDeleting] = useState<PurchaseBill | null>(null)
-  const purchases = db.purchases ?? []
-
   const rows = useMemo(
     () =>
-      purchases
+      (db.purchases ?? [])
         .map((b) => ({ bill: b, t: purchaseTotals(b, db.company.gstin) }))
         .sort((a, b) => b.bill.date.localeCompare(a.bill.date) || b.bill.code.localeCompare(a.bill.code)),
-    [purchases, db.company.gstin],
+    [db.purchases, db.company.gstin],
   )
   const term = q.trim().toLowerCase()
   const filtered = rows.filter(
@@ -171,6 +170,13 @@ export function PurchaseBills({ q, onSearch, onPreview }: { q: string; onSearch:
 
       {editing ? <PurchaseEditor bill={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onPreview={onPreview} /> : null}
       <DeletePurchase bill={deleting} onClose={() => setDeleting(null)} />
+      <datalist id={MATERIAL_LIST_ID}>
+        {db.materials
+          .filter((m) => m.active)
+          .map((m) => (
+            <option key={m.id} value={m.name} />
+          ))}
+      </datalist>
     </>
   )
 }
@@ -278,7 +284,7 @@ function PurchaseEditor({ bill, onClose, onPreview }: { bill: PurchaseBill | nul
         </Field>
         <Field label="GST type" error={errors.supplyType} hint={d.supplyType === 'auto' ? (t.supply === 'intra' ? 'Same state → CGST + SGST' : t.supply === 'inter' ? 'Other state → IGST' : 'Add GSTIN or choose a type') : undefined}>
           <Select value={d.supplyType} onChange={(e) => set({ supplyType: e.target.value as SupplyType })}>
-            {(Object.keys(SUPPLY_LABEL) as SupplyType[]).map((k) => (
+            {[...SUPPLY_CHOICES, ...(d.supplyType === 'none' ? (['none'] as SupplyType[]) : [])].map((k) => (
               <option key={k} value={k}>
                 {SUPPLY_LABEL[k]}
               </option>
@@ -307,7 +313,7 @@ function PurchaseEditor({ bill, onClose, onPreview }: { bill: PurchaseBill | nul
               <tr key={l.id} className="border-t border-rule align-top">
                 <td className="vx-td text-muted">{i + 1}</td>
                 <td className="vx-td">
-                  <Input aria-label={`Item ${i + 1} description`} aria-invalid={!!errors[`line.${i}.description`] || undefined} value={l.description} onChange={(e) => setLine(i, { description: e.target.value })} placeholder="e.g. 300GSM Gold Coin board…" />
+                  <Input list={MATERIAL_LIST_ID} aria-label={`Item ${i + 1} description`} aria-invalid={!!errors[`line.${i}.description`] || undefined} value={l.description} onChange={(e) => setLine(i, { description: e.target.value })} placeholder="e.g. 300GSM Gold Coin board…" />
                   {errors[`line.${i}.description`] ? <span className="vx-help text-risk">{errors[`line.${i}.description`]}</span> : null}
                 </td>
                 <td className="vx-td">

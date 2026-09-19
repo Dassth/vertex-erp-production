@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
 import type { TDocumentDefinitions } from 'pdfmake/interfaces'
-import { FONT_FAMILY, invoiceDefinition, purchaseBillDefinition, statementDefinition, workListDefinition } from './pdfDocs'
+import { FONT_FAMILY, gstReportDefinition, invoiceDefinition, purchaseBillDefinition, statementDefinition, workListDefinition } from './pdfDocs'
 import { consolidatedStatement } from './billing'
 import type { Invoice, ProductionOrder } from './types'
 
@@ -180,5 +180,19 @@ describe('purchase bill PDF', () => {
     const pdf = await render(purchaseBillDefinition(bill, { ...company, gstin: '33AMQPA8484N1ZE' }))
     expect(pageCount(pdf)).toBe(1)
     if (process.env.PDF_OUT) (await import('node:fs')).writeFileSync(process.env.PDF_OUT, pdf)
+  })
+})
+
+describe('monthly GST report PDF', () => {
+  it('renders the purchase and sales reports separately', async () => {
+    const { sampleDb } = await import('../test/gstFixtures')
+    const { monthlyGstReport } = await import('./gstReport')
+    const db = sampleDb()
+    const report = monthlyGstReport(db, '2026-08')
+    for (const kind of ['purchases', 'sales'] as const) {
+      const pdf = await render(gstReportDefinition(report, { ...company, gstin: db.company.gstin }, kind, new Date('2026-09-19T10:00:00')))
+      expect(pageCount(pdf)).toBe(1)
+      if (process.env.PDF_OUT) (await import('node:fs')).writeFileSync(process.env.PDF_OUT.replace('.pdf', `-${kind}.pdf`), pdf)
+    }
   })
 })

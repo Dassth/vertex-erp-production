@@ -41,7 +41,7 @@ export interface PurchaseDraft {
   expectedUpdatedAt?: string | null
 }
 
-const SUPPLY_TYPES: SupplyType[] = ['auto', 'intra', 'inter']
+const SUPPLY_TYPES: SupplyType[] = ['auto', 'intra', 'inter', 'none']
 
 export function validatePurchase(d: PurchaseDraft): Record<string, string> {
   const e: Record<string, string> = {}
@@ -145,6 +145,11 @@ export function validateInvoiceTax(inv: Pick<Invoice, 'lines'>, edit: InvoiceTax
   if (!validGstPct(edit.taxPct)) e.taxPct = 'GST % must be between 0 and 100.'
   if (!SUPPLY_TYPES.includes(edit.supplyType)) e.supplyType = 'Choose how GST applies.'
   if (edit.hsn.length !== inv.lines.length) e.hsn = 'HSN is required for every line.'
+  const hasSplit = edit.cgstPct !== undefined && edit.cgstPct !== null
+  if (hasSplit || (edit.sgstPct !== undefined && edit.sgstPct !== null)) {
+    if (!validGstPct(edit.cgstPct)) e.cgstPct = 'CGST % must be between 0 and 100.'
+    if (!validGstPct(edit.sgstPct)) e.sgstPct = 'SGST % must be between 0 and 100.'
+  }
   return e
 }
 
@@ -172,7 +177,7 @@ export const editInvoiceTax = command(
         entityLabel: `${updated.number} — ${updated.customer.company}`,
         field: 'GST and total',
         oldValue: `${current.taxLabel} ${current.taxPct}% = ${current.taxAmount.toFixed(2)}, total ${current.total.toFixed(2)}`,
-        newValue: `${updated.taxLabel} ${updated.taxPct}% (${updated.igst !== null ? 'IGST' : updated.cgst !== null ? 'CGST + SGST' : 'single line'}) = ${updated.taxAmount.toFixed(2)}, total ${updated.total.toFixed(2)}`,
+        newValue: `${updated.taxLabel} ${updated.taxPct}% (${updated.igst !== null ? 'IGST' : updated.cgst !== null ? `CGST ${updated.cgstPct}% + SGST ${updated.sgstPct}%` : 'single line'}) = ${updated.taxAmount.toFixed(2)}, total ${updated.total.toFixed(2)}`,
       })
       return ok(next, updated)
     },

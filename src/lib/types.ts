@@ -695,6 +695,9 @@ export interface Invoice {
   createdBy: string
   /** How the tax is split. Missing on older invoices, which behave as `auto`. */
   supplyType?: SupplyType
+  /** CGST / SGST rates when billing set an uneven local split. Missing = half of `taxPct` each. */
+  cgstPct?: number | null
+  sgstPct?: number | null
   /** Set when billing corrected the GST details after issue. */
   editedAt?: string | null
   editedBy?: string | null
@@ -706,8 +709,9 @@ export interface Invoice {
  * auto  — decided from the two GSTIN state codes (same state → CGST + SGST)
  * intra — within the state: CGST + SGST, half each
  * inter — another state: IGST
+ * none  — local, but printed as one GST line (no CGST / SGST split)
  */
-export type SupplyType = 'auto' | 'intra' | 'inter'
+export type SupplyType = 'auto' | 'intra' | 'inter' | 'none'
 
 export interface PurchaseLine {
   id: string
