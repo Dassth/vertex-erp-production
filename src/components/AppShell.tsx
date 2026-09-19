@@ -22,6 +22,7 @@ import {
   Menu,
   ReceiptText,
   FileBarChart,
+  Contact,
   RotateCcw,
   ScrollText,
   ShieldCheck,
@@ -85,6 +86,7 @@ const NAV: NavItem[] = [
   { to: '/invoices', label: 'Invoices', hint: 'Order summaries and invoice downloads', icon: FileStack, capabilities: ['billing'] },
   { to: '/billing', label: 'Billing', hint: 'Sales invoices and purchase bills', icon: ReceiptText, capabilities: ['billing'] },
   { to: '/reports', label: 'Reports', hint: 'Monthly GST reports: invoices and bills', icon: FileBarChart, capabilities: ['billing'] },
+  { to: '/customers', label: 'Customers', hint: 'Customer ID lookup and full order history', icon: Contact, capabilities: ['billing'] },
 ]
 
 type Dialog = 'audit' | 'company' | 'account' | 'clear' | 'guide' | 'resources' | null

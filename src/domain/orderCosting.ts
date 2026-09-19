@@ -11,6 +11,7 @@ import { computeOrderCosting } from '../lib/costing'
 import { buildJobStages } from '../lib/schedule'
 import {
   audit,
+  customerOrderCode,
   customerSnapshot,
   deepClone,
   docCode,
@@ -217,11 +218,11 @@ export const finalizeCosting = command(
     })
 
     let next = db
-    let seq: number
-    ;[next, seq] = nextSeq(next, 'order')
+    // The counter still advances so order counts stay continuous; the code itself carries the customer and date.
+    ;[next] = nextSeq(next, 'order')
     const order: ProductionOrder = {
       id: ctx.newId('ORD'),
-      code: docCode('JOB', seq),
+      code: customerOrderCode(db, customer.code, plan.orderDate),
       planId: plan.id,
       costingId: costing.id,
       customerId: customer.id,

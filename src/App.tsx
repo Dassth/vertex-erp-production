@@ -23,6 +23,7 @@ const CostingListPage = lazy(() => import('./features/costing/CostingListPage').
 const OrderCostingPage = lazy(() => import('./features/costing/OrderCostingPage').then((m) => ({ default: m.OrderCostingPage })))
 const DispatchPage = lazy(() => import('./features/dispatch/DispatchPage').then((m) => ({ default: m.DispatchPage })))
 const InvoicesPage = lazy(() => import('./features/invoices/InvoicesPage').then((m) => ({ default: m.InvoicesPage })))
+const CustomerHistoryPage = lazy(() => import('./features/customers/CustomerHistoryPage').then((m) => ({ default: m.CustomerHistoryPage })))
 const ReportsPage = lazy(() => import('./features/reports/ReportsPage').then((m) => ({ default: m.ReportsPage })))
 const BillingPage = lazy(() => import('./features/billing/BillingPage').then((m) => ({ default: m.BillingPage })))
 const SettingsPage = lazy(() => import('./features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })))
@@ -114,6 +115,7 @@ export default function App() {
                   <Route path="invoices" element={guarded('billing', <InvoicesPage />)} />
                   <Route path="billing" element={guarded('billing', <BillingPage />)} />
                   <Route path="reports" element={guarded('billing', <ReportsPage />)} />
+                  <Route path="customers" element={guarded('billing', <CustomerHistoryPage />)} />
                   <Route path="settings" element={guarded('administration', <SettingsPage />)} />
                   <Route path="*" element={<Landing />} />
                 </Routes>

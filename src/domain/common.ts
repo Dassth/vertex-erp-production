@@ -114,6 +114,19 @@ export function docCode(prefix: string, n: number): string {
   return `${prefix}-${String(n).padStart(4, '0')}`
 }
 
+/**
+ * Order ID = customer ID + order date + running number for that customer and day,
+ * e.g. CUS-0001-20260919-01. Reading an order ID tells you who ordered and when.
+ */
+export function customerOrderCode(db: VertexDB, customerCode: string, orderDate: string): string {
+  const who = customerCode.trim().toUpperCase().replace(/[^A-Z0-9-]/g, '') || 'CUS'
+  const stem = `${who}-${orderDate.replace(/-/g, '')}`
+  const taken = new Set(db.orders.map((o) => o.code))
+  let n = 1
+  while (taken.has(`${stem}-${String(n).padStart(2, '0')}`)) n++
+  return `${stem}-${String(n).padStart(2, '0')}`
+}
+
 export function stampNew(ctx: Ctx): Stamp {
   const at = ctx.now.toISOString()
   return { createdAt: at, createdBy: ctx.actor.name, updatedAt: at, updatedBy: ctx.actor.name }
