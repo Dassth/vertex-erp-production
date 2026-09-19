@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { gstReportCsv, monthlyGstReport } from './gstReport'
+import { gstReportTable, monthlyGstReport } from './gstReport'
+import { tableCsv } from './reportTable'
 import { sampleDb } from '../test/gstFixtures'
 
 describe('monthly GST report', () => {
@@ -23,11 +24,11 @@ describe('monthly GST report', () => {
   })
 
   it('exports each register as its own CSV with the materials bought', () => {
-    const purchases = gstReportCsv(r, 'Vertex Print Pack', 'purchases')
+    const purchases = tableCsv(gstReportTable(r, 'Vertex Print Pack', 'purchases'))
     expect(purchases).toContain('Total for GST 5% LOCAL PURCHASE')
     expect(purchases).toContain('Corrugated boxes (1 Nos)')
     expect(purchases).not.toContain('INV/2026-27')
-    const sales = gstReportCsv(r, 'Vertex Print Pack', 'sales')
+    const sales = tableCsv(gstReportTable(r, 'Vertex Print Pack', 'sales'))
     expect(sales).toContain('48192020')
     expect(sales).not.toContain('Ramana')
   })

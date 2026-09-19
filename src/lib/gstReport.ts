@@ -17,6 +17,7 @@ import type { Invoice, VertexDB } from './types'
 import { fromPaise, toPaise } from './costing'
 import { purchaseTotals, splitPaise } from './gst'
 import type { ResolvedSupply } from './gst'
+import type { CellValue, ReportRow, ReportTable } from './reportTable'
 
 export interface GstRow {
   /** The purchase bill or sales invoice this row comes from. */
@@ -283,12 +284,7 @@ export function monthlyGstReport(db: VertexDB, month: string): MonthlyGstReport 
   return { month, label: monthLabel(month), purchases: register(pRows, pHsn.rows()), sales: register(sRows, sHsn.rows()) }
 }
 
-/* ---------------------------------- CSV ----------------------------------- */
-
-const cell = (v: string | number | null) => {
-  const s = v === null ? '' : typeof v === 'number' ? v.toFixed(2) : v
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
-}
+/* ------------------------------ Downloadable table ------------------------- */
 
 export type ReportKind = 'purchases' | 'sales'
 
@@ -299,20 +295,44 @@ export const REPORT_TITLE: Record<ReportKind, string> = {
 export const PARTY_HEAD: Record<ReportKind, string> = { purchases: 'Name of the Seller', sales: 'Name of the Buyer' }
 export const ITEMS_HEAD: Record<ReportKind, string> = { purchases: 'Materials purchased', sales: 'Products sold' }
 
-/** One register as CSV (Annexure-I columns), which opens directly in Excel for the auditor. */
-export function gstReportCsv(r: MonthlyGstReport, company: string, kind: ReportKind): string {
+/** One register in Annexure-I columns, ready for Excel, CSV or PDF. */
+export function gstReportTable(r: MonthlyGstReport, company: string, kind: ReportKind): ReportTable {
   const reg = r[kind]
-  const out: string[] = []
-  const row = (...cells: Array<string | number | null>) => out.push(cells.map(cell).join(','))
-  const tax = (x: { cgst: number; sgst: number; igst: number; gst: number }) => x.cgst + x.sgst + x.igst + x.gst
-  row(`ANNEXURE-I — ${company}`)
-  row(`${REPORT_TITLE[kind]} during the month ${r.label}`)
-  row('Sl. No', PARTY_HEAD[kind], ITEMS_HEAD[kind], 'Bill No', 'Date', 'GST TIN No', 'HSN/SAC', 'Goods amount', 'CGST %', 'CGST', 'SGST %', 'SGST', 'IGST %', 'IGST', 'Tax amount', 'Total')
+  const tax = (x: { cgst: number; sgst: number; igst: number; gst: number }) => fromPaise(toPaise(x.cgst) + toPaise(x.sgst) + toPaise(x.igst) + toPaise(x.gst))
+  const rows: ReportRow[] = []
+  const blank = (n: number) => Array<CellValue>(n).fill(null)
   for (const s of reg.sections) {
-    row(s.title)
-    s.rows.forEach((x, i) => row(i + 1, x.party, x.items, x.billNo, x.date, x.gstin, x.hsn, x.taxable, x.cgstPct, x.cgst, x.sgstPct, x.sgst, x.igstPct, x.igst + x.gst, tax(x), x.total))
-    row('', `Total for ${s.title}`, '', '', '', '', '', s.taxable, '', s.cgst, '', s.sgst, '', s.igst + s.gst, tax(s), s.total)
+    rows.push({ kind: 'section', cells: [s.title] })
+    s.rows.forEach((x, i) =>
+      rows.push({
+        kind: 'row',
+        cells: [String(i + 1), x.party, x.items, x.billNo, x.date, x.gstin, x.hsn, x.taxable, x.cgstPct, x.cgst, x.sgstPct, x.sgst, x.igstPct, fromPaise(toPaise(x.igst) + toPaise(x.gst)), tax(x), x.total],
+      }),
+    )
+    rows.push({ kind: 'total', cells: [null, `Total for ${s.title}`, ...blank(5), s.taxable, null, s.cgst, null, s.sgst, null, fromPaise(toPaise(s.igst) + toPaise(s.gst)), tax(s), s.total] })
   }
-  row('', 'Grand Total', '', '', '', '', '', reg.taxable, '', reg.cgst, '', reg.sgst, '', reg.igst + reg.gst, tax(reg), reg.total)
-  return out.join('\r\n')
+  rows.push({ kind: 'grand', cells: [null, 'Grand Total', ...blank(5), reg.taxable, null, reg.cgst, null, reg.sgst, null, fromPaise(toPaise(reg.igst) + toPaise(reg.gst)), tax(reg), reg.total] })
+  return {
+    name: `${kind === 'purchases' ? 'Purchase' : 'Sales'} GST ${r.label.replace('/', '-')}`,
+    heading: ['ANNEXURE-I', company, `${REPORT_TITLE[kind]} during the month ${r.label}`],
+    columns: [
+      { label: 'Sl. No', width: 6 },
+      { label: PARTY_HEAD[kind], width: 30, wrap: true },
+      { label: ITEMS_HEAD[kind], width: 36, wrap: true },
+      { label: 'Bill No', width: 18 },
+      { label: 'Date', width: 11 },
+      { label: 'GST TIN No', width: 18 },
+      { label: 'HSN/SAC', width: 12 },
+      { label: 'Goods amount', width: 14, numeric: true },
+      { label: 'CGST %', width: 8, numeric: true },
+      { label: 'CGST', width: 12, numeric: true },
+      { label: 'SGST %', width: 8, numeric: true },
+      { label: 'SGST', width: 12, numeric: true },
+      { label: 'IGST %', width: 8, numeric: true },
+      { label: 'IGST', width: 12, numeric: true },
+      { label: 'Tax amount', width: 12, numeric: true },
+      { label: 'Total', width: 14, numeric: true },
+    ],
+    rows,
+  }
 }

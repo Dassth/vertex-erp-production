@@ -70,6 +70,20 @@ export const gstReportDoc = (read: () => VertexDB, month: string, kind: 'purchas
   },
 })
 
+/** The invoice report (each invoice or bill with its items), built from the latest saved records. */
+export const invoiceRegisterDoc = (read: () => VertexDB, month: string, kind: 'purchases' | 'sales'): PreviewDoc => ({
+  title: `${kind === 'purchases' ? 'Purchase' : 'Sales'} invoice report ${month}`,
+  fileName: `${kind === 'purchases' ? 'purchase' : 'sales'}-invoice-report-${month}.pdf`,
+  build: async () => {
+    const db = read()
+    const [{ reportTableDefinition }, { renderPdf }, { invoiceRegister, invoiceRegisterTable }] = await Promise.all([import('../lib/pdfDocs'), import('../lib/pdfRender'), import('../lib/invoiceRegister')])
+    const { updatedAt: _u, updatedBy: _b, ...company } = db.company
+    void _u
+    void _b
+    return renderPdf(reportTableDefinition(invoiceRegisterTable(invoiceRegister(db, month, kind), company.name), company))
+  },
+})
+
 /** Everything the cumulative summary needs, taken from saved records only. */
 function cumulativeSummaryData(db: VertexDB, orderId: string) {
   const order = db.orders.find((o) => o.id === orderId)

@@ -24,6 +24,7 @@ import { rupeesInWords } from './billing'
 import { purchaseTotals } from './gst'
 import type { GstRegister, MonthlyGstReport, ReportKind } from './gstReport'
 import { ITEMS_HEAD, PARTY_HEAD, REPORT_TITLE } from './gstReport'
+import type { CellValue, ReportTable } from './reportTable'
 import type { ProcessWorkRow } from './selectors'
 
 export const FONT_FAMILY = 'NotoSansTamil'
@@ -568,6 +569,49 @@ export function gstReportDefinition(report: MonthlyGstReport, company: CompanySn
       reg.sections.length
         ? { layout: rules, fontSize: 7.5, table: { headerRows: 1, dontBreakRows: true, widths: [16, 92, '*', 72, 72, 48, 56, 26, 48, 26, 48, 52, 58], body } }
         : note(`No ${kind === 'purchases' ? 'purchase bills' : 'sales invoices'} in ${report.label}.`),
+    ],
+  }
+}
+
+/* ------------------------------ Generic report ---------------------------- */
+
+/** Any report table (e.g. the invoice report) as a landscape PDF with the same rows as its Excel file. */
+export function reportTableDefinition(table: ReportTable, company: CompanySnapshot, generatedAt = new Date()): TDocumentDefinitions {
+  const generated = format(generatedAt, 'dd MMM yyyy, hh:mm a')
+  const full = 782
+  // Numbers, dates and codes fit their content; names and items share the rest.
+  const widths = table.columns.map((c) => (c.wrap ? '*' : 'auto'))
+  const show = (v: CellValue, i: number): string => {
+    if (v === null) return ''
+    if (typeof v !== 'number') return /^\d{4}-\d{2}-\d{2}$/.test(v) ? day(v) : v
+    const label = table.columns[i]?.label ?? ''
+    return /qty|%/i.test(label) ? qty(v) : num(v)
+  }
+  const n = table.columns.length
+  const body: TableCell[][] = [
+    table.columns.map((c): TableCell => ({ text: c.label, style: 'th', alignment: c.numeric ? 'right' : 'left' })),
+    ...table.rows.map((r): TableCell[] => {
+      if (r.kind === 'section') return [{ text: String(r.cells[0] ?? ''), bold: true, colSpan: n, margin: [0, 4, 0, 0] }, ...Array(n - 1).fill('')]
+      const fill = r.kind === 'grand' ? WASH : undefined
+      return table.columns.map((c, i): TableCell => ({
+        text: show(r.cells[i] ?? null, i),
+        alignment: c.numeric ? 'right' : 'left',
+        bold: r.kind !== 'row',
+        fillColor: fill,
+      }))
+    }),
+  ]
+  return {
+    ...base(table.heading[0] ?? table.name, company.name, generatedAt.toISOString(), true),
+    pageMargins: [30, 30, 30, 44],
+    footer: footer(`${table.heading.slice(0, 1).join('')} · ${table.heading[2] ?? ''}`, full),
+    content: [
+      { text: table.heading[0] ?? table.name, style: 'h1' },
+      ...table.heading.slice(1).map((h, i): Content => (i === 0 ? { text: h, bold: true } : { text: h, style: 'muted' })),
+      { text: `Generated ${generated}${company.gstin ? `  ·  GSTIN ${company.gstin}` : ''}`, style: 'muted', margin: [0, 0, 0, 8] },
+      table.rows.length > 1
+        ? { layout: rules, fontSize: 7, table: { headerRows: 1, dontBreakRows: true, widths, body } }
+        : note('Nothing recorded in this month.'),
     ],
   }
 }
