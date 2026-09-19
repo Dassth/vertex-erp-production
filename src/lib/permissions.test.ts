@@ -55,9 +55,9 @@ describe('permission matrix', () => {
   })
 
   it('lands every account on a page it may open', () => {
-    expect(landingPath(ADMIN1)).toBe('/production')
-    expect(landingPath(ADMIN2)).toBe('/production')
-    expect(landingPath(ADMIN3)).toBe('/billing')
+    expect(landingPath(ADMIN1)).toBe('/home')
+    expect(landingPath(ADMIN2)).toBe('/home')
+    expect(landingPath(ADMIN3)).toBe('/home')
     expect(landingPath(UNIT1)).toBe('/unit')
     expect(landingPath(null)).toBe('/login')
     // Recovery can never loop: the landing page is always allowed.

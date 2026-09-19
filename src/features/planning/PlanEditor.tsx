@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { addDays, format } from 'date-fns'
-import { ArrowLeft, ArrowRight, CalendarRange, ClipboardList, Eye, Lock, Pin, Save, Undo2, XCircle } from 'lucide-react'
+import { Activity, ArrowLeft, ArrowRight, CalendarRange, ClipboardList, Eye, Lock, Pin, Save, Undo2, XCircle } from 'lucide-react'
 import { useStore } from '../../store/store'
 import type { Plan, Priority } from '../../lib/types'
 import type { PlanDraft } from '../../domain/planning'
@@ -519,11 +519,14 @@ function PlanHeaderActions({ plan }: { plan: Plan }) {
       <Button variant="secondary" icon={<Pin className={plan.pinned ? 'h-4 w-4 fill-current' : 'h-4 w-4'} />} onClick={togglePin}>
         {plan.pinned ? 'Unpin' : 'Pin'}
       </Button>
-      <Button variant="ghost" icon={<Eye className="h-4 w-4" />} onClick={() => setPreview(jobCardDoc(read, plan.id))}>
+      <Button variant="ghost" icon={<Eye className="h-4 w-4" />} onClick={() => setPreview(jobCardDoc(read, plan.id, 'live'))}>
         Preview
       </Button>
-      <DownloadButton variant="secondary" icon={<ClipboardList className="h-4 w-4" />} doc={() => jobCardDoc(read, plan.id)}>
-        Job card
+      <DownloadButton variant="secondary" icon={<ClipboardList className="h-4 w-4" />} doc={() => jobCardDoc(read, plan.id, 'plan')} title="The job as planned">
+        Plan job card
+      </DownloadButton>
+      <DownloadButton variant="secondary" icon={<Activity className="h-4 w-4" />} doc={() => jobCardDoc(read, plan.id, 'live')} title="Current progress: people, machines, status, notes">
+        Live job card
       </DownloadButton>
       <DocumentPreview doc={preview} onClose={() => setPreview(null)} />
     </>

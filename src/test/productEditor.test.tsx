@@ -28,7 +28,7 @@ async function signIn() {
   await user.type(screen.getByLabelText(/New password/), TEST_PASSWORD)
   await user.type(screen.getByLabelText(/Confirm password/), TEST_PASSWORD)
   await user.click(screen.getByRole('button', { name: /Create password & sign in/ }))
-  await screen.findByRole('heading', { name: 'Production' }, { timeout: 5000 })
+  await screen.findByRole('heading', { name: /^Good (morning|afternoon|evening),/ }, { timeout: 5000 })
   return user
 }
 

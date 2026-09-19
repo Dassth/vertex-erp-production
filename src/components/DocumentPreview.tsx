@@ -85,18 +85,18 @@ export const invoiceRegisterDoc = (read: () => VertexDB, month: string, kind: 'p
 })
 
 /** The job card of one plan — everything from customer to dispatch — built from the latest saved state. */
-export const jobCardDoc = (read: () => VertexDB, planId: string): PreviewDoc => {
+export const jobCardDoc = (read: () => VertexDB, planId: string, mode: 'plan' | 'live' = 'live'): PreviewDoc => {
   const now = read()
   const plan = now.plans.find((p) => p.id === planId)
   const order = now.orders.find((o) => o.id === plan?.orderId)
   const name = order?.code ?? plan?.code ?? planId
   return {
-    title: `Job card ${name}`,
-    fileName: `job-card-${name.replace(/[^A-Za-z0-9-]/g, '-')}.pdf`,
+    title: `${mode === 'live' ? 'Live job card' : 'Job card (plan)'} ${name}`,
+    fileName: `${mode === 'live' ? 'live-job-card' : 'job-card-plan'}-${name.replace(/[^A-Za-z0-9-]/g, '-')}.pdf`,
     build: async () => {
       const db = read()
       const [{ jobCardDefinition }, { renderPdf }, { jobCard }] = await Promise.all([import('../lib/pdfDocs'), import('../lib/pdfRender'), import('../lib/jobCard')])
-      const card = jobCard(db, planId)
+      const card = jobCard(db, planId, mode)
       if (!card) throw new DocumentBlockedError('This plan no longer exists.')
       const { updatedAt: _u, updatedBy: _b, ...company } = db.company
       void _u

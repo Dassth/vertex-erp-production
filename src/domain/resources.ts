@@ -19,6 +19,12 @@ export interface PersonDraft {
   unitId: UnitId
   name: string
   designation: string
+  /** Profile fields. Left undefined, a save keeps what is stored. */
+  phone?: string
+  experienceYears?: number | null
+  joinedOn?: string | null
+  skills?: string
+  notes?: string
 }
 
 export interface MachineDraft {
@@ -26,6 +32,33 @@ export interface MachineDraft {
   unitId: UnitId
   code: string
   name: string
+  make?: string
+  model?: string
+  installedYear?: number | null
+  capacity?: string
+  notes?: string
+}
+
+/** Only the profile fields the caller actually sent, trimmed. */
+function profile<T extends object>(draft: T, keys: Array<keyof T>): Partial<T> {
+  const out: Partial<T> = {}
+  for (const k of keys) {
+    const v = draft[k]
+    if (v === undefined) continue
+    out[k] = (typeof v === 'string' ? v.trim() : v) as T[keyof T]
+  }
+  return out
+}
+
+const PERSON_PROFILE: Array<keyof PersonDraft> = ['phone', 'experienceYears', 'joinedOn', 'skills', 'notes']
+const MACHINE_PROFILE: Array<keyof MachineDraft> = ['make', 'model', 'installedYear', 'capacity', 'notes']
+
+function profileErrors(d: { experienceYears?: number | null; joinedOn?: string | null; installedYear?: number | null }, now: Date): Record<string, string> {
+  const e: Record<string, string> = {}
+  if (d.experienceYears != null && !(Number.isFinite(d.experienceYears) && d.experienceYears >= 0 && d.experienceYears <= 60)) e.experienceYears = 'Enter years of experience between 0 and 60.'
+  if (d.joinedOn && !/^\d{4}-\d{2}-\d{2}$/.test(d.joinedOn)) e.joinedOn = 'Enter the joining date.'
+  if (d.installedYear != null && !(Number.isInteger(d.installedYear) && d.installedYear >= 1950 && d.installedYear <= now.getFullYear())) e.installedYear = `Enter a year between 1950 and ${now.getFullYear()}.`
+  return e
 }
 
 /** Unit accounts manage the staff and machines of their own unit; everything else needs administration. */
@@ -42,10 +75,11 @@ export const savePerson = command(
   'savePerson',
   (draft: PersonDraft): Op<UnitPerson> =>
   (db, ctx) => {
-    const denied = ctx.actor.role === 'unit' && ctx.actor.unitId === draft.unitId && !draft.id
-      ? null : requireCapability(ctx, 'administration')
+    const current = draft.id ? db.people.find((p) => p.id === draft.id) : undefined
+    const mine = ownUnit(ctx, draft.unitId) && (!current || current.unitId === draft.unitId)
+    const denied = mine ? null : requireCapability(ctx, 'administration')
     if (denied) return denied
-    const errors: Record<string, string> = {}
+    const errors: Record<string, string> = profileErrors(draft, ctx.now)
     if (!draft.name.trim()) errors.name = 'Enter the person’s name.'
     if (!db.units.some((u) => u.id === draft.unitId)) errors.unitId = 'Select the unit this person works in.'
     const clash = db.people.find((p) => p.id !== draft.id && p.unitId === draft.unitId && sameText(p.name, draft.name))
@@ -55,7 +89,7 @@ export const savePerson = command(
     const existing = draft.id ? db.people.find((p) => p.id === draft.id) : undefined
     if (draft.id && !existing) return fail('Person not found.')
     if (existing) {
-      const updated = stampUpdate({ ...existing, unitId: draft.unitId, name: draft.name.trim(), designation: draft.designation.trim() }, ctx)
+      const updated = stampUpdate({ ...existing, unitId: draft.unitId, name: draft.name.trim(), designation: draft.designation.trim(), ...profile(draft, PERSON_PROFILE) }, ctx)
       return ok(
         audit({ ...db, people: db.people.map((p) => (p.id === existing.id ? updated : p)) }, ctx, {
           action: 'Person updated',
@@ -72,6 +106,7 @@ export const savePerson = command(
       unitId: draft.unitId,
       name: draft.name.trim(),
       designation: draft.designation.trim(),
+      ...profile(draft, PERSON_PROFILE),
       active: true,
       ...stampNew(ctx),
     }
@@ -118,10 +153,11 @@ export const saveMachine = command(
   'saveMachine',
   (draft: MachineDraft): Op<UnitMachine> =>
   (db, ctx) => {
-    const denied = ctx.actor.role === 'unit' && ctx.actor.unitId === draft.unitId && !draft.id
-      ? null : requireCapability(ctx, 'administration')
+    const current = draft.id ? db.machines.find((m) => m.id === draft.id) : undefined
+    const mine = ownUnit(ctx, draft.unitId) && (!current || current.unitId === draft.unitId)
+    const denied = mine ? null : requireCapability(ctx, 'administration')
     if (denied) return denied
-    const errors: Record<string, string> = {}
+    const errors: Record<string, string> = profileErrors(draft, ctx.now)
     if (!draft.name.trim()) errors.name = 'Enter the machine name.'
     if (!db.units.some((u) => u.id === draft.unitId)) errors.unitId = 'Select the unit this machine belongs to.'
     const clash = db.machines.find((m) => m.id !== draft.id && m.unitId === draft.unitId && sameText(m.name, draft.name))
@@ -131,7 +167,7 @@ export const saveMachine = command(
     const existing = draft.id ? db.machines.find((m) => m.id === draft.id) : undefined
     if (draft.id && !existing) return fail('Machine not found.')
     if (existing) {
-      const updated = stampUpdate({ ...existing, unitId: draft.unitId, code: draft.code.trim(), name: draft.name.trim() }, ctx)
+      const updated = stampUpdate({ ...existing, unitId: draft.unitId, code: draft.code.trim() || existing.code, name: draft.name.trim(), ...profile(draft, MACHINE_PROFILE) }, ctx)
       return ok(
         audit({ ...db, machines: db.machines.map((m) => (m.id === existing.id ? updated : m)) }, ctx, {
           action: 'Machine updated',
@@ -148,6 +184,7 @@ export const saveMachine = command(
       unitId: draft.unitId,
       code: draft.code.trim() || docCode('MCH', seq),
       name: draft.name.trim(),
+      ...profile(draft, MACHINE_PROFILE),
       active: true,
       ...stampNew(ctx),
     }

@@ -4,8 +4,17 @@
  * person, machine, timing and status) for every process, the materials to
  * issue, and the dispatches and invoices raised so far.
  *
+ * Two versions:
+ *   plan — the job as planned: route, allocated units, planned windows and
+ *          materials. It does not change as work is done.
+ *   live — the job right now: who is on each process (role, experience), which
+ *          machine (make, model, age), actual start and finish, status, and the
+ *          notes and problems reported by the units, plus dispatches.
+ *
  * It is a shop-floor document: it carries no cost, rate or profit figures.
  * ------------------------------------------------------------------------- */
+
+export type JobCardMode = 'plan' | 'live'
 
 import type { Plan, VertexDB } from './types'
 
@@ -15,9 +24,16 @@ export interface JobCardProcess {
   unit: string
   method: string
   resource: string
+  /** Live card: responsible person with role and experience. */
+  person: string
+  /** Live card: machine with make, model and age. */
+  machine: string
   planned: string
+  actual: string
   status: string
   done: boolean
+  note: string
+  problem: string
 }
 
 export interface JobCardMaterial {
@@ -30,6 +46,10 @@ export interface JobCardMaterial {
 }
 
 export interface JobCard {
+  mode: JobCardMode
+  /** When the live card was produced. */
+  asOf: string
+  progress: { done: number; running: number; total: number }
   plan: Plan
   customer: { code: string; company: string; contact: string; gstin: string; address: string }
   product: { code: string; name: string; hsn: string; uom: string; category: string }
@@ -43,16 +63,21 @@ export interface JobCard {
 }
 
 const n = (v: number, digits = 3) => v.toLocaleString('en-IN', { maximumFractionDigits: digits })
-const window_ = (start?: string, end?: string) => {
+/** "dd/MM HH:mm" in local time. */
+const at = (iso?: string | null) => {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? iso : `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+/** A time window; the date is written once when both ends fall on the same day. */
+const window_ = (start?: string | null, end?: string | null) => {
   if (!start || !end) return ''
-  const f = (iso: string) => {
-    const d = new Date(iso)
-    return Number.isNaN(d.getTime()) ? iso : `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-  }
-  return `${f(start)} – ${f(end)}`
+  const a = at(start)
+  const b = at(end)
+  return a.slice(0, 5) === b.slice(0, 5) ? `${a}–${b.slice(6)}` : `${a} – ${b}`
 }
 
-export function jobCard(db: VertexDB, planId: string): JobCard | null {
+export function jobCard(db: VertexDB, planId: string, mode: JobCardMode = 'live', now = new Date()): JobCard | null {
   const plan = db.plans.find((p) => p.id === planId)
   if (!plan) return null
   const customer = db.customers.find((c) => c.id === plan.customerId)
@@ -64,6 +89,18 @@ export function jobCard(db: VertexDB, planId: string): JobCard | null {
   const machine = (id: string | null) => {
     const m = db.machines.find((x) => x.id === id)
     return m ? m.code || m.name : undefined
+  }
+  const personDetail = (id: string | null) => {
+    const p = db.people.find((x) => x.id === id)
+    if (!p) return ''
+    return [p.name, p.designation, p.experienceYears != null ? `${p.experienceYears} yrs exp.` : ''].filter(Boolean).join(' · ')
+  }
+  const machineDetail = (id: string | null, none: boolean) => {
+    if (none) return 'No machine (manual)'
+    const m = db.machines.find((x) => x.id === id)
+    if (!m) return ''
+    const age = m.installedYear ? now.getFullYear() - m.installedYear : null
+    return [[m.code, m.name].filter(Boolean).join(' '), [m.make, m.model].filter(Boolean).join(' '), age !== null ? `${age <= 0 ? '<1' : age} yr${age === 1 ? '' : 's'} old` : ''].filter(Boolean).join(' · ')
   }
 
   // In production the job's own stages are the truth; before that, the product route and the plan's allocation.
@@ -77,9 +114,14 @@ export function jobCard(db: VertexDB, planId: string): JobCard | null {
             unit: unitName(p.unitId),
             method: def?.method ?? '',
             resource: [person(p.responsiblePersonId), p.noMachineRequired ? 'No machine' : machine(p.machineId)].filter(Boolean).join(' · ') || (p.requiresMachine ? 'Machine to assign' : '—'),
+            person: personDetail(p.responsiblePersonId) || 'Not assigned',
+            machine: machineDetail(p.machineId, p.noMachineRequired) || (p.requiresMachine ? 'Not assigned' : '—'),
             planned: window_(p.plannedStart, p.plannedEnd),
+            actual: p.actualStart ? (p.actualEnd ? window_(p.actualStart, p.actualEnd) : `${at(p.actualStart)} – running`) : p.actualEnd ? `done ${at(p.actualEnd)}` : '',
             status: p.historical ? `${p.status} (not recorded)` : p.status,
             done: p.done,
+            note: p.note ?? '',
+            problem: p.problem ?? '',
           }
         }),
       )
@@ -90,9 +132,14 @@ export function jobCard(db: VertexDB, planId: string): JobCard | null {
           unit: unitName(plan.processUnits[p.id] ?? plan.stageUnits?.[s.id]),
           method: p.method ?? '',
           resource: p.requiresMachine ? 'Machine required' : '—',
+          person: '',
+          machine: p.requiresMachine ? 'Machine required' : '—',
           planned: '',
+          actual: '',
           status: plan.status === 'Cancelled' ? 'Cancelled' : 'Not started',
           done: false,
+          note: '',
+          problem: '',
         })),
       )
 
@@ -132,7 +179,16 @@ export function jobCard(db: VertexDB, planId: string): JobCard | null {
         }))
     : []
 
+  // The plan card shows the job as planned: no people, machines, actual times or progress.
+  const shown: JobCardProcess[] =
+    mode === 'plan'
+      ? processes.map((p) => ({ ...p, resource: '', person: '', machine: '', actual: '', status: '', done: false, note: '', problem: '' }))
+      : processes
+
   return {
+    mode,
+    asOf: now.toISOString(),
+    progress: { done: processes.filter((p) => p.done).length, running: processes.filter((p) => p.status === 'In Progress').length, total: processes.length },
     plan,
     customer: {
       code: customer?.code ?? '',
@@ -155,9 +211,9 @@ export function jobCard(db: VertexDB, planId: string): JobCard | null {
         ? `Completed ${order.completedAt ? order.completedAt.slice(0, 10) : ''} · ${n(order.completedQty)} ${order.uom}`
         : `In production · ${processes.filter((p) => p.done).length} of ${processes.length} processes done`
       : plan.status,
-    processes,
+    processes: shown,
     materials,
     materialsNote: lines ? 'Quantities from the finalized costing, including wastage and purchase rounding.' : 'Quantities per plan quantity, before wastage — finalize costing for issue quantities.',
-    dispatches,
+    dispatches: mode === 'plan' ? [] : dispatches,
   }
 }

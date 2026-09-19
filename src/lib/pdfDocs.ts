@@ -622,6 +622,7 @@ export function reportTableDefinition(table: ReportTable, company: CompanySnapsh
 /** A plan from A to Z for the shop floor: route, units, materials, progress, dispatch. No prices. */
 export function jobCardDefinition(card: JobCard, company: CompanySnapshot, generatedAt = new Date()): TDocumentDefinitions {
   const p = card.plan
+  const live = card.mode === 'live'
   const generated = format(generatedAt, 'dd MMM yyyy, hh:mm a')
   const th = (labels: string[], right: number[] = []): TableCell[] => labels.map((h, i) => ({ text: h, style: 'th', alignment: right.includes(i) ? 'right' : 'left' }))
   const heading = (text: string): Content => ({ text: text.toUpperCase(), style: 'label', margin: [0, 12, 0, 4] })
@@ -632,14 +633,20 @@ export function jobCardDefinition(card: JobCard, company: CompanySnapshot, gener
   ].filter(present) as Content[]
   return {
     ...base(`Job card ${card.orderCode ?? p.code}`, `${card.customer.company} — ${card.product.name}`, generatedAt.toISOString()),
-    footer: footer(`Job card · ${p.code}${card.orderCode ? ` · ${card.orderCode}` : ''} · printed ${generated}`),
+    footer: footer(`${live ? 'Live job card' : 'Job card (plan)'} · ${p.code}${card.orderCode ? ` · ${card.orderCode}` : ''} · printed ${generated}`),
     content: (
       [
-        ...companyHeader(company, 'JOB CARD', [
+        ...companyHeader(company, live ? 'LIVE JOB CARD' : 'JOB CARD — PLAN', [
           ['Order ID', card.orderCode ?? 'Not released'],
           ['Plan', p.code],
           ['Priority', p.priority],
-          ['Status', card.productionStatus],
+          ...(live
+            ? ([
+                ['Status', card.productionStatus],
+                ['Progress', `${card.progress.done} of ${card.progress.total} done${card.progress.running ? ` · ${card.progress.running} running` : ''}`],
+                ['As of', format(new Date(card.asOf), 'dd MMM yyyy, hh:mm a')],
+              ] as Array<[string, string]>)
+            : ([['Plan status', p.status]] as Array<[string, string]>)),
           ['Costing', card.costing],
         ]),
         partyBoxes(
@@ -661,31 +668,57 @@ export function jobCardDefinition(card: JobCard, company: CompanySnapshot, gener
         spec.length
           ? { layout: boxed, table: { widths: ['*'], body: [[{ stack: [{ text: 'SPECIFICATION', style: 'label', margin: [0, 0, 0, 3] }, ...spec] }]] } }
           : null,
-        heading('Process route'),
-        card.processes.length
-          ? {
-              layout: rules,
-              fontSize: 8,
-              table: {
-                headerRows: 1,
-                dontBreakRows: true,
-                widths: [14, 72, '*', 40, 96, 74, 56, 40],
-                body: [
-                  th(['#', 'Stage', 'Process', 'Unit', 'Person / machine', 'Planned', 'Status', 'Sign']),
-                  ...card.processes.map((x, i): TableCell[] => [
-                    String(i + 1),
-                    x.stage,
-                    { text: x.method ? [x.name, { text: `\n${x.method}`, color: MUTED, fontSize: 7 }] : x.name },
-                    x.unit,
-                    x.resource,
-                    x.planned,
-                    { text: x.status, bold: x.done },
-                    '',
-                  ]),
-                ],
+        heading(live ? 'Process route — live' : 'Process route — as planned'),
+        !card.processes.length
+          ? note('The product has no stages or processes defined in Master.')
+          : live
+            ? {
+                layout: rules,
+                fontSize: 7.5,
+                table: {
+                  headerRows: 1,
+                  dontBreakRows: true,
+                  widths: [12, '*', 32, 96, 96, 72, 50],
+                  body: [
+                    th(['#', 'Stage / process', 'Unit', 'Person · role · experience', 'Machine · make · age', 'Planned / actual', 'Status']),
+                    ...card.processes.flatMap((x, i): TableCell[][] => {
+                      const row: TableCell[] = [
+                        String(i + 1),
+                        { text: [{ text: x.name, bold: true }, `\n${x.stage}`, x.method ? { text: ` · ${x.method}`, color: MUTED } : ''] },
+                        x.unit,
+                        { text: x.person, color: x.person === 'Not assigned' ? WARN : INK },
+                        { text: x.machine, color: x.machine === 'Not assigned' ? WARN : INK },
+                        { text: [x.planned || '—', x.actual ? { text: `\n${x.actual}`, bold: true } : ''] },
+                        { text: x.status, bold: x.done || x.status === 'In Progress', color: x.status === 'Blocked' || x.status === 'Delayed' ? WARN : INK },
+                      ]
+                      const remarks = [x.problem && `Problem: ${x.problem}`, x.note && `Note: ${x.note}`].filter(Boolean).join('   ')
+                      return remarks
+                        ? [row, [{ text: '', border: [false, false, false, false] }, { text: remarks, colSpan: 6, fontSize: 7, color: x.problem ? WARN : MUTED, fillColor: x.problem ? WARN_WASH : undefined }, '', '', '', '', '']]
+                        : [row]
+                    }),
+                  ],
+                },
+              }
+            : {
+                layout: rules,
+                fontSize: 8,
+                table: {
+                  headerRows: 1,
+                  dontBreakRows: true,
+                  widths: [14, 90, '*', 44, 110, 40],
+                  body: [
+                    th(['#', 'Stage', 'Process', 'Unit', 'Planned', 'Sign']),
+                    ...card.processes.map((x, i): TableCell[] => [
+                      String(i + 1),
+                      x.stage,
+                      { text: x.method ? [x.name, { text: `\n${x.method}`, color: MUTED, fontSize: 7 }] : x.name },
+                      x.unit,
+                      x.planned || 'Scheduled on release',
+                      '',
+                    ]),
+                  ],
+                },
               },
-            }
-          : note('The product has no stages or processes defined in Master.'),
         heading('Materials to issue'),
         card.materials.length
           ? {
@@ -703,8 +736,10 @@ export function jobCardDefinition(card: JobCard, company: CompanySnapshot, gener
             }
           : note('No materials listed for this product.'),
         { text: card.materialsNote, style: 'muted', margin: [0, 3, 0, 0] },
-        heading('Dispatch and invoices'),
-        card.dispatches.length
+        live ? heading('Dispatch and invoices') : null,
+        !live
+          ? null
+          : card.dispatches.length
           ? {
               layout: rules,
               fontSize: 8,

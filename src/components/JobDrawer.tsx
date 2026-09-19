@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CalendarClock, CheckCircle2, Circle, Repeat2 } from 'lucide-react'
+import { Activity, CalendarClock, CheckCircle2, Circle, Repeat2 } from 'lucide-react'
 import { useStore } from '../store/store'
 import type { JobProcess, Priority, ProductionOrder } from '../lib/types'
 import { PRIORITIES, isProcessDone, isStageDone, processBlockers, productionDates } from '../lib/schedule'
@@ -12,6 +12,7 @@ import { Badge, Button, Drawer, Field, Input, Modal, ProgressBar, Select, Textar
 import { Detail } from './page'
 import { HealthBadge, PriorityBadge, ProcessBadge, StageBadge } from './status'
 import { AuditTrail } from './AuditTrail'
+import { DownloadButton, jobCardDoc, useLatestDb } from './DocumentPreview'
 
 /* Administrator job detail. Monitoring only: no process progress actions, no
    costing or master edits. Priority, delivery date and the unit of a process
@@ -29,6 +30,7 @@ export function JobDrawer({ orderId, onClose }: { orderId: string | null; onClos
 
 function JobDetail({ order }: { order: ProductionOrder }) {
   const { db, can } = useStore()
+  const read = useLatestDb()
   const view = useMemo(() => toJobView(order), [order])
   const [tab, setTab] = useState<'stages' | 'activity'>('stages')
   const balance = orderBalance(order, db.dispatches)
@@ -44,6 +46,9 @@ function JobDetail({ order }: { order: ProductionOrder }) {
         <HealthBadge health={view.health} />
         <PriorityBadge priority={order.priority} />
         {order.status === 'Completed' ? <Badge tone="green">Ready for dispatch</Badge> : null}
+        <DownloadButton className="ml-auto" size="sm" variant="secondary" icon={<Activity className="h-3.5 w-3.5" />} doc={() => jobCardDoc(read, order.planId, 'live')}>
+          Live job card
+        </DownloadButton>
       </div>
 
       <dl className="grid gap-4 sm:grid-cols-3">

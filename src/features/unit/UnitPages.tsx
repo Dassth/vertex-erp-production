@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
-import { CheckCircle2, Cog, Factory, Home, Hourglass, Play, RotateCcw, Timer, Trash2, UserCog, Users } from 'lucide-react'
+import { CheckCircle2, Cog, Eye, Factory, Home, Hourglass, Pencil, Play, RotateCcw, Timer, Trash2, UserCog, Users } from 'lucide-react'
 import { useStore } from '../../store/store'
 import type { UnitId, UnitMachine, UnitPerson } from '../../lib/types'
 import { unitWork } from '../../lib/selectors'
@@ -12,6 +12,7 @@ import { LinkButton, PageHeader, StatStrip, StatTile, useDocumentTitle } from '.
 import { PriorityBadge, ProcessBadge } from '../../components/status'
 import { ResourceDialog } from '../production/UnitWorkPage'
 import { ResourceAdd } from '../production/UnitResourceSetup'
+import { ResourceDrawer, since } from './ResourceDrawer'
 
 /* ---------------------------------------------------------------------------
  * The unit account's own area:
@@ -229,6 +230,7 @@ function UnitResources({ kind }: { kind: 'person' | 'machine' }) {
   const isPerson = kind === 'person'
   useDocumentTitle(isPerson ? 'Staff' : 'Machines')
   const [removing, setRemoving] = useState<UnitPerson | UnitMachine | null>(null)
+  const [viewing, setViewing] = useState<{ value: UnitPerson | UnitMachine; edit: boolean } | null>(null)
   if (!unit) return <Navigate to="/production" replace />
   const list: Array<UnitPerson | UnitMachine> = (isPerson ? db.people : db.machines).filter((x) => x.unitId === unit.unitId)
   const active = list.filter((x) => x.active).sort((a, b) => a.name.localeCompare(b.name))
@@ -266,6 +268,7 @@ function UnitResources({ kind }: { kind: 'person' | 'machine' }) {
             <thead>
               <tr>
                 <th className="vx-th">Name</th>
+                <th className="vx-th">{isPerson ? 'Role · experience' : 'Make / model · age'}</th>
                 <th className="vx-th">Added</th>
                 <th className="vx-th text-right">Open processes</th>
                 <th className="vx-th" />
@@ -275,19 +278,32 @@ function UnitResources({ kind }: { kind: 'person' | 'machine' }) {
               {active.map((x) => {
                 const n = uses(x.id)
                 return (
-                  <tr key={x.id} className="border-t border-rule">
+                  <tr key={x.id} onClick={() => setViewing({ value: x, edit: false })} className="cursor-pointer border-t border-rule transition-colors hover:bg-surface-2">
                     <td className="vx-td font-medium text-ink">
                       {x.name}
                       {'code' in x && x.code ? <span className="vx-code ml-2 text-2xs text-faint">{x.code}</span> : null}
+                    </td>
+                    <td className="vx-td text-sm text-ink-2">
+                      {'designation' in x
+                        ? [x.designation, x.experienceYears != null ? `${x.experienceYears} yrs exp.` : ''].filter(Boolean).join(' · ') || <span className="text-faint">Add details</span>
+                        : [[x.make, x.model].filter(Boolean).join(' '), x.installedYear ? since(x.installedYear) + ' old' : ''].filter(Boolean).join(' · ') || <span className="text-faint">Add details</span>}
                     </td>
                     <td className="vx-td text-sm text-muted">
                       {fmtDate(x.createdAt)} · {x.createdBy}
                     </td>
                     <td className="vx-td vx-code text-right">{n}</td>
-                    <td className="vx-td text-right">
-                      <Button size="sm" variant="ghost" icon={<Trash2 className="h-3.5 w-3.5" />} onClick={() => setRemoving(x)} aria-label={`Remove ${x.name}`}>
-                        Remove
-                      </Button>
+                    <td className="vx-td" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex justify-end gap-1">
+                        <Button size="sm" variant="ghost" icon={<Eye className="h-3.5 w-3.5" />} onClick={() => setViewing({ value: x, edit: false })} aria-label={`View ${x.name}`}>
+                          View
+                        </Button>
+                        <Button size="sm" variant="secondary" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => setViewing({ value: x, edit: true })} aria-label={`Edit ${x.name}`}>
+                          Edit
+                        </Button>
+                        <Button size="sm" variant="ghost" icon={<Trash2 className="h-3.5 w-3.5" />} onClick={() => setRemoving(x)} aria-label={`Remove ${x.name}`}>
+                          Remove
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 )
@@ -315,6 +331,11 @@ function UnitResources({ kind }: { kind: 'person' | 'machine' }) {
         </Card>
       ) : null}
 
+      <ResourceDrawer
+        item={viewing ? (isPerson ? { kind: 'person', value: viewing.value as UnitPerson } : { kind: 'machine', value: viewing.value as UnitMachine }) : null}
+        edit={viewing?.edit}
+        onClose={() => setViewing(null)}
+      />
       <ConfirmDialog
         open={!!removing}
         tone="danger"

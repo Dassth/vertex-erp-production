@@ -51,11 +51,11 @@ describe('company profile', () => {
   it('Administrator 1 edits, sees inline errors, saves, reloads and edits again', async () => {
     const first = mount()
     const user = await signInFirstTime('Administrator 1')
-    await screen.findByRole('heading', { name: 'Production' }, { timeout: 5000 })
+    await screen.findByRole('heading', { name: /^Good (morning|afternoon|evening),/ }, { timeout: 5000 })
 
     // Dispatch reports the incomplete profile.
     await first.router.navigate('/dispatch')
-    expect(await screen.findByText(/Invoices cannot be issued yet/)).toBeTruthy()
+    expect(await screen.findByText(/Invoices cannot be issued yet/, {}, { timeout: 5000 })).toBeTruthy()
 
     let dialog = await openCompanyProfile(user)
     const name = within(dialog).getByLabelText(/Company name/) as HTMLInputElement
@@ -97,7 +97,7 @@ describe('company profile', () => {
   it('Administrator 2 gets a notice on Dispatch and no way to open the editor', async () => {
     const { router } = mount()
     const user = await signInFirstTime('Administrator 2')
-    await screen.findByRole('heading', { name: 'Production' }, { timeout: 5000 })
+    await screen.findByRole('heading', { name: /^Good (morning|afternoon|evening),/ }, { timeout: 5000 })
     await router.navigate('/dispatch')
 
     expect(await screen.findByText(OWNER_NOTICE)).toBeTruthy()

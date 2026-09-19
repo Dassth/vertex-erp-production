@@ -23,6 +23,7 @@ const CostingListPage = lazy(() => import('./features/costing/CostingListPage').
 const OrderCostingPage = lazy(() => import('./features/costing/OrderCostingPage').then((m) => ({ default: m.OrderCostingPage })))
 const DispatchPage = lazy(() => import('./features/dispatch/DispatchPage').then((m) => ({ default: m.DispatchPage })))
 const InvoicesPage = lazy(() => import('./features/invoices/InvoicesPage').then((m) => ({ default: m.InvoicesPage })))
+const AdminHomePage = lazy(() => import('./features/home/AdminHomePage').then((m) => ({ default: m.AdminHomePage })))
 const UnitHomePage = lazy(() => import('./features/unit/UnitPages').then((m) => ({ default: m.UnitHomePage })))
 const UnitAllocationsPage = lazy(() => import('./features/unit/UnitPages').then((m) => ({ default: m.UnitAllocationsPage })))
 const UnitStaffPage = lazy(() => import('./features/unit/UnitPages').then((m) => ({ default: m.UnitStaffPage })))
@@ -120,6 +121,7 @@ export default function App() {
                   <Route path="billing" element={guarded('billing', <BillingPage />)} />
                   <Route path="reports" element={guarded('billing', <ReportsPage />)} />
                   <Route path="customers" element={guarded('billing', <CustomerHistoryPage />)} />
+                  <Route path="home" element={<RequirePermission>{page(<AdminHomePage />)}</RequirePermission>} />
                   <Route path="unit" element={guarded('production.work', <UnitHomePage />)} />
                   <Route path="unit/allocations" element={guarded('production.work', <UnitAllocationsPage />)} />
                   <Route path="unit/staff" element={guarded('production.work', <UnitStaffPage />)} />

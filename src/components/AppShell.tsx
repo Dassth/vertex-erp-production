@@ -83,6 +83,8 @@ export const MASTER_SECTIONS: NavChild[] = [
 ]
 
 const NAV: NavItem[] = [
+  // Every administrator tier holds billing, so this is Home for all administrators.
+  { to: '/home', label: 'Home', hint: 'What needs you today', icon: Home, capabilities: ['billing'] },
   // Unit accounts: their own area. Administrators never hold production.work, so never see these.
   { to: '/unit', label: 'Home', hint: 'Your unit today', icon: Home, capabilities: ['production.work'] },
   { to: '/unit/allocations', label: 'Allocations', hint: 'Person and machine for every process', icon: UserCog, capabilities: ['production.work'] },

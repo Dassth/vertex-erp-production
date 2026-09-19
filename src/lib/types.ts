@@ -60,6 +60,14 @@ export interface UnitPerson extends Stamp {
   name: string
   designation: string
   active: boolean
+  /** Profile — optional; shown on the Staff page and the live job card. */
+  phone?: string
+  /** Years of work experience in this trade. */
+  experienceYears?: number | null
+  /** Date the person joined the unit (yyyy-mm-dd). */
+  joinedOn?: string | null
+  skills?: string
+  notes?: string
 }
 
 /** A machine belonging to one unit, selectable for processes that need one. */
@@ -69,6 +77,13 @@ export interface UnitMachine extends Stamp {
   code: string
   name: string
   active: boolean
+  /** Profile — optional; shown on the Machines page and the live job card. */
+  make?: string
+  model?: string
+  /** Year the machine was installed; its age is worked out from this. */
+  installedYear?: number | null
+  capacity?: string
+  notes?: string
 }
 
 export interface CompanyProfile {

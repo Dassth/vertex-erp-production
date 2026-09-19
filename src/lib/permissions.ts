@@ -67,8 +67,8 @@ export function canAny(user: Principal, capabilities: Capability[]): boolean {
 export function landingPath(user: Principal): string {
   if (!user) return '/login'
   if (user.role === 'unit') return '/unit'
-  if (can(user, 'production.monitor')) return '/production'
-  if (can(user, 'billing')) return '/billing'
+  // Every administrator starts on Home, which shows only what their tier may see.
+  if (user.role === 'admin') return '/home'
   return '/account'
 }
 
@@ -99,6 +99,7 @@ export function canOpenPath(user: Principal, pathname: string): boolean {
   const path = pathname.toLowerCase()
   if (path === '/production' || path.startsWith('/production/')) return canAny(user, ['production.monitor', 'production.work'])
   if (path === '/account' || path.startsWith('/account/')) return !!user
+  if (path === '/home') return user?.role === 'admin'
   const capability = capabilityForPath(path)
   return capability ? can(user, capability) : !!user
 }

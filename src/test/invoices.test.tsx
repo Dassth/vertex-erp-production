@@ -118,11 +118,11 @@ describe('Invoices page', () => {
 
     if (name === 'Administrator 3') {
       await again.router.navigate('/dispatch')
-      await waitFor(() => expect(again.router.state.location.pathname).toBe('/billing'))
+      await waitFor(() => expect(again.router.state.location.pathname).toBe('/home'))
     }
     if (name === 'Administrator 2') {
       await again.router.navigate('/costing')
-      await waitFor(() => expect(again.router.state.location.pathname).toBe('/production'))
+      await waitFor(() => expect(again.router.state.location.pathname).toBe('/home'))
     }
   }, 90000)
 
@@ -130,7 +130,7 @@ describe('Invoices page', () => {
     const orderId = stored().orders.find((o) => o.code === 'CUS-0001-20260915-01')!.id
     const first = mount()
     const user = await signIn('Administrator 1')
-    await screen.findByRole('heading', { name: 'Production' }, { timeout: 5000 })
+    await screen.findByRole('heading', { name: /^Good (morning|afternoon|evening),/ }, { timeout: 5000 })
     await first.router.navigate(`/dispatch?order=${orderId}`)
     const [, awaiting] = stored().dispatches
     await user.click(await screen.findByRole('button', { name: `Confirm received — ${awaiting.code}` }, { timeout: 5000 }))

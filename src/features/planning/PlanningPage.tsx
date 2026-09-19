@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { CalendarRange, CircleDashed, ClipboardList, Eye, Factory, FileClock, Pin, Plus, Search, XCircle } from 'lucide-react'
+import { Activity, CalendarRange, CircleDashed, ClipboardList, Eye, Factory, FileClock, Pin, Plus, Search, XCircle } from 'lucide-react'
 import { useStore } from '../../store/store'
 import type { Plan, PlanStatus, Priority } from '../../lib/types'
 import { fmtDate, pieces } from '../../lib/format'
@@ -192,11 +192,14 @@ export function PlanningPage() {
                       </td>
                       <td className="vx-td">
                         <div className="flex justify-end gap-1">
-                          <Button size="sm" variant="ghost" icon={<Eye className="h-3.5 w-3.5" />} onClick={() => setPreview(jobCardDoc(read, plan.id))} aria-label={`Preview job card ${plan.code}`}>
+                          <Button size="sm" variant="ghost" icon={<Eye className="h-3.5 w-3.5" />} onClick={() => setPreview(jobCardDoc(read, plan.id, 'live'))} aria-label={`Preview live job card ${plan.code}`}>
                             <span className="sr-only">Preview</span>
                           </Button>
-                          <DownloadButton size="sm" variant="secondary" icon={<ClipboardList className="h-3.5 w-3.5" />} doc={() => jobCardDoc(read, plan.id)} aria-label={`Download job card ${plan.code}`}>
-                            Job card
+                          <DownloadButton size="sm" variant="ghost" icon={<ClipboardList className="h-3.5 w-3.5" />} doc={() => jobCardDoc(read, plan.id, 'plan')} aria-label={`Download plan job card ${plan.code}`} title="Job card as planned">
+                            Plan
+                          </DownloadButton>
+                          <DownloadButton size="sm" variant="secondary" icon={<Activity className="h-3.5 w-3.5" />} doc={() => jobCardDoc(read, plan.id, 'live')} aria-label={`Download live job card ${plan.code}`} title="Job card with current progress">
+                            Live
                           </DownloadButton>
                         </div>
                       </td>

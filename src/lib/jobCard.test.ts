@@ -54,8 +54,31 @@ describe('job card', () => {
     expect(card.productionStatus).toMatch(/^Completed/)
   })
 
+  it('has a plan version without people, status or dispatches', () => {
+    const { db, planId } = workflow()
+    const card = jobCard(db, planId, 'plan')!
+    expect(card.mode).toBe('plan')
+    expect(card.processes.every((p) => !p.person && !p.status && !p.actual)).toBe(true)
+    expect(card.dispatches).toHaveLength(0)
+    expect(card.processes[0].unit).not.toBe('')
+  })
+
+  it('shows staff role and experience, and machine make and age, on the live version', () => {
+    const { db, planId } = workflow()
+    db.people = db.people.map((p) => ({ ...p, designation: 'Operator', experienceYears: 6 }))
+    db.machines = db.machines.map((m) => ({ ...m, make: 'Heidelberg', model: 'SM 74', installedYear: 2018 }))
+    const card = jobCard(db, planId, 'live', new Date('2026-09-19T10:00:00'))!
+    expect(card.processes[0].person).toMatch(/Operator · 6 yrs exp\./)
+    expect(card.processes[0].machine).toMatch(/Heidelberg SM 74 · 8 yrs old/)
+    expect(card.progress.done).toBe(card.progress.total)
+  })
+
   it('renders a PDF', async () => {
     const { db, planId } = workflow()
+    db.people = db.people.map((p) => ({ ...p, designation: 'Operator', experienceYears: 6 }))
+    db.machines = db.machines.map((m) => ({ ...m, make: 'Heidelberg', model: 'SM 74', installedYear: 2018 }))
+    const order = db.orders[0]
+    db.orders = [{ ...order, stages: order.stages.map((s, i) => (i === 0 ? { ...s, processes: s.processes.map((p, j) => (j === 0 ? { ...p, note: 'Plates checked twice', problem: 'Registration drift on first 50 sheets' } : p)) } : s)) }, ...db.orders.slice(1)]
     const mod = (await import('pdfmake')) as unknown as { default?: PdfMake } & PdfMake
     const pdfmake = mod.default ?? mod
     const dir = path.resolve(__dirname, '../assets/fonts')
@@ -67,11 +90,12 @@ describe('job card', () => {
     const { updatedAt: _u, updatedBy: _b, ...company } = db.company
     void _u
     void _b
-    const pdf = await pdfmake.createPdf(jobCardDefinition(jobCard(db, planId)!, company, new Date('2026-09-19T10:00:00'))).getBuffer()
-    expect(pdf.subarray(0, 4).toString()).toBe('%PDF')
-    const text = pdf.toString('latin1')
-    expect(text).not.toMatch(/₹/)
-    if (process.env.PDF_OUT) writeFileSync(process.env.PDF_OUT.replace('.pdf', '-jobcard.pdf'), pdf)
+    for (const mode of ['plan', 'live'] as const) {
+      const pdf = await pdfmake.createPdf(jobCardDefinition(jobCard(db, planId, mode, new Date('2026-09-19T10:00:00'))!, company, new Date('2026-09-19T10:00:00'))).getBuffer()
+      expect(pdf.subarray(0, 4).toString()).toBe('%PDF')
+      expect(pdf.toString('latin1')).not.toMatch(/₹/)
+      if (process.env.PDF_OUT) writeFileSync(process.env.PDF_OUT.replace('.pdf', `-jobcard-${mode}.pdf`), pdf)
+    }
   })
 })
 

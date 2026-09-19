@@ -92,8 +92,8 @@ describe('sign-in through the real UI', () => {
     await user.clear(screen.getByLabelText(/Confirm password/))
     await user.type(screen.getByLabelText(/Confirm password/), TEST_PASSWORD)
     await user.click(screen.getByRole('button', { name: /Create password & sign in/ }))
-    await screen.findByRole('heading', { name: 'Production' }, { timeout: 5000 })
-    expect(first.router.state.location.pathname).toBe('/production')
+    await screen.findByRole('heading', { name: /^Good (morning|afternoon|evening),/ }, { timeout: 5000 })
+    expect(first.router.state.location.pathname).toBe('/home')
     expect(screen.getByRole('button', { name: 'Account — Administrator 1' })).toBeTruthy()
     const saved = stored()
     expect(saved.users.find((u) => u.id === 'USR-ADM1')!.passwordHash).toMatch(/^[0-9a-f]{64}$/)
@@ -114,13 +114,13 @@ describe('sign-in through the real UI', () => {
     await user.clear(screen.getByLabelText(/^Password/))
     await user.type(screen.getByLabelText(/^Password/), TEST_PASSWORD)
     await user.click(screen.getByRole('button', { name: /^Sign in$/ }))
-    await screen.findByRole('heading', { name: 'Production' }, { timeout: 5000 })
+    await screen.findByRole('heading', { name: /^Good (morning|afternoon|evening),/ }, { timeout: 5000 })
 
     // Reload: unmount everything and mount a fresh app with the same browser storage.
     cleanup()
     const second = mount('/billing')
     await screen.findByRole('heading', { name: 'Billing' }, { timeout: 5000 })
-    expect(second.router.state.location.pathname).toBe('/billing')
+    expect(second.router.state.location.pathname).toBe('/home')
     expect(screen.getByRole('button', { name: 'Account — Administrator 1' })).toBeTruthy()
   }, 30000)
 
@@ -143,19 +143,19 @@ describe('sign-in through the real UI', () => {
     await user.type(screen.getByLabelText(/New password/), TEST_PASSWORD)
     await user.type(screen.getByLabelText(/Confirm password/), TEST_PASSWORD)
     await user.click(screen.getByRole('button', { name: /Create password & sign in/ }))
-    await screen.findByRole('heading', { name: 'Production' }, { timeout: 5000 })
-    expect(router.state.location.pathname).toBe('/production')
+    await screen.findByRole('heading', { name: /^Good (morning|afternoon|evening),/ }, { timeout: 5000 })
+    expect(router.state.location.pathname).toBe('/home')
 
     const modules = screen.getAllByRole('navigation', { name: 'Modules' })[0]
     const linked = within(modules)
       .getAllByRole('link')
       .map((a) => a.getAttribute('href'))
-    expect(linked.sort()).toEqual(['/billing', '/customers', '/dispatch', '/invoices', '/production', '/reports'])
+    expect(linked.sort()).toEqual(['/billing', '/customers', '/dispatch', '/home', '/invoices', '/production', '/reports'])
 
     // Restricted modules recover to an allowed page instead of rendering.
     for (const path of ['/master/products', '/master/costing', '/planning', '/costing', '/settings']) {
       await router.navigate(path)
-      await waitFor(() => expect(router.state.location.pathname).toBe('/production'))
+      await waitFor(() => expect(router.state.location.pathname).toBe('/home'))
     }
     expect(screen.queryByText(/Product register|Costing configuration|Units, people & machines/)).toBeNull()
 
@@ -175,7 +175,7 @@ describe('sign-in through the real UI', () => {
     await user.type(screen.getByLabelText(/Confirm password/), TEST_PASSWORD)
     await user.click(screen.getByRole('button', { name: /Create password & sign in/ }))
     await screen.findByRole('heading', { name: 'Billing' }, { timeout: 5000 })
-    expect(router.state.location.pathname).toBe('/billing')
+    expect(router.state.location.pathname).toBe('/home')
 
     const modules = screen.getAllByRole('navigation', { name: 'Modules' })[0]
     expect(
@@ -187,7 +187,7 @@ describe('sign-in through the real UI', () => {
     // Every other module, including Production and Dispatch, recovers to Billing without looping.
     for (const path of ['/production', '/dispatch', '/master/customers', '/planning', '/costing', '/settings']) {
       await router.navigate(path)
-      await waitFor(() => expect(router.state.location.pathname).toBe('/billing'))
+      await waitFor(() => expect(router.state.location.pathname).toBe('/home'))
     }
     expect(screen.queryByRole('heading', { name: 'Production' })).toBeNull()
     expect(screen.queryByRole('heading', { name: 'Dispatch' })).toBeNull()
