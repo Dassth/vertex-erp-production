@@ -34,13 +34,15 @@ export type Capability =
   | 'production.work'
   | 'dispatch'
   | 'billing'
+  /** Watch every unit's work, read-only. Held by all administrator tiers. */
+  | 'units.monitor'
   /** Company profile, units, people, machines, accounts, data reset. */
   | 'administration'
 
 const TIER_CAPABILITIES: Record<AdminTier, Capability[]> = {
-  full: ['master', 'planning', 'costing', 'costing.internals', 'production.monitor', 'dispatch', 'billing', 'administration'],
-  operations: ['production.monitor', 'dispatch', 'billing'],
-  billing: ['billing'],
+  full: ['master', 'planning', 'costing', 'costing.internals', 'production.monitor', 'units.monitor', 'dispatch', 'billing', 'administration'],
+  operations: ['production.monitor', 'units.monitor', 'dispatch', 'billing'],
+  billing: ['units.monitor', 'billing'],
 }
 
 const UNIT_CAPABILITIES: Capability[] = ['production.work']
@@ -81,6 +83,7 @@ const ROUTE_CAPABILITIES: Array<[string, Capability]> = [
   ['/billing', 'billing'],
   ['/reports', 'billing'],
   ['/customers', 'billing'],
+  ['/units', 'units.monitor'],
   ['/unit', 'production.work'],
   ['/invoices', 'billing'],
   ['/settings', 'administration'],

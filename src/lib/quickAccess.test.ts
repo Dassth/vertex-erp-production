@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { buildEmptyDB } from './defaults'
-import { places, rank, records, suggestions, words } from './quickAccess'
+import { parse, places, rank, records, suggestions, words } from './quickAccess'
 import type { Customer, Dispatch, Invoice, Plan, ProductionOrder, VertexDB } from './types'
 
-const top = (query: string, extra = places()) => rank(extra, query)[0]?.id
+/** What an administrator sees: everything except the unit-only entries. */
+const adminPlaces = () => places().filter((t) => t.need !== 'production.work' && t.need !== 'unit')
+const top = (query: string, extra = adminPlaces()) => rank(extra, query)[0]?.id
 
 describe('quick access ranking', () => {
   it('understands a sentence, not just a keyword', () => {
@@ -16,22 +18,45 @@ describe('quick access ranking', () => {
     expect(top('job card')).toBe('jobcard')
   })
 
+  it('reads plain English sentences the way a person writes them', () => {
+    // Either GST answer is right; what matters is that the topic beats generic help.
+    expect(['report.gst', 'invoice.gst']).toContain(top('i have a question about gst'))
+    expect(top('i have a problem')).toBe('help.problem')
+    expect(top('i need customer support')).toBe('help.guide')
+    expect(top('how do i make a plan')).toBe('plan.new')
+    expect(top('where is production')).toBe('go.production')
+    expect(top('i want to change the settings')).toBe('go.settings')
+    expect(top('i want to see what the units are doing')).toBe('go.units')
+  })
+
+  it('forgives a typed-in-a-hurry word and knows trade synonyms', () => {
+    expect(top('purchse bill')).toBe('purchase.new')
+    expect(top('i bought paper from a supplier')).toBe('purchase.new')
+    expect(top('party history')).toBe('customer.history')
+  })
+
+  it('reads the intent even when the topic is missing', () => {
+    expect(parse('i have a problem').intent).toBe('problem')
+    expect(parse('i want to make a bill').intent).toBe('do')
+    expect(rank(adminPlaces(), 'i have a question').map((r) => r.id)).toContain('help.guide')
+  })
+
   it('ignores filler words entirely', () => {
     expect(words('I want to')).toEqual(['i', 'want', 'to'])
     // …but they carry no meaning on their own.
-    expect(rank(places(), 'i want to')).toEqual([])
+    expect(rank(adminPlaces(), 'i want to')).toEqual([])
   })
 
   it('returns nothing for a query that matches nothing', () => {
-    expect(rank(places(), 'zzzz')).toEqual([])
+    expect(rank(adminPlaces(), 'zzzz')).toEqual([])
   })
 
   it('lifts what this account picks often', () => {
-    const plain = rank(places(), 'report')
+    const plain = rank(adminPlaces(), 'report')
     const second = plain[1].id
     expect(plain[0].id).not.toBe(second)
     // After picking the runner-up often enough, it comes first.
-    const learned = rank(places(), 'report', { usage: { [second]: 8 } })
+    const learned = rank(adminPlaces(), 'report', { usage: { [second]: 8 } })
     expect(learned[0].id).toBe(second)
   })
 })

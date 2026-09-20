@@ -33,12 +33,77 @@ export interface ScoredTarget extends QuickTarget {
   reason?: string
 }
 
-/* Words that carry no meaning in a command ("I want to take a bill"). */
+/* Words that carry no meaning on their own ("I want to take a bill"). */
 const NOISE = new Set([
-  'i', 'me', 'my', 'we', 'our', 'a', 'an', 'the', 'to', 'for', 'of', 'in', 'on', 'at', 'is', 'it', 'this', 'that',
-  'want', 'wanna', 'need', 'like', 'please', 'pls', 'plz', 'show', 'give', 'get', 'go', 'goto', 'open', 'see', 'view',
-  'take', 'find', 'search', 'where', 'how', 'do', 'can', 'could', 'would', 'should', 'now', 'today', 'and', 'with',
+  'i', 'me', 'my', 'we', 'our', 'you', 'a', 'an', 'the', 'to', 'for', 'of', 'in', 'on', 'at', 'is', 'am', 'are', 'it',
+  'this', 'that', 'there', 'here', 'about', 'with', 'from', 'and', 'or', 'any', 'some', 'want', 'wanna', 'need',
+  'needed', 'like', 'would', 'could', 'should', 'can', 'may', 'must', 'have', 'has', 'had', 'do', 'does', 'did',
+  'please', 'pls', 'plz', 'kindly', 'show', 'give', 'get', 'go', 'goto', 'open', 'see', 'view', 'take', 'find',
+  'search', 'where', 'what', 'which', 'who', 'when', 'how', 'why', 'now', 'today', 'again', 'just', 'let', 'lets',
 ])
+
+/** What the sentence is asking for, read from the words around the topic. */
+export type Intent = 'do' | 'goto' | 'setting' | 'help' | 'problem' | 'none'
+
+const INTENT_PATTERNS: Array<[Intent, RegExp]> = [
+  ['problem', /\b(problem|problems|issue|issues|error|errors|wrong|broken|stuck|not working|doesn'?t work|failed|failing|complaint|complain)\b/],
+  ['help', /\b(help|support|question|questions|doubt|doubts|guide|tutorial|explain|teach|suggestion|suggestions|feedback|idea|how do i|how to|what is)\b/],
+  ['setting', /\b(setting|settings|configure|configuration|setup|set up|preference|preferences)\b/],
+  ['do', /\b(make|create|add|new|record|enter|raise|issue|prepare|download|print|generate|send|take|want|need)\b/],
+  ['goto', /\b(where|open|show|see|view|go|visit|list)\b/],
+]
+
+/** Words people use for the same thing in this trade. */
+const SYNONYMS: Record<string, string[]> = {
+  bill: ['invoice'],
+  invoice: ['bill'],
+  bills: ['invoice'],
+  buy: ['purchase'],
+  buying: ['purchase'],
+  bought: ['purchase'],
+  inward: ['purchase'],
+  sell: ['sales'],
+  sold: ['sales'],
+  selling: ['sales'],
+  outward: ['sales'],
+  party: ['customer'],
+  client: ['customer'],
+  buyer: ['customer'],
+  vendor: ['supplier'],
+  tax: ['gst'],
+  gst: ['tax'],
+  worker: ['staff'],
+  workers: ['staff'],
+  people: ['staff'],
+  employee: ['staff'],
+  operator: ['staff'],
+  press: ['machine'],
+  lorry: ['transport'],
+  truck: ['transport'],
+  courier: ['dispatch'],
+  shipment: ['dispatch'],
+  delivery: ['dispatch'],
+  money: ['invoice'],
+  payment: ['invoice'],
+  paid: ['invoice'],
+  cost: ['costing'],
+  rate: ['costing'],
+  quotation: ['costing'],
+  quote: ['costing'],
+  stock: ['material'],
+  paper: ['material'],
+  board: ['material'],
+  change: ['edit'],
+  update: ['edit'],
+  modify: ['edit'],
+  correct: ['edit'],
+  delete: ['remove'],
+  monitor: ['production'],
+  status: ['progress'],
+  support: ['help'],
+  doubt: ['help'],
+  question: ['help'],
+}
 
 export const words = (text: string): string[] =>
   text
@@ -47,10 +112,50 @@ export const words = (text: string): string[] =>
     .split(/\s+/)
     .filter(Boolean)
 
-const meaningful = (text: string): string[] => {
-  const all = words(text)
-  // "show me production" → ["production"]; a sentence of filler alone means nothing yet.
-  return all.filter((w) => !NOISE.has(w))
+/** A word from the query: either typed, or one we added because it means the same. */
+export interface Token {
+  word: string
+  derived: boolean
+}
+
+/** The sentence reduced to what it is actually asking for. */
+export function parse(query: string): { intent: Intent; tokens: Token[]; phrase: string } {
+  const text = query.toLowerCase().trim()
+  const intent = INTENT_PATTERNS.find(([, re]) => re.test(text))?.[0] ?? 'none'
+  const typed = words(text).filter((w) => !NOISE.has(w))
+  const seen = new Set(typed)
+  const tokens: Token[] = typed.map((word) => ({ word, derived: false }))
+  for (const w of typed)
+    for (const syn of SYNONYMS[w] ?? [])
+      if (!seen.has(syn)) {
+        seen.add(syn)
+        tokens.push({ word: syn, derived: true })
+      }
+  return { intent, tokens, phrase: text }
+}
+
+/** One edit apart, e.g. "purchse" and "purchase" — enough for a typed word. */
+function nearlyEqual(a: string, b: string): boolean {
+  if (Math.abs(a.length - b.length) > 1) return false
+  if (a === b) return true
+  let i = 0
+  let j = 0
+  let edits = 0
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) {
+      i += 1
+      j += 1
+      continue
+    }
+    if (++edits > 1) return false
+    if (a.length > b.length) i += 1
+    else if (a.length < b.length) j += 1
+    else {
+      i += 1
+      j += 1
+    }
+  }
+  return edits + (a.length - i) + (b.length - j) <= 1
 }
 
 /** The fixed screens and actions of the app. */
@@ -68,11 +173,16 @@ export function places(): QuickTarget[] {
     { id: 'customer.history', title: 'Customer history', hint: 'What a customer ordered, from any year', to: '/customers', group: 'Do', need: 'billing', keywords: ['customer', 'history', 'past', 'orders', 'buyer', 'party', 'client', 'old'] },
     { id: 'jobcard', title: 'Job card for a plan', hint: 'Planning → the plan → Plan or Live job card', to: '/planning', group: 'Do', need: 'planning', keywords: ['job', 'card', 'jobcard', 'route', 'shop', 'floor', 'print', 'live', 'progress', 'download'] },
 
+    { id: 'help.guide', title: 'How the workflow works', hint: 'Step-by-step guide: Master → Planning → Costing → Production → Billing', to: '/home?guide=1', group: 'Do', keywords: ['help', 'guide', 'how', 'question', 'doubt', 'support', 'learn', 'explain', 'steps', 'workflow', 'training', 'tutorial'] },
+    { id: 'help.problem', title: 'Something is wrong — what needs attention', hint: 'Problems reported by units, late jobs and unconfirmed deliveries', to: '/home', group: 'Do', need: 'billing', keywords: ['problem', 'issue', 'wrong', 'error', 'stuck', 'delay', 'late', 'attention', 'complaint', 'broken', 'help'] },
+    { id: 'help.support', title: 'Report a problem on a process', hint: 'Production → the process → Report a problem', to: '/production', group: 'Do', need: 'production.work', keywords: ['problem', 'issue', 'report', 'machine', 'breakdown', 'stop', 'help', 'support', 'stuck'] },
+    { id: 'go.units', title: 'Units — what each unit is working on', hint: 'Watch all four production units', to: '/units', group: 'Go to', need: 'units.monitor', keywords: ['unit', 'units', 'shop', 'floor', 'monitor', 'watch', 'team', 'load', 'u1', 'u2', 'u3', 'u4'] },
+
     // Go to
     { id: 'go.home', title: 'Home', hint: 'What needs you today', to: '/home', group: 'Go to', need: 'billing', keywords: ['home', 'dashboard', 'start', 'overview'] },
     { id: 'go.planning', title: 'Planning', hint: 'All plans', to: '/planning', group: 'Go to', need: 'planning', keywords: ['planning', 'plans', 'schedule', 'allocate'] },
     { id: 'go.costing', title: 'Costing', hint: 'Cost and finalize a planned order', to: '/costing', group: 'Go to', need: 'costing', keywords: ['costing', 'cost', 'price', 'quote', 'rate', 'profit', 'finalize'] },
-    { id: 'go.production', title: 'Production', hint: 'Process progress by unit', to: '/production', group: 'Go to', need: 'production.monitor', keywords: ['production', 'progress', 'shop', 'floor', 'jobs', 'units', 'work'] },
+    { id: 'go.production', title: 'Production', hint: 'Process progress by unit', to: '/production', group: 'Go to', need: 'production.monitor', keywords: ['production', 'progress', 'jobs', 'work', 'board', 'timeline'] },
     { id: 'go.dispatch', title: 'Dispatch', hint: 'Ship completed orders', to: '/dispatch', group: 'Go to', need: 'dispatch', keywords: ['dispatch', 'shipping', 'delivery'] },
     { id: 'go.invoices', title: 'Invoices', hint: 'Order summaries and invoice downloads', to: '/invoices', group: 'Go to', need: 'billing', keywords: ['invoices', 'summary', 'cumulative', 'statement'] },
     { id: 'go.billing.sales', title: 'Billing — Sales', hint: 'Sales invoices for every order', to: '/billing', group: 'Go to', need: 'billing', keywords: ['billing', 'sales', 'invoice', 'money', 'revenue'] },
@@ -84,7 +194,7 @@ export function places(): QuickTarget[] {
     { id: 'go.master.products', title: 'Master — Products', hint: 'Stages, processes and materials', to: '/master/products', group: 'Setup', need: 'master', keywords: ['product', 'products', 'master', 'stages', 'processes', 'bom', 'material', 'box', 'design'] },
     { id: 'go.master.costing', title: 'Master — Costing', hint: 'Material prices and costing configuration', to: '/master/costing', group: 'Setup', need: 'master', keywords: ['master', 'costing', 'prices', 'material', 'rates', 'charges', 'tax', 'settings', 'configuration'] },
     { id: 'go.master.customers', title: 'Master — Customers', hint: 'Add or edit customers, GSTIN and addresses', to: '/master/customers', group: 'Setup', need: 'master', keywords: ['customer', 'add', 'new', 'edit', 'gstin', 'address', 'master', 'party'] },
-    { id: 'go.settings', title: 'Settings', hint: 'Units, people, machines, accounts and data', to: '/settings', group: 'Setup', need: 'administration', keywords: ['settings', 'setting', 'change', 'units', 'people', 'staff', 'machines', 'accounts', 'users', 'backup', 'company', 'profile', 'admin'] },
+    { id: 'go.settings', title: 'Settings', hint: 'Units, people, machines, accounts and data', to: '/settings', group: 'Setup', need: 'administration', keywords: ['settings', 'setting', 'change', 'people', 'staff', 'machines', 'accounts', 'users', 'backup', 'company', 'profile', 'admin', 'password'] },
 
     // Unit accounts
     { id: 'unit.home', title: 'Unit home', hint: 'Your unit today', to: '/unit', group: 'Go to', need: 'unit', keywords: ['home', 'unit', 'today', 'dashboard'] },
@@ -119,7 +229,10 @@ export function records(db: VertexDB, limitPerKind = 60): QuickTarget[] {
 /** "bills" and "bill" are the same word here. */
 const stem = (w: string) => (w.length > 3 && w.endsWith('s') ? w.slice(0, -1) : w)
 
-function scoreOne(target: QuickTarget, tokens: string[], phrase: string): number {
+/** Entries that answer "help me" rather than "take me somewhere". */
+const HELP_IDS = new Set(['help.guide', 'help.problem', 'help.support'])
+
+function scoreOne(target: QuickTarget, tokens: Token[], phrase: string, intent: Intent): number {
   const title = target.title.toLowerCase()
   const titleWords = title.split(/[^a-z0-9]+/).filter(Boolean).map(stem)
   const hint = target.hint.toLowerCase()
@@ -134,22 +247,35 @@ function scoreOne(target: QuickTarget, tokens: string[], phrase: string): number
     if (keys.some((k) => k.includes(phrase))) score += 30
   }
 
+  let typedWords = 0
   for (const raw of tokens) {
-    const t = stem(raw)
+    const t = stem(raw.word)
+    if (!raw.derived) typedWords += 1
     let best = 0
     // An exact word — in the title or as a deliberate synonym ("bill" → invoice) — is the strongest signal.
     if (titleWords.includes(t) || keyStems.includes(t)) best = 90
+    else if (t.length >= 5 && [...titleWords, ...keyStems].some((w) => nearlyEqual(w, t))) best = 60 // typed in a hurry
     else if (titleWords.some((w) => w.startsWith(t))) best = 35
     else if (keyStems.some((k) => k.startsWith(t) || t.startsWith(k))) best = 26
     else if (title.includes(t)) best = 25
     else if (hint.includes(t)) best = 12
-    if (best) matched += 1
+    // A word we added ourselves counts, but never more than the words actually typed.
+    if (best && raw.derived) best = Math.round(best * 0.7)
+    else if (best) matched += 1
     score += best
   }
   if (!matched) return 0
+
+  // What the sentence asks for decides between an action, a page and an answer.
+  if (intent === 'do' && target.group === 'Do') score += 14
+  if (intent === 'goto' && target.group === 'Go to') score += 14
+  if (intent === 'setting' && target.group === 'Setup') score += 20
+  if ((intent === 'help' || intent === 'problem') && HELP_IDS.has(target.id)) score += 45
+  // (a topic beats the general help entry — see rank())
+
   // Every word matching something is a much better answer than one word matching.
-  const coverage = matched / tokens.length
-  if (coverage < 0.5) return 0
+  const coverage = matched / Math.max(1, typedWords)
+  if (coverage < 0.4) return 0
   return score * (0.6 + 0.4 * coverage)
 }
 
@@ -162,16 +288,20 @@ export interface RankOptions {
 }
 
 export function rank(targets: QuickTarget[], query: string, opts: RankOptions = {}): ScoredTarget[] {
-  const phrase = query.trim().toLowerCase()
-  const tokens = meaningful(query)
-  if (!tokens.length) return []
+  const { intent, tokens, phrase } = parse(query)
+  if (!tokens.length) {
+    // "I have a question" on its own: no topic, but the intent is clear.
+    if (intent === 'help' || intent === 'problem') return targets.filter((t) => HELP_IDS.has(t.id)).map((t) => ({ ...t, score: 1 }))
+    return []
+  }
   const { usage = {}, context = {}, limit = 8 } = opts
-  return targets
-    .map((t) => {
-      const base = scoreOne(t, tokens, phrase)
-      if (!base) return { ...t, score: 0 }
-      return { ...t, score: base + Math.min(usage[t.id] ?? 0, 6) * 12 + (context[t.id] ?? 0) }
-    })
+  const scored = targets.map((t) => ({ ...t, score: scoreOne(t, tokens, phrase, intent) }))
+  // "A question about GST" is a question about GST: when the sentence names a
+  // topic the app knows, that answer leads and general help steps back.
+  const topical = Math.max(0, ...scored.filter((t) => !HELP_IDS.has(t.id)).map((t) => t.score))
+  return scored
+    .map((t) => (topical >= 90 && HELP_IDS.has(t.id) ? { ...t, score: t.score * 0.7 } : t))
+    .map((t) => (t.score ? { ...t, score: t.score + Math.min(usage[t.id] ?? 0, 6) * 12 + (context[t.id] ?? 0) } : t))
     .filter((t) => t.score > 0)
     .sort((a, b) => b.score - a.score || a.title.localeCompare(b.title))
     .slice(0, limit)

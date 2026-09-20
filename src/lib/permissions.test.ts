@@ -37,7 +37,7 @@ describe('permission matrix', () => {
   })
 
   it('limits Administrator 2 to production monitoring, dispatch and billing', () => {
-    expect(capabilitiesOf(ADMIN2).sort()).toEqual(['billing', 'dispatch', 'production.monitor'])
+    expect(capabilitiesOf(ADMIN2).sort()).toEqual(['billing', 'dispatch', 'production.monitor', 'units.monitor'])
     expect(capabilitiesOf(ADMIN2)).not.toContain('master')
     expect(capabilitiesOf(ADMIN2)).not.toContain('planning')
     expect(capabilitiesOf(ADMIN2)).not.toContain('costing')
@@ -46,8 +46,15 @@ describe('permission matrix', () => {
     expect(capabilitiesOf(ADMIN2)).not.toContain('administration')
   })
 
-  it('limits Administrator 3 to billing', () => {
-    expect(capabilitiesOf(ADMIN3)).toEqual(['billing'])
+  it('limits Administrator 3 to billing, plus watching the units', () => {
+    expect(capabilitiesOf(ADMIN3).sort()).toEqual(['billing', 'units.monitor'])
+  })
+
+  it('lets every administrator watch the units, and no unit account', () => {
+    for (const admin of [ADMIN1, ADMIN2, ADMIN3]) expect(canOpenPath(admin, '/units')).toBe(true)
+    expect(canOpenPath(UNIT1, '/units')).toBe(false)
+    // Watching is not working: only the unit itself reaches its own screens.
+    expect(canOpenPath(ADMIN1, '/unit/staff')).toBe(false)
   })
 
   it('limits unit users to their own process work', () => {

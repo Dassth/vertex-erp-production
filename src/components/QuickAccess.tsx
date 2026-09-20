@@ -56,7 +56,10 @@ export function QuickAccessPanel({ variant, onDone }: { variant: 'page' | 'dialo
 
   // Today's real needs, so an empty box still helps.
   const hints = useMemo(() => suggestions(db, allowed, { usage }), [db, allowed, usage])
-  const results: ScoredTarget[] = useMemo(() => (query.trim() ? rank(allowed, query, { usage, limit: 8 }) : hints), [allowed, query, usage, hints])
+  const matches: ScoredTarget[] = useMemo(() => (query.trim() ? rank(allowed, query, { usage, limit: 8 }) : []), [allowed, query, usage])
+  // A half-typed sentence ("I need to…") still shows today's work rather than a dead end.
+  const showingHints = matches.length === 0
+  const results: ScoredTarget[] = showingHints ? hints : matches
 
   useEffect(() => {
     if (variant === 'dialog') input.current?.focus()
@@ -156,6 +159,12 @@ export function QuickAccessPanel({ variant, onDone }: { variant: 'page' | 'dialo
     return (
       <div className="-mx-5 -my-5">
         <div className="border-b border-rule p-3">{field}</div>
+        {showingHints ? (
+          <p className="flex items-center gap-2 border-b border-rule px-4 py-2 text-2xs text-muted">
+            <Sparkles className="h-3.5 w-3.5 text-faint" aria-hidden="true" />
+            {query.trim() ? 'Keep typing — meanwhile, what needs you now' : 'Suggested for you right now'}
+          </p>
+        ) : null}
         {list}
       </div>
     )
@@ -165,10 +174,10 @@ export function QuickAccessPanel({ variant, onDone }: { variant: 'page' | 'dialo
       {field}
       {open ? (
         <div className="vx-anim-pop absolute inset-x-0 top-full z-20 mt-1 overflow-hidden rounded-lg border border-rule-2 bg-surface" style={{ boxShadow: 'var(--shadow-pop)' }}>
-          {!query.trim() ? (
+          {showingHints ? (
             <p className="flex items-center gap-2 border-b border-rule px-4 py-2 text-2xs text-muted">
               <Sparkles className="h-3.5 w-3.5 text-faint" aria-hidden="true" />
-              Suggested for you right now
+              {query.trim() ? 'Keep typing — meanwhile, what needs you now' : 'Suggested for you right now'}
             </p>
           ) : null}
           {list}

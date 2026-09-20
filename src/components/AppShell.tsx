@@ -94,13 +94,14 @@ const NAV: NavItem[] = [
   { to: '/planning', label: 'Planning', hint: 'Allocate every process to a unit', icon: CalendarRange, capabilities: ['planning'] },
   { to: '/costing', label: 'Costing', hint: 'Cost and finalize a planned order', icon: Calculator, capabilities: ['costing'] },
   { to: '/production', label: 'Production', hint: 'Process progress by unit', icon: Factory, capabilities: ['production.monitor', 'production.work'] },
-  { to: '/unit/staff', label: 'Staff', hint: 'Add and remove your unit’s people', icon: Users, capabilities: ['production.work'] },
-  { to: '/unit/machines', label: 'Machines', hint: 'Add and remove your unit’s machines', icon: Cog, capabilities: ['production.work'] },
+  { to: '/units', label: 'Units', hint: 'Watch what every unit is working on', icon: Building2, capabilities: ['units.monitor'] },
+  { to: '/billing', label: 'Billing', hint: 'Sales invoices and purchase bills', icon: ReceiptText, capabilities: ['billing'] },
   { to: '/dispatch', label: 'Dispatch', hint: 'Ship completed orders', icon: Truck, capabilities: ['dispatch'] },
   { to: '/invoices', label: 'Invoices', hint: 'Order summaries and invoice downloads', icon: FileStack, capabilities: ['billing'] },
-  { to: '/billing', label: 'Billing', hint: 'Sales invoices and purchase bills', icon: ReceiptText, capabilities: ['billing'] },
   { to: '/reports', label: 'Reports', hint: 'Monthly GST reports: invoices and bills', icon: FileBarChart, capabilities: ['billing'] },
   { to: '/customers', label: 'Customers', hint: 'Customer ID lookup and full order history', icon: Contact, capabilities: ['billing'] },
+  { to: '/unit/staff', label: 'Staff', hint: 'Add and remove your unit’s people', icon: Users, capabilities: ['production.work'] },
+  { to: '/unit/machines', label: 'Machines', hint: 'Add and remove your unit’s machines', icon: Cog, capabilities: ['production.work'] },
 ]
 
 type Dialog = 'audit' | 'company' | 'account' | 'clear' | 'guide' | 'resources' | null
@@ -124,6 +125,13 @@ export function AppShell({ children }: { children: ReactNode }) {
     })
 
   useEffect(() => setSheetOpen(false), [location.pathname])
+
+  // Quick access opens the workflow guide with ?guide=1; consume the flag once.
+  useEffect(() => {
+    if (!new URLSearchParams(location.search).has('guide')) return
+    setDialog('guide')
+    navigate(location.pathname, { replace: true })
+  }, [location.search, location.pathname, navigate])
 
   // Ctrl/⌘ + K opens quick access from anywhere.
   useEffect(() => {
