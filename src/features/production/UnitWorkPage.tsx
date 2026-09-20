@@ -395,8 +395,7 @@ export function ResourceDialog({ open, onClose, row }: { open: boolean; onClose:
           </Select>
         </Field>
 
-        {!process.requiresMachine ? (
-          <label className="flex items-start gap-2.5">
+        <label className="flex items-start gap-2.5">
             <input
               type="checkbox"
               className="mt-0.5 h-4 w-4 accent-[var(--color-accent)]"
@@ -409,12 +408,15 @@ export function ResourceDialog({ open, onClose, row }: { open: boolean; onClose:
             <span className="min-w-0">
               <span className="flex items-center gap-1.5 text-base text-ink">
                 <CircleSlash className="h-3.5 w-3.5 text-faint" aria-hidden="true" />
-                No machine required
+                This process needs no machine — run manually
               </span>
-              <span className="block text-xs text-muted">Record this process as manual work.</span>
+              <span className="block text-xs text-muted">
+                {process.requiresMachine
+                  ? 'Master expects a machine here. Tick this if your unit runs it by hand — it is recorded as manual work.'
+                  : 'Record this process as manual work.'}
+              </span>
             </span>
           </label>
-        ) : null}
 
         <UnitResourceSetup unitId={process.unitId} onPersonAdded={setPersonId} onMachineAdded={id => { setMachineId(id); setNoMachine(false) }} />
 

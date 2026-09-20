@@ -119,11 +119,15 @@ describe('three processes in one stage, allocated to three units', () => {
     ).db
     db = must(completeProcess(order.id, plate.id)(db, unit(1))).db
 
-    // Journey 6/7: the machine-bound process refuses "no machine required".
-    const refused = assignProcessResources(order.id, print.id, { responsiblePersonId: base.personOf('U2'), machineId: null, noMachineRequired: true })(db, unit(2))
-    expect(refused.ok).toBe(false)
+    // Journey 6/7: the unit may declare a machine-bound process manual — it is
+    // recorded as such, with the override written to the audit trail.
+    const manual = must(assignProcessResources(order.id, print.id, { responsiblePersonId: base.personOf('U2'), machineId: null, noMachineRequired: true })(db, unit(2)))
+    expect(manual.value.noMachineRequired).toBe(true)
+    expect(manual.value.machineId).toBeNull()
+    expect(manual.db.audit[0].reason).toMatch(/manual although Master expects a machine/)
+    // Choosing a machine afterwards clears the manual flag.
     db = must(
-      assignProcessResources(order.id, print.id, { responsiblePersonId: base.personOf('U2'), machineId: base.machineOf('U2'), noMachineRequired: false })(db, unit(2)),
+      assignProcessResources(order.id, print.id, { responsiblePersonId: base.personOf('U2'), machineId: base.machineOf('U2'), noMachineRequired: false })(manual.db, unit(2)),
     ).db
     // A machine from another unit is rejected.
     expect(

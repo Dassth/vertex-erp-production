@@ -1,12 +1,13 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Building2, CheckCircle2, Cog, Eye, Factory, Timer, TriangleAlert, Users } from 'lucide-react'
 import { useStore } from '../../store/store'
-import type { UnitId } from '../../lib/types'
+import type { UnitId, UnitMachine, UnitPerson } from '../../lib/types'
 import { allJobViews, unitSummaries, unitWork } from '../../lib/selectors'
+import type { ProcessWorkRow } from '../../lib/selectors'
 import { fmtDate, fmtDateTime, pieces, planWindow } from '../../lib/format'
-import { since } from '../unit/ResourceDrawer'
-import { Badge, Card, CardHead, EmptyState, ProgressBar } from '../../components/ui'
+import { ResourceDrawer, since } from '../unit/ResourceDrawer'
+import { Badge, Button, Card, CardHead, EmptyState, Modal, ProgressBar } from '../../components/ui'
 import { Detail, LinkButton, PageHeader, StatStrip, StatTile, useDocumentTitle } from '../../components/page'
 import { PriorityBadge, ProcessBadge } from '../../components/status'
 
@@ -83,6 +84,8 @@ export function UnitMonitorDetailPage() {
   const unit = db.units.find((u) => u.id === unitId)
   useDocumentTitle(unit?.shortName ?? 'Unit')
   const work = useMemo(() => (unitId ? unitWork(db.orders, unitId, new Date()) : null), [db.orders, unitId])
+  const [peek, setPeek] = useState<ProcessWorkRow | null>(null)
+  const [who, setWho] = useState<UnitPerson | UnitMachine | null>(null)
 
   if (!unit || !work)
     return (
@@ -136,7 +139,7 @@ export function UnitMonitorDetailPage() {
               </thead>
               <tbody>
                 {[...work.ready, ...work.waiting].map((r) => (
-                  <tr key={r.key} className="border-t border-rule">
+                  <tr key={r.key} onClick={() => setPeek(r)} className="cursor-pointer border-t border-rule transition-colors hover:bg-surface-2">
                     <td className="vx-td">
                       <span className="vx-code font-semibold text-ink">{r.order.code}</span>
                       <span className="block text-2xs text-faint">
@@ -148,7 +151,7 @@ export function UnitMonitorDetailPage() {
                       <span className="block text-2xs text-faint">{r.process.stageName}</span>
                     </td>
                     <td className="vx-td">{person(r.process.responsiblePersonId) ?? <span className="text-warn">Not allocated</span>}</td>
-                    <td className="vx-td">{r.process.noMachineRequired ? <span className="text-muted">No machine</span> : machine(r.process.machineId) ?? <span className="text-muted">—</span>}</td>
+                    <td className="vx-td">{r.process.noMachineRequired ? <span className="text-muted">Manual — no machine</span> : machine(r.process.machineId) ?? <span className="text-muted">—</span>}</td>
                     <td className="vx-td text-sm">{planWindow(r.process.plannedStart, r.process.plannedEnd)}</td>
                     <td className="vx-td">
                       <span className="flex flex-wrap items-center gap-1.5">
@@ -174,11 +177,11 @@ export function UnitMonitorDetailPage() {
           ) : (
             <ul className="divide-y divide-rule">
               {staff.map((p) => (
-                <li key={p.id} className="flex items-center justify-between gap-3 px-5 py-2.5 text-sm">
-                  <span>
-                    <span className="font-medium text-ink">{p.name}</span>
+                <li key={p.id}>
+                  <button type="button" onClick={() => setWho(p)} className="vx-focus block w-full px-5 py-2.5 text-left text-sm hover:bg-surface-2">
+                    <span className="block font-medium text-ink">{p.name}</span>
                     <span className="block text-2xs text-faint">{[p.designation, p.experienceYears != null ? `${p.experienceYears} yrs exp.` : '', p.joinedOn ? `with the unit ${since(p.joinedOn)}` : ''].filter(Boolean).join(' · ') || 'No details added'}</span>
-                  </span>
+                  </button>
                 </li>
               ))}
             </ul>
@@ -192,11 +195,11 @@ export function UnitMonitorDetailPage() {
           ) : (
             <ul className="divide-y divide-rule">
               {machines.map((m) => (
-                <li key={m.id} className="flex items-center justify-between gap-3 px-5 py-2.5 text-sm">
-                  <span>
-                    <span className="font-medium text-ink">{m.name}</span>
+                <li key={m.id}>
+                  <button type="button" onClick={() => setWho(m)} className="vx-focus block w-full px-5 py-2.5 text-left text-sm hover:bg-surface-2">
+                    <span className="block font-medium text-ink">{m.name}</span>
                     <span className="block text-2xs text-faint">{[m.code, [m.make, m.model].filter(Boolean).join(' '), m.installedYear ? `${since(m.installedYear)} old` : '', m.capacity].filter(Boolean).join(' · ') || 'No details added'}</span>
-                  </span>
+                  </button>
                 </li>
               ))}
             </ul>
@@ -211,19 +214,89 @@ export function UnitMonitorDetailPage() {
         ) : (
           <ul className="divide-y divide-rule">
             {work.completed.slice(0, 10).map((r) => (
-              <li key={r.key} className="flex flex-wrap items-center justify-between gap-2 px-5 py-2.5 text-sm">
-                <span>
-                  <span className="vx-code font-semibold text-ink">{r.order.code}</span> · {r.process.name}
-                  <span className="block text-2xs text-faint">
-                    {person(r.process.responsiblePersonId) ?? 'Not recorded'} · {r.process.doneBy ? `closed by ${r.process.doneBy}` : ''}
+              <li key={r.key}>
+                <button type="button" onClick={() => setPeek(r)} className="vx-focus flex w-full flex-wrap items-center justify-between gap-2 px-5 py-2.5 text-left text-sm hover:bg-surface-2">
+                  <span className="min-w-0">
+                    <span className="vx-code font-semibold text-ink">{r.order.code}</span> · {r.process.name}
+                    <span className="block text-2xs text-faint">
+                      {person(r.process.responsiblePersonId) ?? 'Not recorded'}
+                      {r.process.doneBy ? ` · closed by ${r.process.doneBy}` : ''}
+                    </span>
                   </span>
-                </span>
-                <span className="text-xs text-muted">{r.process.actualEnd ? fmtDateTime(r.process.actualEnd) : fmtDate(r.order.deliveryDate)}</span>
+                  <span className="text-xs text-muted">{r.process.actualEnd ? fmtDateTime(r.process.actualEnd) : fmtDate(r.order.deliveryDate)}</span>
+                </button>
               </li>
             ))}
           </ul>
         )}
       </Card>
+
+      <ProcessPeek row={peek} onClose={() => setPeek(null)} />
+      <ResourceDrawer
+        item={who ? ('designation' in who ? { kind: 'person', value: who } : { kind: 'machine', value: who }) : null}
+        readOnly
+        onClose={() => setWho(null)}
+      />
     </div>
+  )
+}
+
+/** Everything recorded about one process — for watching only. */
+function ProcessPeek({ row, onClose }: { row: ProcessWorkRow | null; onClose: () => void }) {
+  const { db } = useStore()
+  if (!row) return null
+  const { order, process } = row
+  const person = db.people.find((p) => p.id === process.responsiblePersonId)
+  const machine = db.machines.find((m) => m.id === process.machineId)
+  const line = (label: string, value: React.ReactNode) => (
+    <div>
+      <dt className="text-xs text-muted">{label}</dt>
+      <dd className="text-ink">{value}</dd>
+    </div>
+  )
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      size="md"
+      title={process.name}
+      subtitle={`${process.stageName} · ${order.code} · ${order.customer.company}`}
+      footer={<Button onClick={onClose}>Close</Button>}
+    >
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <ProcessBadge status={process.status} />
+          <PriorityBadge priority={order.priority} />
+          {row.ready ? <Badge tone="indigo">Ready</Badge> : process.status === 'Completed' ? null : <Badge tone="slate">Waiting on earlier work</Badge>}
+          {process.noMachineRequired ? <Badge tone="slate">Manual — no machine</Badge> : null}
+        </div>
+
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+          {line('Job', <span className="vx-code">{order.code}</span>)}
+          {line('Product', `${order.productName} · ${pieces(order.quantity)}`)}
+          {line('Unit', process.unitId)}
+          {line('Delivery date', fmtDate(order.deliveryDate))}
+          {line('Responsible person', person ? [person.name, person.designation, person.experienceYears != null ? `${person.experienceYears} yrs exp.` : ''].filter(Boolean).join(' · ') : <span className="text-warn">Not allocated</span>)}
+          {line(
+            'Machine',
+            process.noMachineRequired
+              ? 'Manual — the unit recorded this process as needing no machine'
+              : machine
+                ? [machine.code, machine.name, [machine.make, machine.model].filter(Boolean).join(' '), machine.installedYear ? `${since(machine.installedYear)} old` : ''].filter(Boolean).join(' · ')
+                : <span className={process.requiresMachine ? 'text-warn' : 'text-muted'}>{process.requiresMachine ? 'Not allocated' : '—'}</span>,
+          )}
+          {line('Planned', planWindow(process.plannedStart, process.plannedEnd) || '—')}
+          {line('Actual', process.actualStart ? `${fmtDateTime(process.actualStart)} → ${process.actualEnd ? fmtDateTime(process.actualEnd) : 'running'}` : '—')}
+          {line('Allocated by', process.assignedBy ? `${process.assignedBy} · ${fmtDateTime(process.assignedAt)}` : 'Not allocated yet')}
+          {line('Closed by', process.doneBy ? `${process.doneBy} · ${fmtDateTime(process.doneAt)}` : '—')}
+        </dl>
+
+        {process.problem ? (
+          <p className="rounded-md bg-risk-wash px-3 py-2 text-sm text-risk">Problem reported: {process.problem}</p>
+        ) : null}
+        {process.note ? <p className="rounded-md bg-surface-2 px-3 py-2 text-sm text-ink-2">Note: {process.note}</p> : null}
+        <p className="text-2xs text-faint">You are watching this process. Only {process.unitId} can allocate or record work on it.</p>
+      </div>
+    </Modal>
   )
 }

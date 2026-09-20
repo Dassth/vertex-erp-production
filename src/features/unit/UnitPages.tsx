@@ -197,7 +197,7 @@ export function UnitAllocationsPage() {
                     <td className="vx-td text-sm">{planWindow(r.process.plannedStart, r.process.plannedEnd)}</td>
                     <td className="vx-td">{person(r.process.responsiblePersonId) ?? <span className="text-warn">Not assigned</span>}</td>
                     <td className="vx-td">
-                      {r.process.noMachineRequired ? <span className="text-muted">No machine</span> : machine(r.process.machineId) ?? (r.process.requiresMachine ? <span className="text-warn">Not assigned</span> : <span className="text-muted">—</span>)}
+                      {r.process.noMachineRequired ? <span className="text-muted">Manual — no machine</span> : machine(r.process.machineId) ?? (r.process.requiresMachine ? <span className="text-warn">Not assigned</span> : <span className="text-muted">—</span>)}
                     </td>
                     <td className="vx-td">
                       {r.ready ? <Badge tone="indigo">Ready</Badge> : <Badge tone="slate">Waiting</Badge>}

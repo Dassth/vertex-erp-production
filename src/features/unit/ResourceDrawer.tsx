@@ -45,12 +45,12 @@ export function workOf(db: VertexDB, item: Item) {
   }
 }
 
-export function ResourceDrawer({ item, edit = false, onClose }: { item: Item | null; edit?: boolean; onClose: () => void }) {
+export function ResourceDrawer({ item, edit = false, readOnly = false, onClose }: { item: Item | null; edit?: boolean; readOnly?: boolean; onClose: () => void }) {
   if (!item) return null
-  return <Panel key={item.value.id} item={item} startEditing={edit} onClose={onClose} />
+  return <Panel key={item.value.id} item={item} startEditing={edit && !readOnly} readOnly={readOnly} onClose={onClose} />
 }
 
-function Panel({ item, startEditing, onClose }: { item: Item; startEditing: boolean; onClose: () => void }) {
+function Panel({ item, startEditing, readOnly, onClose }: { item: Item; startEditing: boolean; readOnly?: boolean; onClose: () => void }) {
   const { db } = useStore()
   const [editing, setEditing] = useState(startEditing)
   // Always show the saved version, so the panel reflects an edit straight away.
@@ -72,9 +72,13 @@ function Panel({ item, startEditing, onClose }: { item: Item; startEditing: bool
         <div className="space-y-5">
           <div className="flex items-center justify-between gap-2">
             {latest.active ? <Badge tone="green" dot>In service</Badge> : <Badge tone="slate" dot>Removed</Badge>}
-            <Button size="sm" variant="secondary" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => setEditing(true)}>
-              Edit details
-            </Button>
+            {readOnly ? (
+              <span className="text-2xs text-faint">Watching — only the unit can change this</span>
+            ) : (
+              <Button size="sm" variant="secondary" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => setEditing(true)}>
+                Edit details
+              </Button>
+            )}
           </div>
 
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">

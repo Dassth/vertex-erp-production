@@ -159,7 +159,7 @@ describe('production workflow across units', () => {
     if (!r.ok) expect(r.error).toMatch(/responsible person/i)
   })
 
-  it('accepts a manual process with no machine, and refuses one that needs a machine', () => {
+  it('accepts a manual process with no machine, and lets a unit declare a machine-bound one manual', () => {
     const { db, order, personOf } = toProduction()
     const manual = processes(order)[0]
     const assigned = must(
@@ -168,18 +168,24 @@ describe('production workflow across units', () => {
     expect(assigned.value.noMachineRequired).toBe(true)
     expect(startProcess(order.id, manual.id)(assigned.db, unit(1)).ok).toBe(true)
 
-    // A process configured as machine-bound cannot be allocated without one.
+    // A machine-bound process still refuses an empty allocation, but the unit
+    // may declare it manual: they are the ones running it.
     const machineBound = { ...assigned.db }
     machineBound.orders = machineBound.orders.map((o) => ({
       ...o,
       stages: o.stages.map((st) => ({ ...st, processes: st.processes.map((pr) => (pr.id === manual.id ? { ...pr, requiresMachine: true } : pr)) })),
     }))
-    const denied = assignProcessResources(order.id, manual.id, { responsiblePersonId: personOf(manual.unitId), machineId: null, noMachineRequired: true })(
+    const denied = assignProcessResources(order.id, manual.id, { responsiblePersonId: personOf(manual.unitId), machineId: null, noMachineRequired: false })(
       machineBound,
       unit(1),
     )
     expect(denied.ok).toBe(false)
     if (!denied.ok) expect(denied.error).toMatch(/machine/i)
+
+    const declaredManual = must(
+      assignProcessResources(order.id, manual.id, { responsiblePersonId: personOf(manual.unitId), machineId: null, noMachineRequired: true })(machineBound, unit(1)),
+    )
+    expect(declaredManual.value.noMachineRequired).toBe(true)
   })
 
   it('completing one process never completes another, and the stage closes only when all of its processes are done', () => {

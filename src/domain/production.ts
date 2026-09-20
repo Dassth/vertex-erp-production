@@ -108,7 +108,10 @@ export const assignProcessResources = command(
     if (resources.machineId && !machine) errors.machineId = 'Select a machine from this unit.'
     else if (machine && (!machine.active || machine.unitId !== process.unitId))
       errors.machineId = `${machine.name} does not belong to ${process.unitId}.`
-    if (process.requiresMachine && !machine) errors.machineId = 'This process is configured to need a machine.'
+    // Master may expect a machine, but the unit doing the work decides: ticking
+    // "no machine needed" records the process as manual instead of blocking it.
+    if (process.requiresMachine && !machine && !resources.noMachineRequired)
+      errors.machineId = 'This process is configured to need a machine — choose one, or tick “No machine needed”.'
     if (machine && resources.noMachineRequired) errors.machineId = 'Either choose a machine or mark the process as needing none.'
 
     if (Object.keys(errors).length) return fail(Object.values(errors)[0], { fieldErrors: errors })
@@ -130,6 +133,7 @@ export const assignProcessResources = command(
       entityId: processId,
       entityLabel: label(order, process),
       field: 'Responsible person / machine',
+      reason: process.requiresMachine && !machine && resources.noMachineRequired ? 'Unit recorded this process as manual although Master expects a machine.' : undefined,
       oldValue: `${process.responsiblePersonId ?? '—'} / ${process.machineId ?? (process.noMachineRequired ? 'No machine' : '—')}`,
       newValue: `${person?.name ?? '—'} / ${machine?.name ?? (updated.noMachineRequired ? 'No machine required' : '—')}`,
     })
