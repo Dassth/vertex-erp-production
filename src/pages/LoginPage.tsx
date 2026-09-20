@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
+import { POWERED_BY } from '../lib/brand'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   ArrowRight,
@@ -227,6 +228,10 @@ export function LoginPage() {
             {storageMode === 'server'
               ? 'Accounts and data are stored on the Vertex server. Passwords are checked by the server.'
               : 'Accounts and data are stored in this browser only. They are not shared with other computers.'}
+          </p>
+
+          <p className="mt-6 select-none border-t border-rule pt-4 text-2xs uppercase tracking-[0.14em] text-faint/70" translate="no">
+            {POWERED_BY}
           </p>
         </div>
       </div>

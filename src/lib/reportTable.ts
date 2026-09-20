@@ -4,6 +4,7 @@
  * ------------------------------------------------------------------------- */
 
 import { buildXlsx } from './xlsx'
+import { POWERED_BY } from './brand'
 
 export type CellValue = string | number | null
 
@@ -39,7 +40,13 @@ const csvCell = (v: CellValue) => {
 }
 
 export function tableCsv(t: ReportTable): string {
-  const lines = [...t.heading.map((h) => csvCell(h)), t.columns.map((c) => csvCell(c.label)).join(','), ...t.rows.map((r) => r.cells.map(csvCell).join(','))]
+  const lines = [
+    ...t.heading.map((h) => csvCell(h)),
+    t.columns.map((c) => csvCell(c.label)).join(','),
+    ...t.rows.map((r) => r.cells.map(csvCell).join(',')),
+    '',
+    csvCell(POWERED_BY),
+  ]
   return lines.join('\r\n')
 }
 
@@ -53,6 +60,8 @@ export function tableXlsx(t: ReportTable): Uint8Array {
         { cells: [] },
         { cells: t.columns.map((c) => c.label), bold: true },
         ...t.rows.map((r) => ({ cells: r.cells, bold: r.kind !== 'row' })),
+        { cells: [] },
+        { cells: [POWERED_BY] },
       ],
     },
   ])

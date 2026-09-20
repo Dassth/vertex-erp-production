@@ -21,6 +21,7 @@ import { format } from 'date-fns'
 import type { CompanySnapshot, Dispatch, Invoice, ProductionOrder, PurchaseBill } from './types'
 import type { ConsolidatedStatement } from './billing'
 import { rupeesInWords } from './billing'
+import { POWERED_BY } from './brand'
 import { purchaseTotals } from './gst'
 import type { GstRegister, MonthlyGstReport, ReportKind } from './gstReport'
 import { ITEMS_HEAD, PARTY_HEAD, REPORT_TITLE } from './gstReport'
@@ -103,7 +104,8 @@ function footer(note: string, width = A4_WIDTH) {
   return (currentPage: number, pageCount: number): Content => ({
     margin: [40, 18, 40, 0],
     columns: [
-      { text: note, style: 'muted', width: width - 90 },
+      { text: note, style: 'muted', width: width - 240 },
+      { text: POWERED_BY, style: 'muted', alignment: 'center', characterSpacing: 0.4, width: 150 },
       { text: `Page ${currentPage} of ${pageCount}`, style: 'muted', alignment: 'right', width: 90 },
     ],
   })

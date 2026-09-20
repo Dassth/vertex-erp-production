@@ -50,6 +50,7 @@ import { Button, Drawer, IconButton } from './ui'
 import { AuditTrail } from './AuditTrail'
 import { AccountDialog, ClearDataDialog, CompanyProfileDialog } from './AdminDialogs'
 import { SetupGuide } from './SetupGuide'
+import { POWERED_BY } from '../lib/brand'
 import { RecentPlans } from './RecentPlans'
 import { QuickAccessDialog } from './QuickAccess'
 
@@ -177,11 +178,16 @@ export function AppShell({ children }: { children: ReactNode }) {
           {children}
         </main>
 
-        <footer className="vx-no-print mx-auto w-full max-w-[1600px] px-4 pb-6 sm:px-6 lg:px-10">
-          <p className="border-t border-rule pt-4 text-xs text-faint">
-            {db.company.name} · Vertex ERP ·{' '}
-            {storageMode === 'server' ? 'Data is stored on the Vertex server and shared by signed-in users' : 'Data is stored in this browser only and is not shared across devices'}
-          </p>
+        <footer className="mx-auto w-full max-w-[1600px] px-4 pb-6 sm:px-6 lg:px-10">
+          <div className="border-t border-rule pt-4">
+            <p className="vx-no-print text-xs text-faint">
+              {db.company.name} · Vertex ERP ·{' '}
+              {storageMode === 'server' ? 'Data is stored on the Vertex server and shared by signed-in users' : 'Data is stored in this browser only and is not shared across devices'}
+            </p>
+            <p className="mt-1 select-none text-2xs uppercase tracking-[0.14em] text-faint/70" translate="no">
+              {POWERED_BY}
+            </p>
+          </div>
         </footer>
       </div>
 
