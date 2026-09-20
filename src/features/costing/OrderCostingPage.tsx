@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Calculator, CheckCircle2, Factory, Lock, Plus, Save, Trash2 } from 'lucide-react'
+import { ArrowLeft, Calculator, CheckCircle2, Download, Eye, Factory, Lock, Plus, Save, Trash2 } from 'lucide-react'
 import { useStore } from '../../store/store'
 import type { ChargeBasis, CostingInputs, CostingResult, OrderCosting, Plan, ProfitMethod } from '../../lib/types'
 import { finalizeCosting, openCosting, saveCostingInputs } from '../../domain/orderCosting'
@@ -9,6 +9,8 @@ import { cx, fmtDate, fmtDateTime, moneyPaise, moneyPrecise, pct, pieces, qty, u
 import { Badge, Button, Card, CardHead, ConfirmDialog, EmptyState, Field, IconButton, Input, Select, Skeleton } from '../../components/ui'
 import { ConflictNotice, Detail, IssueList, LinkButton, NumberInput, PageHeader, useDocumentTitle, useUnsavedChanges } from '../../components/page'
 import { CostingStatusBadge, PlanStatusBadge } from '../../components/status'
+import { DocumentPreview, DownloadButton, ExcelButton, costingDoc, useLatestDb } from '../../components/DocumentPreview'
+import type { PreviewDoc } from '../../components/DocumentPreview'
 
 export function OrderCostingPage() {
   const { planId } = useParams()
@@ -52,6 +54,8 @@ function CostingWorkspace({ plan, costing, back }: { plan: Plan; costing: OrderC
   const { db, run, pushToast } = useStore()
   const navigate = useNavigate()
   const finalized = costing.status === 'Finalized' && !!costing.snapshot
+  const read = useLatestDb()
+  const [preview, setPreview] = useState<PreviewDoc | null>(null)
   const [inputs, setInputs] = useState<CostingInputs>(() => structuredClone(costing.inputs))
   // The inputs and version this screen started from — drives dirty state and stale-save detection.
   const [base, setBase] = useState(() => ({ inputs: structuredClone(costing.inputs), updatedAt: costing.updatedAt }))
@@ -134,6 +138,28 @@ function CostingWorkspace({ plan, costing, back }: { plan: Plan; costing: OrderC
           <>
             <CostingStatusBadge status={costing.status} />
             <PlanStatusBadge status={plan.status} />
+            {finalized ? (
+              <>
+                <Button variant="ghost" icon={<Eye className="h-4 w-4" />} onClick={() => setPreview(costingDoc(read, costing.id))}>
+                  Preview
+                </Button>
+                <DownloadButton variant="secondary" icon={<Download className="h-4 w-4" />} doc={() => costingDoc(read, costing.id)}>
+                  Costing PDF
+                </DownloadButton>
+                <ExcelButton
+                  variant="secondary"
+                  stem={`costing-${costing.code}`}
+                  aria-label="Download the costing sheet as a spreadsheet"
+                  table={async () => {
+                    const { costingTable } = await import('../../lib/docTables')
+                    const db = read()
+                    const latest = db.costings.find((c) => c.id === costing.id)
+                    if (!latest?.snapshot) throw new Error('This costing has no saved snapshot yet.')
+                    return costingTable(latest, db.company.name)
+                  }}
+                />
+              </>
+            ) : null}
             {back}
           </>
         }
@@ -376,6 +402,7 @@ function CostingWorkspace({ plan, costing, back }: { plan: Plan; costing: OrderC
         </>
       )}
       {guard.dialog}
+      <DocumentPreview doc={preview} onClose={() => setPreview(null)} />
     </div>
   )
 }

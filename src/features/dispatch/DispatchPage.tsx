@@ -12,7 +12,7 @@ import { cx, fmtDate, fmtDateTime, moneyPaise, moneyPrecise, pct, pieces, uid } 
 import { Badge, Button, Card, CardHead, ConfirmDialog, EmptyState, Field, Input, ProgressBar, Segmented, Textarea } from '../../components/ui'
 import { Detail, LinkButton, NumberInput, PageHeader, StatStrip, StatTile, useDocumentTitle } from '../../components/page'
 import { CompanyProfileDialog } from '../../components/AdminDialogs'
-import { DocumentPreview, DownloadButton, InvoiceDocActions, statementDoc } from '../../components/DocumentPreview'
+import { DocumentPreview, DownloadButton, ExcelButton, InvoiceDocActions, statementDoc } from '../../components/DocumentPreview'
 import type { PreviewDoc } from '../../components/DocumentPreview'
 
 const COMPANY_OWNER_NOTICE = 'Administrator 1 must complete the company profile before invoices can be issued.'
@@ -244,6 +244,18 @@ function OrderDispatch({ order, onPreview, companyBlocked }: { order: Production
               <DownloadButton size="sm" variant="ghost" icon={<Download className="h-3.5 w-3.5" />} doc={() => statement} aria-label="Download order statement PDF">
                 PDF
               </DownloadButton>
+              <ExcelButton
+                size="sm"
+                variant="ghost"
+                stem={`${order.code}-cumulative-invoice-summary`}
+                aria-label="Download the order statement as a spreadsheet"
+                table={async () => {
+                  const [{ statementTable }, { consolidatedStatement, receivedInvoices }] = await Promise.all([import('../../lib/docTables'), import('../../lib/billing')])
+                  const costing = db.costings.find((c) => c.id === order.costingId)
+                  if (!costing?.snapshot) throw new Error('The finalized costing for this order is missing.')
+                  return statementTable(order, consolidatedStatement(order, receivedInvoices(order.id, db.dispatches, db.invoices), costing.snapshot.result), db.company.name)
+                }}
+              />
             </div>
           ) : null}
         />

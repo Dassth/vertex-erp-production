@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import type { ExportFormat } from '../../lib/reportTable'
+import type { ExportFormat } from '../lib/reportTable'
 
 /* The spreadsheet download format is a per-computer preference: Excel (.xlsx)
    unless someone switches it to CSV in Reports → Settings. */

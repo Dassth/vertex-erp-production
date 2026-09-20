@@ -9,7 +9,7 @@ import { deletePurchaseBill, savePurchaseBill, validatePurchase } from '../../do
 import type { PurchaseDraft } from '../../domain/purchases'
 import { Button, Card, CardHead, ConfirmDialog, EmptyState, Field, IconButton, Input, Modal, SearchInput, Select, Textarea } from '../../components/ui'
 import { NumberInput, StatStrip, StatTile } from '../../components/page'
-import { DownloadButton, purchaseDoc, useLatestDb } from '../../components/DocumentPreview'
+import { DownloadButton, ExcelButton, purchaseDoc, useLatestDb } from '../../components/DocumentPreview'
 import type { PreviewDoc } from '../../components/DocumentPreview'
 
 export const HSN_LIST_ID = 'vx-hsn-suggestions'
@@ -162,6 +162,20 @@ export function PurchaseBills({ q, onSearch, onPreview, openNew, onOpenedNew }: 
                         <DownloadButton size="sm" icon={<Download className="h-3.5 w-3.5" />} doc={() => purchaseDoc(b, read)} aria-label={`Download purchase bill ${b.code}`}>
                           Download
                         </DownloadButton>
+                        <ExcelButton
+                          size="sm"
+                          variant="secondary"
+                          stem={`purchase-${b.code}`}
+                          aria-label={`Download purchase bill ${b.code} as a spreadsheet`}
+                          table={async () => {
+                            const { purchaseBillTable } = await import('../../lib/docTables')
+                            const latest = read().purchases.find((x) => x.id === b.id) ?? b
+                            const { updatedAt: _u, updatedBy: _b, ...company } = read().company
+                            void _u
+                            void _b
+                            return purchaseBillTable(latest, company)
+                          }}
+                        />
                         <IconButton label={`Delete purchase bill ${b.code}`} onClick={() => setDeleting(b)}>
                           <Trash2 className="h-4 w-4" />
                         </IconButton>

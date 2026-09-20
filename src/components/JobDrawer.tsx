@@ -12,7 +12,7 @@ import { Badge, Button, Drawer, Field, Input, Modal, ProgressBar, Select, Textar
 import { Detail } from './page'
 import { HealthBadge, PriorityBadge, ProcessBadge, StageBadge } from './status'
 import { AuditTrail } from './AuditTrail'
-import { DownloadButton, jobCardDoc, useLatestDb } from './DocumentPreview'
+import { DownloadButton, ExcelButton, jobCardDoc, useLatestDb } from './DocumentPreview'
 
 /* Administrator job detail. Monitoring only: no process progress actions, no
    costing or master edits. Priority, delivery date and the unit of a process
@@ -49,6 +49,18 @@ function JobDetail({ order }: { order: ProductionOrder }) {
         <DownloadButton className="ml-auto" size="sm" variant="secondary" icon={<Activity className="h-3.5 w-3.5" />} doc={() => jobCardDoc(read, order.planId, 'live')}>
           Live job card
         </DownloadButton>
+        <ExcelButton
+          size="sm"
+          variant="ghost"
+          stem={`live-job-card-${order.code}`}
+          aria-label="Download the live job card as a spreadsheet"
+          table={async () => {
+            const [{ jobCard }, { jobCardTable }] = await Promise.all([import('../lib/jobCard'), import('../lib/docTables')])
+            const card = jobCard(read(), order.planId, 'live')
+            if (!card) throw new Error('This job has no plan record.')
+            return jobCardTable(card)
+          }}
+        />
       </div>
 
       <dl className="grid gap-4 sm:grid-cols-3">

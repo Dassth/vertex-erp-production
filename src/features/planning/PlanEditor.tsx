@@ -11,7 +11,7 @@ import { cx, fmtDateTime, qty } from '../../lib/format'
 import { Badge, Button, Card, CardHead, EmptyState, Field, Input, Modal, Select, Textarea } from '../../components/ui'
 import { ConflictNotice, Detail, IssueList, LinkButton, NumberInput, PageHeader, focusFirstInvalid, useDocumentTitle, useUnsavedChanges } from '../../components/page'
 import { PlanStatusBadge } from '../../components/status'
-import { DocumentPreview, DownloadButton, jobCardDoc, useLatestDb } from '../../components/DocumentPreview'
+import { DocumentPreview, DownloadButton, ExcelButton, jobCardDoc, useLatestDb } from '../../components/DocumentPreview'
 import type { PreviewDoc } from '../../components/DocumentPreview'
 
 export function PlanEditorPage() {
@@ -528,6 +528,22 @@ function PlanHeaderActions({ plan }: { plan: Plan }) {
       <DownloadButton variant="secondary" icon={<Activity className="h-4 w-4" />} doc={() => jobCardDoc(read, plan.id, 'live')} title="Current progress: people, machines, status, notes">
         Live job card
       </DownloadButton>
+      {(['plan', 'live'] as const).map((mode) => (
+        <ExcelButton
+          key={mode}
+          variant="ghost"
+          stem={`${mode === 'live' ? 'live-job-card' : 'job-card-plan'}-${plan.code}`}
+          aria-label={`Download the ${mode === 'live' ? 'live' : 'plan'} job card as a spreadsheet`}
+          table={async () => {
+            const [{ jobCard }, { jobCardTable }] = await Promise.all([import('../../lib/jobCard'), import('../../lib/docTables')])
+            const card = jobCard(read(), plan.id, mode)
+            if (!card) throw new Error('This plan no longer exists.')
+            return jobCardTable(card)
+          }}
+        >
+          {mode === 'live' ? 'Live sheet' : 'Plan sheet'}
+        </ExcelButton>
+      ))}
       <DocumentPreview doc={preview} onClose={() => setPreview(null)} />
     </>
   )

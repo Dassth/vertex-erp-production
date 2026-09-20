@@ -17,7 +17,7 @@ import { DocumentPreview, DownloadButton, gstReportDoc, invoiceRegisterDoc, useL
 import type { PreviewDoc } from '../../components/DocumentPreview'
 import { HsnDatalist, PurchaseEditor } from '../billing/PurchaseBills'
 import { InvoiceEditDialog } from '../billing/InvoiceEditDialog'
-import { FORMAT_LABEL, useExportFormat } from './exportFormat'
+import { FORMAT_LABEL, useExportFormat } from '../../components/exportFormat'
 
 /** invoice = each invoice or bill with its items; gst = Annexure-I grouped by GST rate. */
 type ReportType = 'invoice' | 'gst'

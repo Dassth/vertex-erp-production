@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Download, Eye, FilePenLine, FileStack, PackageCheck, Percent, ReceiptText, Search, Truck } from 'lucide-react'
+import { ArrowLeft, Download, Eye, FilePenLine, FileSpreadsheet, FileStack, PackageCheck, Percent, ReceiptText, Search, Truck } from 'lucide-react'
 import { useStore } from '../../store/store'
 import type { Invoice, VertexDB } from '../../lib/types'
 import { fmtDate, fmtDateTime, moneyPaise, moneyShort } from '../../lib/format'
@@ -8,7 +8,7 @@ import { DELIVERY_PENDING_MESSAGE, isReceived, orderInvoiceSummary } from '../..
 import type { OrderInvoiceStatus, OrderInvoiceSummary } from '../../lib/billing'
 import { Badge, Button, Card, CardHead, EmptyState, ProgressBar, SearchInput, Segmented, Select } from '../../components/ui'
 import { Detail, LinkButton, PageHeader, StatStrip, StatTile, useDocumentTitle } from '../../components/page'
-import { DocumentPreview, DownloadButton, InvoiceDocActions, summaryDoc, useDeliveryPendingMessage } from '../../components/DocumentPreview'
+import { DocumentPreview, DownloadButton, ExcelButton, InvoiceDocActions, summaryDoc, useDeliveryPendingMessage } from '../../components/DocumentPreview'
 import type { PreviewDoc } from '../../components/DocumentPreview'
 import { HsnDatalist, PurchaseBills } from './PurchaseBills'
 import { InvoiceTaxDialog } from './InvoiceTaxDialog'
@@ -249,6 +249,20 @@ function OrderInvoices({ row, read, onBack, onPreview, onEditTax, onEdit }: { ro
           <DownloadButton icon={<Download className="h-4 w-4" />} doc={summary} disabled={!eligible} aria-label="Download PDF — cumulative invoice summary">
             Download PDF
           </DownloadButton>
+          <ExcelButton
+            stem={`${order.code}-cumulative-invoice-summary`}
+            variant="secondary"
+            icon={<FileSpreadsheet className="h-4 w-4" />}
+            disabled={!eligible}
+            aria-label="Download the cumulative invoice summary as a spreadsheet"
+            table={async () => {
+              const db = read()
+              const [{ statementTable }, { consolidatedStatement, receivedInvoices }] = await Promise.all([import('../../lib/docTables'), import('../../lib/billing')])
+              const costing = db.costings.find((c) => c.id === order.costingId)
+              if (!costing?.snapshot) throw new Error('The finalized costing for this order is missing.')
+              return statementTable(order, consolidatedStatement(order, receivedInvoices(order.id, db.dispatches, db.invoices), costing.snapshot.result), db.company.name)
+            }}
+          />
           <Button variant="secondary" icon={<Eye className="h-4 w-4" />} disabled={!eligible} onClick={() => onPreview(summary())}>
             Preview PDF
           </Button>

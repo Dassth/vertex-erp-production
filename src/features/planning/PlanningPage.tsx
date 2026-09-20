@@ -7,7 +7,7 @@ import { fmtDate, pieces } from '../../lib/format'
 import { Button, Card, CardHead, EmptyState, SearchInput, Select } from '../../components/ui'
 import { LinkButton, PageHeader, StatStrip, StatTile, useDocumentTitle } from '../../components/page'
 import { PlanStatusBadge, PriorityBadge } from '../../components/status'
-import { DocumentPreview, DownloadButton, jobCardDoc, useLatestDb } from '../../components/DocumentPreview'
+import { DocumentPreview, DownloadButton, ExcelButton, jobCardDoc, useLatestDb } from '../../components/DocumentPreview'
 import type { PreviewDoc } from '../../components/DocumentPreview'
 import { cx } from '../../lib/format'
 import { sortPlans } from '../../lib/planList'
@@ -201,6 +201,18 @@ export function PlanningPage() {
                           <DownloadButton size="sm" variant="secondary" icon={<Activity className="h-3.5 w-3.5" />} doc={() => jobCardDoc(read, plan.id, 'live')} aria-label={`Download live job card ${plan.code}`} title="Job card with current progress">
                             Live
                           </DownloadButton>
+                          <ExcelButton
+                            size="sm"
+                            variant="ghost"
+                            stem={`job-card-${plan.code}`}
+                            aria-label={`Download the live job card of ${plan.code} as a spreadsheet`}
+                            table={async () => {
+                              const [{ jobCard }, { jobCardTable }] = await Promise.all([import('../../lib/jobCard'), import('../../lib/docTables')])
+                              const card = jobCard(read(), plan.id, 'live')
+                              if (!card) throw new Error('This plan no longer exists.')
+                              return jobCardTable(card)
+                            }}
+                          />
                         </div>
                       </td>
                       <td className="vx-td text-right">

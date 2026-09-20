@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ComponentProps, ReactNode } from 'react'
-import { Download, Eye, FileText } from 'lucide-react'
+import { Download, Eye, FileSpreadsheet, FileText } from 'lucide-react'
 import type { Invoice, PurchaseBill, VertexDB } from '../lib/types'
 import { DELIVERY_PENDING_BILLING_MESSAGE, consolidatedStatement, invoiceDownloadBlock, receivedInvoices } from '../lib/billing'
 import { invoiceFileName } from '../lib/format'
 import { useStore } from '../store/store'
 import { Button, Modal, Skeleton } from './ui'
+import { FORMAT_LABEL, useExportFormat } from './exportFormat'
+import type { ReportTable } from '../lib/reportTable'
 
 /* pdfmake and the embedded fonts are large, so document code loads only when a
    document is previewed or downloaded. */
@@ -106,6 +108,25 @@ export const jobCardDoc = (read: () => VertexDB, planId: string, mode: 'plan' | 
   }
 }
 
+/** The costing sheet as a PDF. Internal figures — it is never sent to a customer. */
+export const costingDoc = (read: () => VertexDB, costingId: string): PreviewDoc => {
+  const code = read().costings.find((c) => c.id === costingId)?.code ?? costingId
+  return {
+    title: `Order costing ${code}`,
+    fileName: `costing-${code.replace(/[^A-Za-z0-9-]/g, '-')}.pdf`,
+    build: async () => {
+      const db = read()
+      const costing = db.costings.find((c) => c.id === costingId)
+      if (!costing?.snapshot) throw new DocumentBlockedError('This costing has no saved snapshot yet.')
+      const [{ reportTableDefinition }, { renderPdf }, { costingTable }] = await Promise.all([import('../lib/pdfDocs'), import('../lib/pdfRender'), import('../lib/docTables')])
+      const { updatedAt: _u, updatedBy: _b, ...company } = db.company
+      void _u
+      void _b
+      return renderPdf(reportTableDefinition(costingTable(costing, company.name), company))
+    },
+  }
+}
+
 /** Everything the cumulative summary needs, taken from saved records only. */
 function cumulativeSummaryData(db: VertexDB, orderId: string) {
   const order = db.orders.find((o) => o.id === orderId)
@@ -148,6 +169,51 @@ async function save(blob: Blob, fileName: string) {
 
 export async function downloadDoc(doc: PreviewDoc) {
   await save(await doc.build(), doc.fileName)
+}
+
+/* ------------------------------- Spreadsheets ------------------------------ */
+
+/** A spreadsheet of the same document, in the format chosen in Reports → Settings. */
+export function ExcelButton({ table, stem, children, ...rest }: ButtonLike & { table: () => ReportTable | Promise<ReportTable>; stem: string; children?: ReactNode }) {
+  const { pushToast } = useStore()
+  const [format] = useExportFormat()
+  const [phase, setPhase] = useState<'idle' | 'busy' | 'error'>('idle')
+  const busy = useRef(false)
+  return (
+    <Button
+      {...rest}
+      icon={rest.icon ?? <FileSpreadsheet className="h-3.5 w-3.5" />}
+      loading={phase === 'busy'}
+      state={phase === 'error' ? 'error' : 'idle'}
+      onClick={() => {
+        if (busy.current) return
+        busy.current = true
+        setPhase('busy')
+        ;(async () => {
+          const [{ tableFile }, { saveBlob }] = await Promise.all([import('../lib/reportTable'), import('../lib/pdfRender')])
+          const { blob, fileName } = tableFile(await table(), format, stem)
+          saveBlob(blob, fileName)
+        })().then(
+          () => {
+            busy.current = false
+            setPhase('idle')
+          },
+          (error: unknown) => {
+            console.error(error)
+            busy.current = false
+            setPhase('error')
+            pushToast({
+              title: `${FORMAT_LABEL[format]} file could not be prepared`,
+              message: error instanceof DocumentBlockedError ? error.message : 'Try the download again.',
+              level: 'danger',
+            })
+          },
+        )
+      }}
+    >
+      {children ?? FORMAT_LABEL[format]}
+    </Button>
+  )
 }
 
 /* ------------------------------ Download action --------------------------- */
@@ -267,6 +333,17 @@ export function InvoiceDocActions({
         <DownloadButton size={size} icon={<Download className="h-3.5 w-3.5" />} disabled={!!blocked} doc={() => invoiceDoc(invoice, read)} aria-label={`${downloadLabel} — invoice ${invoice.number}`}>
           {downloadLabel}
         </DownloadButton>
+        <ExcelButton
+          size={size}
+          variant="secondary"
+          disabled={!!blocked}
+          stem={`invoice-${invoice.number.replace(/[\\/]/g, '-')}`}
+          aria-label={`Download invoice ${invoice.number} as a spreadsheet`}
+          table={async () => {
+            const { invoiceTable } = await import('../lib/docTables')
+            return invoiceTable(read().invoices.find((i) => i.id === invoice.id) ?? invoice)
+          }}
+        />
       </div>
       {blocked ? <p className="max-w-64 text-right text-2xs text-warn">{pending(blocked)}</p> : null}
     </div>
