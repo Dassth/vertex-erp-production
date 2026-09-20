@@ -1,21 +1,7 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { format } from 'date-fns'
-import type { ReactNode } from 'react'
-import {
-  AlertTriangle,
-  CalendarRange,
-  Contact,
-  Factory,
-  FileBarChart,
-  Home,
-  IndianRupee,
-  PackageCheck,
-  Pin,
-  ReceiptText,
-  ShoppingCart,
-  Truck,
-} from 'lucide-react'
+import { AlertTriangle, CalendarRange, Factory, Home, IndianRupee, PackageCheck, Pin, ReceiptText, ShoppingCart } from 'lucide-react'
 import { useStore } from '../../store/store'
 import { fmtDate, fromNow, moneyPaise, pieces } from '../../lib/format'
 import { allJobViews } from '../../lib/selectors'
@@ -25,6 +11,7 @@ import { fromPaise, toPaise } from '../../lib/costing'
 import { sortPlans } from '../../lib/planList'
 import { describeAccess } from '../../lib/permissions'
 import { Card, CardHead, EmptyState } from '../../components/ui'
+import { QuickAccessBar } from '../../components/QuickAccess'
 import { LinkButton, PageHeader, StatStrip, StatTile, useDocumentTitle } from '../../components/page'
 import { HealthBadge, PriorityBadge } from '../../components/status'
 
@@ -78,16 +65,6 @@ export function AdminHomePage() {
     ...(can('planning') ? urgentPlans.map((p) => ({ key: `u-${p.id}`, tone: 'warn' as const, text: `${p.code} is urgent and still ${p.status.toLowerCase()}`, to: `/planning/${p.id}` })) : []),
   ].slice(0, 10)
 
-  const shortcuts: Array<{ to: string; label: string; icon: ReactNode; show: boolean }> = [
-    { to: '/planning/new', label: 'New plan', icon: <CalendarRange className="h-4 w-4" />, show: can('planning') },
-    { to: '/production', label: 'Production', icon: <Factory className="h-4 w-4" />, show: can('production.monitor') },
-    { to: '/dispatch', label: 'Dispatch', icon: <Truck className="h-4 w-4" />, show: can('dispatch') },
-    { to: '/billing', label: 'Billing', icon: <ReceiptText className="h-4 w-4" />, show: can('billing') },
-    { to: '/billing?tab=purchase', label: 'Purchase bill', icon: <ShoppingCart className="h-4 w-4" />, show: can('billing') },
-    { to: '/reports', label: 'Reports', icon: <FileBarChart className="h-4 w-4" />, show: can('billing') },
-    { to: '/customers', label: 'Customers', icon: <Contact className="h-4 w-4" />, show: can('billing') },
-  ]
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -105,17 +82,8 @@ export function AdminHomePage() {
         {can('billing') && !can('dispatch') ? <StatTile label={`Purchases in ${format(now, 'MMM')}`} value={moneyPaise(purchased)} icon={<ShoppingCart className="h-4 w-4" />} tone="amber" hint={`${monthPurchases.length} bill(s)`} /> : null}
       </StatStrip>
 
-      <Card className="vx-anim-up p-4">
-        <p className="vx-label mb-2">Go to</p>
-        <div className="flex flex-wrap gap-2">
-          {shortcuts
-            .filter((s) => s.show)
-            .map((s) => (
-              <LinkButton key={s.to} to={s.to} variant="secondary" icon={s.icon}>
-                {s.label}
-              </LinkButton>
-            ))}
-        </div>
+      <Card className="vx-anim-up relative z-10 p-4">
+        <QuickAccessBar />
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">

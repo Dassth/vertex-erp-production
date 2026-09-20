@@ -20,6 +20,7 @@ import {
   ListChecks,
   LogOut,
   Menu,
+  Search,
   Home,
   Cog,
   PanelLeftClose,
@@ -50,6 +51,7 @@ import { AuditTrail } from './AuditTrail'
 import { AccountDialog, ClearDataDialog, CompanyProfileDialog } from './AdminDialogs'
 import { SetupGuide } from './SetupGuide'
 import { RecentPlans } from './RecentPlans'
+import { QuickAccessDialog } from './QuickAccess'
 
 /* Hallmark · genre: modern-minimal · macrostructure: Bento Grid
  * nav: collapsible left sidebar (slide-in panel on small screens) · footer: Ft2 Inline single line
@@ -110,6 +112,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [dialog, setDialog] = useState<Dialog>(null)
   const [collapsed, setCollapsed] = useState(readCollapsed)
+  const [quickOpen, setQuickOpen] = useState(false)
   const toggleCollapsed = () =>
     setCollapsed((v) => {
       try {
@@ -121,6 +124,18 @@ export function AppShell({ children }: { children: ReactNode }) {
     })
 
   useEffect(() => setSheetOpen(false), [location.pathname])
+
+  // Ctrl/⌘ + K opens quick access from anywhere.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setQuickOpen(true)
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
 
   // Navigation only ever lists modules this account may open (routes re-check).
   const items = useMemo(() => NAV.filter((n) => n.capabilities.some((c) => can(c))), [can])
@@ -139,6 +154,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <Sidebar items={items} collapsed={collapsed} onToggle={toggleCollapsed} />
 
       <UtilityCluster
+        onQuickAccess={() => setQuickOpen(true)}
         onMenu={() => setSheetOpen(true)}
         scopeLabel={isAdmin ? 'All units' : (unit?.shortName ?? 'Unit')}
         open={(d) => (d === 'resources' ? navigate('/settings') : setDialog(d))}
@@ -161,6 +177,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </footer>
       </div>
 
+      <QuickAccessDialog open={quickOpen} onClose={() => setQuickOpen(false)} />
       <MobileSheet open={sheetOpen} onClose={() => setSheetOpen(false)} items={items} />
 
       <Drawer open={dialog === 'audit'} onClose={() => setDialog(null)} title="Activity Log" subtitle="Every important action, attributed to the account that performed it" width="w-full max-w-2xl">
@@ -344,11 +361,13 @@ function MobileSheet({ open, onClose, items }: { open: boolean; onClose: () => v
 /* ---------------------------- Utility cluster ----------------------------- */
 
 function UtilityCluster({
+  onQuickAccess,
   onMenu,
   scopeLabel,
   open,
   onLogout,
 }: {
+  onQuickAccess: () => void
   onMenu: () => void
   scopeLabel: string
   open: (d: Dialog) => void
@@ -451,6 +470,10 @@ function UtilityCluster({
             {currentShift(clock)}
           </span>
         </span>
+
+        <Button size="sm" variant="ghost" icon={<Search className="h-4 w-4" />} onClick={onQuickAccess} className="rounded-full" aria-label="Quick access (Ctrl+K)" title="Quick access — Ctrl+K">
+          <span className="hidden lg:inline">Quick access</span>
+        </Button>
 
         {can('planning') ? (
           <Button size="sm" variant="ghost" icon={<ListChecks className="h-4 w-4" />} onClick={() => open('guide')} className="rounded-full" aria-label="Workflow guide">

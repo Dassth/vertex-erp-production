@@ -92,7 +92,7 @@ export function BillingPage() {
       />
 
       {tab === 'purchase' ? (
-        <PurchaseBills q={q} onSearch={(v) => set({ q: v })} onPreview={setPreview} />
+        <PurchaseBills q={q} onSearch={(v) => set({ q: v })} onPreview={setPreview} openNew={params.get('new') === '1'} onOpenedNew={() => set({ new: null })} />
       ) : selected ? (
         <OrderInvoices row={selected} read={read} onBack={() => set({ order: null }, true)} onPreview={setPreview} onEditTax={setTaxEdit} onEdit={setFullEdit} />
       ) : orderId ? (

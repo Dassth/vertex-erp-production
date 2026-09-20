@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { format } from 'date-fns'
 import { Download, Eye, IndianRupee, Pencil, Plus, ReceiptText, Search, ShoppingCart, Trash2 } from 'lucide-react'
 import { useStore } from '../../store/store'
@@ -56,10 +56,10 @@ const toDraft = (b: PurchaseBill | null): PurchaseDraft =>
         notes: '',
       }
 
-export function PurchaseBills({ q, onSearch, onPreview }: { q: string; onSearch: (v: string) => void; onPreview: (d: PreviewDoc) => void }) {
+export function PurchaseBills({ q, onSearch, onPreview, openNew, onOpenedNew }: { q: string; onSearch: (v: string) => void; onPreview: (d: PreviewDoc) => void; openNew?: boolean; onOpenedNew?: () => void }) {
   const { db } = useStore()
   const read = useLatestDb()
-  const [editing, setEditing] = useState<PurchaseBill | 'new' | null>(null)
+  const [editing, setEditing] = useState<PurchaseBill | 'new' | null>(openNew ? 'new' : null)
   const [deleting, setDeleting] = useState<PurchaseBill | null>(null)
   const rows = useMemo(
     () =>
@@ -68,6 +68,13 @@ export function PurchaseBills({ q, onSearch, onPreview }: { q: string; onSearch:
         .sort((a, b) => b.bill.date.localeCompare(a.bill.date) || b.bill.code.localeCompare(a.bill.code)),
     [db.purchases, db.company.gstin],
   )
+  // Quick access can arrive with ?new=1; open the editor once and drop the flag.
+  useEffect(() => {
+    if (!openNew) return
+    setEditing((e) => e ?? 'new')
+    onOpenedNew?.()
+  }, [openNew, onOpenedNew])
+
   const term = q.trim().toLowerCase()
   const filtered = rows.filter(
     ({ bill: b }) =>

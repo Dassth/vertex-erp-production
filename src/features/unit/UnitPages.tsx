@@ -13,6 +13,7 @@ import { PriorityBadge, ProcessBadge } from '../../components/status'
 import { ResourceDialog } from '../production/UnitWorkPage'
 import { ResourceAdd } from '../production/UnitResourceSetup'
 import { ResourceDrawer, since } from './ResourceDrawer'
+import { QuickAccessBar } from '../../components/QuickAccess'
 
 /* ---------------------------------------------------------------------------
  * The unit account's own area:
@@ -53,6 +54,10 @@ export function UnitHomePage() {
   return (
     <div className="space-y-6">
       <PageHeader eyebrow="Unit · Home" title={`${unit.unitName}`} subtitle="Your unit today: what is running, what is ready to start, and what still needs a person or machine." icon={<Home className="h-4 w-4" />} />
+
+      <Card className="vx-anim-up relative z-10 p-4">
+        <QuickAccessBar />
+      </Card>
 
       <StatStrip className="grid-cols-2 lg:grid-cols-4">
         <StatTile label="Ready now" value={String(work.ready.length)} icon={<Timer className="h-4 w-4" />} tone="indigo" hint="Earlier processes are done" />
