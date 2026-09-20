@@ -184,7 +184,8 @@ export function AppShell({ children }: { children: ReactNode }) {
               {db.company.name} · Vertex ERP ·{' '}
               {storageMode === 'server' ? 'Data is stored on the Vertex server and shared by signed-in users' : 'Data is stored in this browser only and is not shared across devices'}
             </p>
-            <p className="mt-1 select-none text-2xs uppercase tracking-[0.14em] text-faint/70" translate="no">
+            {/* A watermark, not a banner: centred, small and quiet. */}
+            <p className="mt-2 select-none text-center text-[9px] uppercase leading-none tracking-[0.22em] text-faint/45" translate="no">
               {POWERED_BY}
             </p>
           </div>

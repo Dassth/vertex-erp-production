@@ -230,7 +230,7 @@ export function LoginPage() {
               : 'Accounts and data are stored in this browser only. They are not shared with other computers.'}
           </p>
 
-          <p className="mt-6 select-none border-t border-rule pt-4 text-2xs uppercase tracking-[0.14em] text-faint/70" translate="no">
+          <p className="mt-6 select-none border-t border-rule pt-4 text-center text-[9px] uppercase leading-none tracking-[0.22em] text-faint/45" translate="no">
             {POWERED_BY}
           </p>
         </div>
