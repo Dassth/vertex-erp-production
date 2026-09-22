@@ -35,6 +35,7 @@ export const saveCompanyProfile = command(
       invoicePrefix: d.invoicePrefix.trim(),
       bankDetails: d.bankDetails.trim(),
       invoiceTerms: d.invoiceTerms.trim(),
+      documentWatermark: d.documentWatermark !== false,
       updatedAt: ctx.now.toISOString(),
       updatedBy: ctx.actor.name,
     }

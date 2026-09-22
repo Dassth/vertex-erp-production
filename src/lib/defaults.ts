@@ -67,6 +67,7 @@ export function defaultCompany(): CompanyProfile {
     invoicePrefix: 'INV',
     bankDetails: '',
     invoiceTerms: 'Goods once dispatched will not be taken back. Subject to local jurisdiction.',
+    documentWatermark: true,
     updatedAt: null,
     updatedBy: null,
   }

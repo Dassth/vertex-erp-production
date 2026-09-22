@@ -96,6 +96,12 @@ export interface CompanyProfile {
   invoicePrefix: string
   bankDetails: string
   invoiceTerms: string
+  /**
+   * Print "Powered by …" on INTERNAL documents (job card, costing sheet,
+   * purchase bill, work list). Customer and government documents never carry
+   * it. Missing means on.
+   */
+  documentWatermark?: boolean
   updatedAt: string | null
   updatedBy: string | null
 }

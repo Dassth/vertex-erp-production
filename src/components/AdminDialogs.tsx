@@ -4,6 +4,7 @@ import { useStore } from '../store/store'
 import { CLEAR_CONFIRMATION, clearBusinessData, resetPassword, saveCompanyProfile, updateDisplayName, validateCompany } from '../domain/system'
 import type { CompanyDraft } from '../domain/system'
 import { MIN_PASSWORD_LENGTH } from '../lib/auth'
+import { POWERED_BY } from '../lib/brand'
 import { fmtDateTime } from '../lib/format'
 import { Badge, Button, ConfirmDialog, Field, Input, Modal, Textarea } from './ui'
 import { ConflictNotice, focusFirstInvalid } from './page'
@@ -142,6 +143,24 @@ function CompanyProfileEditor({ open, onClose }: { open: boolean; onClose: () =>
         <Field label="Invoice terms" className="sm:col-span-2">
           <Textarea rows={2} value={draft.invoiceTerms} onChange={(e) => set({ invoiceTerms: e.target.value })} />
         </Field>
+
+        <div className="sm:col-span-2 rounded-md border border-rule bg-surface-2 p-3">
+          <label className="flex cursor-pointer items-start gap-2.5">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 accent-[var(--color-accent)]"
+              checked={draft.documentWatermark !== false}
+              onChange={(e) => set({ documentWatermark: e.target.checked })}
+            />
+            <span className="min-w-0">
+              <span className="block text-base text-ink">Print “{POWERED_BY}” on in-house documents</span>
+              <span className="block text-xs text-muted">
+                Job card, costing sheet, purchase bill and work list. Customer and government documents — tax invoices, cumulative summaries and the GST and
+                invoice reports — never carry it.
+              </span>
+            </span>
+          </label>
+        </div>
       </form>
       {db.company.updatedAt ? (
         <p className="text-xs text-muted">

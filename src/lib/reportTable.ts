@@ -26,6 +26,10 @@ export interface ReportRow {
 export interface ReportTable {
   /** Sheet name and file-name stem. */
   name: string
+  /** An in-house document: it may carry the maker's mark if the company wants it. */
+  internal?: boolean
+  /** Set when the file should actually close with the mark. */
+  watermark?: boolean
   /** Title lines printed above the table. */
   heading: string[]
   columns: ReportColumn[]
@@ -44,8 +48,7 @@ export function tableCsv(t: ReportTable): string {
     ...t.heading.map((h) => csvCell(h)),
     t.columns.map((c) => csvCell(c.label)).join(','),
     ...t.rows.map((r) => r.cells.map(csvCell).join(',')),
-    '',
-    csvCell(POWERED_BY),
+    ...(t.watermark ? ['', csvCell(POWERED_BY)] : []),
   ]
   return lines.join('\r\n')
 }
@@ -60,8 +63,7 @@ export function tableXlsx(t: ReportTable): Uint8Array {
         { cells: [] },
         { cells: t.columns.map((c) => c.label), bold: true },
         ...t.rows.map((r) => ({ cells: r.cells, bold: r.kind !== 'row' })),
-        { cells: [] },
-        { cells: [POWERED_BY] },
+        ...(t.watermark ? [{ cells: [] }, { cells: [POWERED_BY] }] : []),
       ],
     },
   ])

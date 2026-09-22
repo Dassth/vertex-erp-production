@@ -93,6 +93,7 @@ export function purchaseBillTable(bill: PurchaseBill, company: CompanySnapshot):
   total('Net amount', t.net, 'grand')
   return {
     name: `Purchase ${clean(bill.code)}`.slice(0, 31),
+    internal: true,
     heading: [
       `PURCHASE BILL ${bill.code}`,
       company.name,
@@ -134,6 +135,7 @@ export function jobCardTable(card: JobCard): ReportTable {
   }
   return {
     name: `${live ? 'Live job card' : 'Job card'} ${clean(card.orderCode ?? card.plan.code)}`.slice(0, 31),
+    internal: true,
     heading: [
       live ? 'LIVE JOB CARD' : 'JOB CARD — PLAN',
       `${card.orderCode ?? card.plan.code} · ${card.customer.company} · ${card.product.name}`,
@@ -198,6 +200,7 @@ export function costingTable(costing: OrderCosting, company: string): ReportTabl
 
   return {
     name: `Costing ${clean(costing.code)}`.slice(0, 31),
+    internal: true,
     heading: [
       `ORDER COSTING ${costing.code} — INTERNAL`,
       company,

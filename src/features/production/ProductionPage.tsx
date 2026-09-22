@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { useStore } from '../../store/store'
 import { allJobViews, stageUnitsLabel, todaysProcessWork, unitSummaries } from '../../lib/selectors'
+import { watermarkOn } from '../../lib/brand'
 import type { JobView } from '../../lib/selectors'
 import { orderBalance } from '../../lib/billing'
 import { isStageDone } from '../../lib/schedule'
@@ -124,7 +125,7 @@ function AdminProduction() {
         </Card>
       ) : (
         <>
-          <TodaysWork rows={today} unitName={unitName} onOpen={open} company={db.company.name} />
+          <TodaysWork rows={today} unitName={unitName} onOpen={open} company={db.company.name} watermark={watermarkOn(db.company)} />
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {summaries.map((s) => (
@@ -221,7 +222,7 @@ function AdminProduction() {
 
 /* ------------------------------ Today's work ------------------------------ */
 
-function TodaysWork({ rows, unitName, onOpen, company }: { rows: ReturnType<typeof todaysProcessWork>; unitName: (id: string) => string; onOpen: (id: string) => void; company: string }) {
+function TodaysWork({ rows, unitName, onOpen, company, watermark }: { rows: ReturnType<typeof todaysProcessWork>; unitName: (id: string) => string; onOpen: (id: string) => void; company: string; watermark: boolean }) {
   const { pushToast } = useStore()
   const [exportPhase, setExportPhase] = useState<'idle' | 'busy' | 'error'>('idle')
 
@@ -233,7 +234,7 @@ function TodaysWork({ rows, unitName, onOpen, company }: { rows: ReturnType<type
     setExportPhase('busy')
     ;(async () => {
       const [{ workListDefinition }, { renderPdf, saveBlob }] = await Promise.all([import('../../lib/pdfDocs'), import('../../lib/pdfRender')])
-      const definition = workListDefinition(rows, { title: `${company} — Today's production work`, scope: fmtDate(new Date(), 'EEEE, dd MMM yyyy'), unitName })
+      const definition = workListDefinition(rows, { title: `${company} — Today's production work`, scope: fmtDate(new Date(), 'EEEE, dd MMM yyyy'), unitName }, new Date(), watermark)
       saveBlob(await renderPdf(definition), `work-list-${fmtDate(new Date(), 'yyyy-MM-dd')}.pdf`)
     })().then(
       () => setExportPhase('idle'),

@@ -100,12 +100,12 @@ function base(title: string, subject: string, createdAt: string, landscape = fal
   }
 }
 
-function footer(note: string, width = A4_WIDTH) {
+function footer(note: string, width = A4_WIDTH, mark = false) {
   return (currentPage: number, pageCount: number): Content => ({
     margin: [40, 18, 40, 0],
     columns: [
-      { text: note, style: 'muted', width: width - 240 },
-      { text: POWERED_BY, style: 'muted', alignment: 'center', characterSpacing: 0.4, width: 150 },
+      { text: note, style: 'muted', width: width - (mark ? 240 : 90) },
+      ...(mark ? [{ text: POWERED_BY, style: 'muted', alignment: 'center' as const, characterSpacing: 0.4, width: 150 }] : []),
       { text: `Page ${currentPage} of ${pageCount}`, style: 'muted', alignment: 'right', width: 90 },
     ],
   })
@@ -311,7 +311,7 @@ export function invoiceDefinition(inv: Invoice): TDocumentDefinitions {
  * A supplier's bill as recorded here. Tax is worked out per line at that line's
  * GST rate and split CGST + SGST (same state) or IGST (other state).
  */
-export function purchaseBillDefinition(bill: PurchaseBill, company: CompanySnapshot): TDocumentDefinitions {
+export function purchaseBillDefinition(bill: PurchaseBill, company: CompanySnapshot, mark = false): TDocumentDefinitions {
   const t = purchaseTotals(bill, company.gstin)
   const header: TableCell[] = ['#', 'Description', 'HSN/SAC', 'Qty', 'Unit', 'Rate', 'GST %', 'Amount'].map((h, i) => ({
     text: h,
@@ -334,7 +334,7 @@ export function purchaseBillDefinition(bill: PurchaseBill, company: CompanySnaps
 
   return {
     ...base(`Purchase bill ${bill.code}`, bill.supplierName, bill.updatedAt),
-    footer: footer(`${bill.code} · Purchase record${bill.supplierInvoiceNo ? ` of supplier invoice ${bill.supplierInvoiceNo}` : ''}`),
+    footer: footer(`${bill.code} · Purchase record${bill.supplierInvoiceNo ? ` of supplier invoice ${bill.supplierInvoiceNo}` : ''}`, A4_WIDTH, mark),
     content: (
       [
         ...companyHeader(company, 'PURCHASE BILL', [
@@ -579,7 +579,7 @@ export function gstReportDefinition(report: MonthlyGstReport, company: CompanySn
 /* ------------------------------ Generic report ---------------------------- */
 
 /** Any report table (e.g. the invoice report) as a landscape PDF with the same rows as its Excel file. */
-export function reportTableDefinition(table: ReportTable, company: CompanySnapshot, generatedAt = new Date()): TDocumentDefinitions {
+export function reportTableDefinition(table: ReportTable, company: CompanySnapshot, generatedAt = new Date(), mark = false): TDocumentDefinitions {
   const generated = format(generatedAt, 'dd MMM yyyy, hh:mm a')
   const full = 782
   // Numbers, dates and codes fit their content; names and items share the rest.
@@ -607,7 +607,7 @@ export function reportTableDefinition(table: ReportTable, company: CompanySnapsh
   return {
     ...base(table.heading[0] ?? table.name, company.name, generatedAt.toISOString(), true),
     pageMargins: [30, 30, 30, 44],
-    footer: footer(`${table.heading.slice(0, 1).join('')} · ${table.heading[2] ?? ''}`, full),
+    footer: footer(`${table.heading.slice(0, 1).join('')} · ${table.heading[2] ?? ''}`, full, mark),
     content: [
       { text: table.heading[0] ?? table.name, style: 'h1' },
       ...table.heading.slice(1).map((h, i): Content => (i === 0 ? { text: h, bold: true } : { text: h, style: 'muted' })),
@@ -622,7 +622,7 @@ export function reportTableDefinition(table: ReportTable, company: CompanySnapsh
 /* --------------------------------- Job card -------------------------------- */
 
 /** A plan from A to Z for the shop floor: route, units, materials, progress, dispatch. No prices. */
-export function jobCardDefinition(card: JobCard, company: CompanySnapshot, generatedAt = new Date()): TDocumentDefinitions {
+export function jobCardDefinition(card: JobCard, company: CompanySnapshot, generatedAt = new Date(), mark = false): TDocumentDefinitions {
   const p = card.plan
   const live = card.mode === 'live'
   const generated = format(generatedAt, 'dd MMM yyyy, hh:mm a')
@@ -635,7 +635,7 @@ export function jobCardDefinition(card: JobCard, company: CompanySnapshot, gener
   ].filter(present) as Content[]
   return {
     ...base(`Job card ${card.orderCode ?? p.code}`, `${card.customer.company} — ${card.product.name}`, generatedAt.toISOString()),
-    footer: footer(`${live ? 'Live job card' : 'Job card (plan)'} · ${p.code}${card.orderCode ? ` · ${card.orderCode}` : ''} · printed ${generated}`),
+    footer: footer(`${live ? 'Live job card' : 'Job card (plan)'} · ${p.code}${card.orderCode ? ` · ${card.orderCode}` : ''} · printed ${generated}`, A4_WIDTH, mark),
     content: (
       [
         ...companyHeader(company, live ? 'LIVE JOB CARD' : 'JOB CARD — PLAN', [
@@ -772,13 +772,13 @@ export function jobCardDefinition(card: JobCard, company: CompanySnapshot, gener
 
 /* -------------------------------- Work list ------------------------------- */
 
-export function workListDefinition(rows: ProcessWorkRow[], meta: { title: string; scope: string; unitName: (id: string) => string }, generatedAt = new Date()): TDocumentDefinitions {
+export function workListDefinition(rows: ProcessWorkRow[], meta: { title: string; scope: string; unitName: (id: string) => string }, generatedAt = new Date(), mark = false): TDocumentDefinitions {
   const widths = [52, 58, '*', '*', '*', 60, 120, 64, 60]
   const header: TableCell[] = ['Unit', 'Job', 'Customer', 'Product', 'Stage', 'Qty', 'Planned window', 'Status', 'Sign'].map((h) => ({ text: h, style: 'th' }))
   return {
     ...base(meta.title, meta.scope, generatedAt.toISOString(), true),
     pageMargins: [30, 34, 30, 48],
-    footer: footer('Vertex ERP · Production work list', 782 - 60),
+    footer: footer('Vertex ERP · Production work list', 782 - 60, mark),
     content: [
       { text: meta.title, style: 'h1' },
       { text: `${meta.scope} · ${rows.length} process(es) · generated ${format(generatedAt, 'dd MMM yyyy, hh:mm a')}`, style: 'muted', margin: [0, 2, 0, 10] },

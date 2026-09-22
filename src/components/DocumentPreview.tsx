@@ -7,6 +7,7 @@ import { invoiceFileName } from '../lib/format'
 import { useStore } from '../store/store'
 import { Button, Modal, Skeleton } from './ui'
 import { FORMAT_LABEL, useExportFormat } from './exportFormat'
+import { watermarkOn } from '../lib/brand'
 import type { ReportTable } from '../lib/reportTable'
 
 /* pdfmake and the embedded fonts are large, so document code loads only when a
@@ -54,7 +55,7 @@ export const purchaseDoc = (bill: PurchaseBill, read: () => VertexDB): PreviewDo
     void _u
     void _b
     const [{ purchaseBillDefinition }, { renderPdf }] = await loadPdf()
-    return renderPdf(purchaseBillDefinition(latest, company))
+    return renderPdf(purchaseBillDefinition(latest, company, watermarkOn(db.company)))
   },
 })
 
@@ -103,7 +104,7 @@ export const jobCardDoc = (read: () => VertexDB, planId: string, mode: 'plan' | 
       const { updatedAt: _u, updatedBy: _b, ...company } = db.company
       void _u
       void _b
-      return renderPdf(jobCardDefinition(card, company))
+      return renderPdf(jobCardDefinition(card, company, new Date(), watermarkOn(db.company)))
     },
   }
 }
@@ -122,7 +123,7 @@ export const costingDoc = (read: () => VertexDB, costingId: string): PreviewDoc 
       const { updatedAt: _u, updatedBy: _b, ...company } = db.company
       void _u
       void _b
-      return renderPdf(reportTableDefinition(costingTable(costing, company.name), company))
+      return renderPdf(reportTableDefinition(costingTable(costing, company.name), company, new Date(), watermarkOn(db.company)))
     },
   }
 }
@@ -175,7 +176,8 @@ export async function downloadDoc(doc: PreviewDoc) {
 
 /** A spreadsheet of the same document, in the format chosen in Reports → Settings. */
 export function ExcelButton({ table, stem, children, ...rest }: ButtonLike & { table: () => ReportTable | Promise<ReportTable>; stem: string; children?: ReactNode }) {
-  const { pushToast } = useStore()
+  const { db, pushToast } = useStore()
+  const mark = watermarkOn(db.company)
   const [format] = useExportFormat()
   const [phase, setPhase] = useState<'idle' | 'busy' | 'error'>('idle')
   const busy = useRef(false)
@@ -191,7 +193,8 @@ export function ExcelButton({ table, stem, children, ...rest }: ButtonLike & { t
         setPhase('busy')
         ;(async () => {
           const [{ tableFile }, { saveBlob }] = await Promise.all([import('../lib/reportTable'), import('../lib/pdfRender')])
-          const { blob, fileName } = tableFile(await table(), format, stem)
+          const built = await table()
+          const { blob, fileName } = tableFile({ ...built, watermark: !!built.internal && mark }, format, stem)
           saveBlob(blob, fileName)
         })().then(
           () => {
