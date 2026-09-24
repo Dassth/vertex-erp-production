@@ -91,7 +91,7 @@ function AdminProduction() {
       <PageHeader
         eyebrow="Operations · Step 3"
         title="Production"
-        subtitle="Monitor every order released from costing: today’s stage work, progress by unit, deadlines and completion. Stage updates are made by the assigned unit."
+        subtitle="Every order released from costing, with its plan by unit. Open a job to download each unit’s sheet and send it. When the units say a job is done, mark it finished in Dispatch."
         icon={<Factory className="h-4 w-4" />}
       />
 

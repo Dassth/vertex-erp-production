@@ -91,7 +91,7 @@ const NAV: NavItem[] = [
   { to: '/planning', label: 'Planning', hint: 'Allocate every process to a unit', icon: CalendarRange, capabilities: ['planning'] },
   { to: '/costing', label: 'Costing', hint: 'Cost and finalize a planned order', icon: Calculator, capabilities: ['costing'] },
   { to: '/production', label: 'Production', hint: 'Process progress by unit', icon: Factory, capabilities: ['production.monitor', 'production.work'] },
-  { to: '/units', label: 'Units', hint: 'Allocate, record and print each unit’s jobs', icon: Building2, capabilities: ['units.monitor'] },
+  { to: '/units', label: 'Units', hint: 'Each unit’s work, with today’s download', icon: Building2, capabilities: ['units.monitor'] },
   { to: '/billing', label: 'Billing', hint: 'Sales invoices and purchase bills', icon: ReceiptText, capabilities: ['billing'] },
   { to: '/dispatch', label: 'Dispatch', hint: 'Ship completed orders', icon: Truck, capabilities: ['dispatch'] },
   { to: '/invoices', label: 'Invoices', hint: 'Order summaries and invoice downloads', icon: FileStack, capabilities: ['billing'] },

@@ -1,18 +1,23 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { Building2, CheckCircle2, Cog, Eye, Factory, TriangleAlert, Users } from 'lucide-react'
+import { ArrowLeft, Building2, CalendarClock, CheckCircle2, Cog, Download, Eye, Factory, TriangleAlert, Users } from 'lucide-react'
 import { useStore } from '../../store/store'
 import type { UnitId, UnitMachine, UnitPerson } from '../../lib/types'
-import { allJobViews, unitSummaries } from '../../lib/selectors'
+import { allJobViews, unitSummaries, unitWork } from '../../lib/selectors'
+import type { ProcessWorkRow } from '../../lib/selectors'
+import { fmtDate, pieces, planWindow } from '../../lib/format'
 import { ResourceDrawer, since } from '../unit/ResourceDrawer'
 import { Badge, Card, CardHead, EmptyState, ProgressBar } from '../../components/ui'
 import { Detail, LinkButton, PageHeader, StatStrip, StatTile, useDocumentTitle } from '../../components/page'
-import { UnitWorkPage } from '../production/UnitWorkPage'
+import { DocumentPreview, DownloadButton, unitJobSheetDoc, unitTodayDoc, useLatestDb } from '../../components/DocumentPreview'
+import type { PreviewDoc } from '../../components/DocumentPreview'
+import { onDay } from '../../lib/unitDay'
 
 /* ---------------------------------------------------------------------------
- * Units — where administrators run each unit's work. Units have no accounts:
- * open a unit to allocate people and machines, print a job's sheet for the
- * unit's in-charge (to hand over or send on WhatsApp), and record progress.
+ * Units — a view of what each unit has been given. Units have no accounts and
+ * report on paper: the office downloads a unit's work for today, or one job's
+ * sheet, and sends it to the unit's in-charge. When the unit says a job is
+ * done, the office marks it finished in Dispatch. Nothing here changes a record.
  * ------------------------------------------------------------------------- */
 
 export function UnitsMonitorPage() {
@@ -28,7 +33,7 @@ export function UnitsMonitorPage() {
       <PageHeader
         eyebrow="Production · Units"
         title="Units"
-        subtitle="Open a unit to allocate its work, print each job’s sheet for the unit’s in-charge, and record progress as the unit reports back."
+        subtitle="Open a unit to see the work it has been given and download today’s work or a job’s sheet to send to the unit’s in-charge."
         icon={<Building2 className="h-4 w-4" />}
       />
 
@@ -78,18 +83,26 @@ export function UnitsMonitorPage() {
 export function UnitMonitorDetailPage() {
   const { unitId } = useParams()
   const { db, can } = useStore()
+  const read = useLatestDb()
   const unit = db.units.find((u) => u.id === unitId)
+  useDocumentTitle(`${unit?.shortName ?? 'Unit'} · Units`)
+  const work = useMemo(() => (unitId ? unitWork(db.orders, unitId, new Date()) : null), [db.orders, unitId])
+  const [preview, setPreview] = useState<PreviewDoc | null>(null)
   const [who, setWho] = useState<UnitPerson | UnitMachine | null>(null)
 
-  if (!unit)
+  if (!unit || !work)
     return (
       <Card>
         <EmptyState icon={<Building2 className="h-6 w-6" />} title="Unit not found" message="This unit does not exist." action={<LinkButton to="/units">All units</LinkButton>} />
       </Card>
     )
 
+  const open = [...work.ready, ...work.waiting].sort((a, b) => a.process.plannedStart.localeCompare(b.process.plannedStart))
+  const today = open.filter((r) => onDay(r.process.plannedStart, r.process.plannedEnd, new Date()))
+  const jobs = new Set(open.map((r) => r.order.id)).size
   const staff = db.people.filter((p) => p.unitId === unit.id && p.active)
   const machines = db.machines.filter((m) => m.unitId === unit.id && m.active)
+  const openSheet = (orderId: string) => setPreview(unitJobSheetDoc(read, orderId, unit.id))
   const manage = can('administration') ? (
     <LinkButton to={`/settings?unit=${unit.id}`} size="sm" variant="secondary">
       Manage in Settings
@@ -98,7 +111,37 @@ export function UnitMonitorDetailPage() {
 
   return (
     <div className="space-y-6">
-      <UnitWorkPage unitId={unit.id} />
+      <LinkButton to="/units" variant="ghost" icon={<ArrowLeft className="h-4 w-4" />}>
+        All units
+      </LinkButton>
+
+      <PageHeader
+        eyebrow="Units · View"
+        title={unit.name}
+        subtitle={`The work ${unit.shortName} has been given in plans. Download today’s work, or open a job number for its sheet, and send it to the unit’s in-charge. When the unit says a job is done, mark it finished in Dispatch.`}
+        icon={<Factory className="h-4 w-4" />}
+        actions={
+          <DownloadButton icon={<Download className="h-4 w-4" />} doc={() => unitTodayDoc(read, unit.id)} disabled={!today.length} title={today.length ? undefined : 'Nothing is planned for this unit today'}>
+            Download today’s work
+          </DownloadButton>
+        }
+      />
+
+      <StatStrip className="grid-cols-1 sm:grid-cols-3">
+        <StatTile label="Today" value={String(today.length)} icon={<CalendarClock className="h-4 w-4" />} tone="indigo" hint="Processes planned for today" />
+        <StatTile label="Open jobs" value={String(jobs)} icon={<Factory className="h-4 w-4" />} tone="blue" hint="Jobs with work for this unit" />
+        <StatTile label="Open processes" value={String(open.length)} icon={<CheckCircle2 className="h-4 w-4" />} tone="slate" hint="Not finished yet" />
+      </StatStrip>
+
+      <Card className="vx-anim-up overflow-hidden">
+        <CardHead title="Today’s work" subtitle={fmtDate(new Date(), 'EEEE, dd MMM yyyy')} />
+        <WorkTable rows={today} onOpen={openSheet} empty="Nothing is planned for this unit today." />
+      </Card>
+
+      <Card className="vx-anim-up overflow-hidden">
+        <CardHead title="All open work" subtitle={`${open.length} process(es) across ${jobs} job(s)`} />
+        <WorkTable rows={open} onOpen={openSheet} empty="This unit has no open work." />
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="vx-anim-up overflow-hidden">
@@ -138,11 +181,51 @@ export function UnitMonitorDetailPage() {
         </Card>
       </div>
 
+      <DocumentPreview doc={preview} onClose={() => setPreview(null)} />
       <ResourceDrawer
         item={who ? ('designation' in who ? { kind: 'person', value: who } : { kind: 'machine', value: who }) : null}
         readOnly
         onClose={() => setWho(null)}
       />
+    </div>
+  )
+}
+
+/** A unit's processes, read-only. The job number opens that job's sheet for this unit. */
+function WorkTable({ rows, onOpen, empty }: { rows: ProcessWorkRow[]; onOpen: (orderId: string) => void; empty: string }) {
+  if (!rows.length) return <p className="px-5 py-6 text-sm text-muted">{empty}</p>
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[720px]">
+        <thead>
+          <tr>
+            <th className="vx-th">Job</th>
+            <th className="vx-th">Process</th>
+            <th className="vx-th">Planned</th>
+            <th className="vx-th">Delivery</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.key} className="border-t border-rule">
+              <td className="vx-td">
+                <button type="button" onClick={() => onOpen(r.order.id)} className="vx-focus vx-code rounded-xs font-semibold text-accent-text hover:underline" aria-label={`${r.order.code} — open this unit’s job sheet`}>
+                  {r.order.code}
+                </button>
+                <span className="block text-2xs text-faint">
+                  {r.order.productName} · {pieces(r.order.quantity)}
+                </span>
+              </td>
+              <td className="vx-td">
+                {r.process.name}
+                <span className="block text-2xs text-faint">{r.process.stageName}</span>
+              </td>
+              <td className="vx-td text-sm">{planWindow(r.process.plannedStart, r.process.plannedEnd)}</td>
+              <td className="vx-td text-sm">{fmtDate(r.order.deliveryDate)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }

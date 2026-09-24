@@ -26,9 +26,9 @@ Master setup → Planning → Order Costing → Production → Dispatch → Bill
 | Master → Customers | `/master/customers` | Company, contact, billing/delivery address, GSTIN, place of supply, payment terms, notes |
 | Planning | `/planning` | Customer, product, quantity, dates, priority, options; **a production unit for every stage** |
 | Costing | `/costing` | Cost one planned order, set profit/discount/tax, finalize (snapshot + production order) |
-| Production | `/production` | Process progress across all units |
-| Units | `/units` | Per unit: allocate, print job sheets, record start and completion |
-| Dispatch | `/dispatch` | Full or partial dispatch of completed production; each dispatch issues an invoice |
+| Production | `/production` | Every released order; open a job to download each unit's sheet |
+| Units | `/units` | View a unit's work; download today's work or one job's sheet |
+| Dispatch | `/dispatch` | Mark a job's work finished; full or partial dispatch; each dispatch issues an invoice |
 | Billing | `/billing` | Read-only invoice register, preview and PDF download, consolidated order statement |
 
 Master → Costing (shared configuration) and the main Costing module (one order's calculation) are
@@ -38,9 +38,11 @@ separate on purpose. Planning and Costing read Master definitions; they never ed
 
 Two administrators with separate audit identities: Administrator 1 (`admin1@vertex.local`, the whole
 workflow plus Settings) and Administrator 2 (`admin2@vertex.local`, production, dispatch and billing).
-Production units have **no accounts**: under **Units** an administrator opens a unit, allocates the person
-and machine for each process, prints the job's **job sheet** for the unit's in-charge (to hand over or send
-on WhatsApp), and records start and completion as the unit reports back. Databases from earlier builds lose
+Production units have **no accounts** and report on paper. The office plans an order (a unit for every
+process), then sends each unit its **job sheet** — from Production → the job → *Send to units*, or from
+Units → the unit, which also offers *Download today's work*. Units screens are view-only. When the units say
+a job is done, an administrator marks it finished in **Dispatch → In production → Work finished**; every open
+process closes at once and the order becomes dispatchable. Databases from earlier builds lose
 their Administrator 3 and unit logins on the next load; the names on past work and audit entries stay.
 Accounts ship **without passwords**: the first sign-in on an account chooses one (min. 8 characters,
 stored as a salted PBKDF2-SHA-256 hash, 120,000 iterations). An administrator can reset another account's

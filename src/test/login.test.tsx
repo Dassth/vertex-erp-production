@@ -176,7 +176,7 @@ describe('sign-in through the real UI', () => {
     expect(screen.queryByRole('radio', { name: /Unit \d Supervisor/ })).toBeNull()
   }, 30000)
 
-  it('lets an administrator run one unit’s work from Units and print its job sheet', async () => {
+  it('shows a unit’s work read-only, with today’s download and a sheet per job', async () => {
     localStorage.setItem(DB_KEY, JSON.stringify(seedOrderAcrossUnits()))
     const { router } = mount()
     const user = await chooseAccount('Administrator 2')
@@ -186,20 +186,17 @@ describe('sign-in through the real UI', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe('/home'), { timeout: 5000 })
     const modules = (await screen.findAllByRole('navigation', { name: 'Modules' }, { timeout: 5000 }))[0]
     expect(within(modules).getByRole('link', { name: /Units/ })).toBeTruthy()
-    // The old unit-only area is gone.
     expect(within(modules).queryByRole('link', { name: /Allocations/ })).toBeNull()
 
     await router.navigate('/units/U2')
     await screen.findByRole('heading', { level: 1, name: 'Unit 2' }, { timeout: 5000 })
-    // Unit 2 is allocated only "Die cut"; other units' processes are not listed here.
-    await user.click(screen.getByRole('button', { name: /Waiting on earlier work/ }))
-    expect(await screen.findByText(/2.1 Die cut/)).toBeTruthy()
-    expect(screen.queryByText(/1.1 Plate making/)).toBeNull()
-    expect(screen.queryByText(/3.2 Packing/)).toBeNull()
-    // The parent stage and its id travel with the process.
-    expect(screen.getByText(/Stage ID st-cut/)).toBeTruthy()
-    // Each job can be printed for the unit's in-charge, and no money is shown.
-    expect(screen.getAllByRole('button', { name: /Job sheet/ }).length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: /Download today’s work/ })).toBeTruthy()
+    // Unit 2 is given only "Die cut"; other units' processes are not listed.
+    expect(screen.getAllByText('Die cut').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Plate making')).toBeNull()
+    expect(screen.getAllByRole('button', { name: /open this unit’s job sheet/ }).length).toBeGreaterThan(0)
+    // View only: nothing here records work.
+    for (const action of [/Start process/, /Complete process/, /Assign person/, /Report a problem/]) expect(screen.queryByRole('button', { name: action })).toBeNull()
     expect(document.body.textContent).not.toMatch(/₹/)
   }, 30000)
 })

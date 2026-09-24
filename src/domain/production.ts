@@ -522,3 +522,59 @@ export function sweepSchedules(db: VertexDB, now: Date): VertexDB {
   if (!changed && !fresh.length) return db
   return { ...db, orders, notifications: [...fresh, ...db.notifications].slice(0, 300) }
 }
+
+/* ---------------------------- Finished from Dispatch ---------------------------- */
+
+/**
+ * Units report on paper, not in the ERP. When a unit tells the office the job
+ * is done, an administrator marks the order's work finished from Dispatch:
+ * every open process closes at once and the order becomes dispatchable.
+ * Repeating it on a finished order changes nothing.
+ */
+export const finishOrderProduction = command(
+  'finishOrderProduction',
+  (orderId: string): Op<ProductionOrder> =>
+  (db, ctx) => {
+    const denied = requireCapability(ctx, 'dispatch')
+    if (denied) return denied
+    const order = db.orders.find((o) => o.id === orderId)
+    if (!order) return fail('Production order not found.')
+    if (order.status === 'Completed') return ok(db, order)
+
+    const stamp = ctx.now.toISOString()
+    const stages = order.stages.map((s) =>
+      recalcStage(
+        {
+          ...s,
+          processes: s.processes.map((p) =>
+            isProcessDone(p)
+              ? p
+              : { ...p, status: 'Completed' as const, actualEnd: stamp, problem: undefined, done: true, doneAt: stamp, doneBy: ctx.actor.name, updatedBy: ctx.actor.name, updatedAt: stamp },
+          ),
+        },
+        ctx.now,
+      ),
+    )
+    const finished: ProductionOrder = { ...order, stages, status: 'Completed', completedAt: stamp, completedQty: order.quantity }
+
+    let next = replaceOrder(db, finished)
+    next = audit(next, ctx, {
+      action: 'Production completed',
+      entity: 'Production Order',
+      entityId: orderId,
+      entityLabel: `${order.code} — ${order.customer.company}`,
+      field: 'Completed quantity',
+      newValue: String(order.quantity),
+      reason: 'Marked finished from Dispatch after the units reported the work done.',
+    })
+    next = notify(next, ctx, {
+      key: `${orderId}:ready-dispatch`,
+      title: `${order.code} ready for dispatch`,
+      message: `${ctx.actor.name} marked the work finished. ${order.quantity.toLocaleString('en-IN')} ${order.uom} available in Dispatch.`,
+      level: 'success',
+      audience: 'admin',
+      orderId,
+    })
+    return ok(next, finished)
+  },
+)

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Activity, CalendarClock, CheckCircle2, Circle, Repeat2 } from 'lucide-react'
+import { Activity, CalendarClock, CheckCircle2, Circle, Printer, Repeat2 } from 'lucide-react'
 import { useStore } from '../store/store'
 import type { JobProcess, Priority, ProductionOrder } from '../lib/types'
 import { PRIORITIES, isProcessDone, isStageDone, processBlockers, productionDates } from '../lib/schedule'
@@ -12,7 +12,7 @@ import { Badge, Button, Drawer, Field, Input, Modal, ProgressBar, Select, Textar
 import { Detail } from './page'
 import { HealthBadge, PriorityBadge, ProcessBadge, StageBadge } from './status'
 import { AuditTrail } from './AuditTrail'
-import { DownloadButton, ExcelButton, jobCardDoc, useLatestDb } from './DocumentPreview'
+import { DownloadButton, ExcelButton, jobCardDoc, unitJobSheetDoc, useLatestDb } from './DocumentPreview'
 
 /* Administrator job detail. Monitoring only: no process progress actions, no
    costing or master edits. Priority, delivery date and the unit of a process
@@ -62,6 +62,8 @@ function JobDetail({ order }: { order: ProductionOrder }) {
           }}
         />
       </div>
+
+      <UnitSheets order={order} />
 
       <dl className="grid gap-4 sm:grid-cols-3">
         <Detail label="Customer">{order.customer.company}</Detail>
@@ -115,9 +117,9 @@ function JobDetail({ order }: { order: ProductionOrder }) {
             View finalized costing
           </Link>
         ) : null}
-        {order.status === 'Completed' && can('dispatch') ? (
-          <Link className="vx-focus rounded-xs font-medium text-accent-text hover:underline" to={`/dispatch?order=${order.id}`}>
-            Open in Dispatch
+        {can('dispatch') ? (
+          <Link className="vx-focus rounded-xs font-medium text-accent-text hover:underline" to={`/dispatch?order=${order.id}${order.status === 'Completed' ? '' : '&filter=production'}`}>
+            {order.status === 'Completed' ? 'Open in Dispatch' : 'Mark work finished in Dispatch'}
           </Link>
         ) : null}
       </div>
@@ -381,5 +383,39 @@ function AdminAdjustments({ order }: { order: ProductionOrder }) {
         </Field>
       </Modal>
     </div>
+  )
+}
+
+/**
+ * One download per unit that works on this job: the sheet the office sends to
+ * that unit's in-charge (printed, or on WhatsApp). Units do not sign in.
+ */
+function UnitSheets({ order }: { order: ProductionOrder }) {
+  const { db } = useStore()
+  const read = useLatestDb()
+  const units = db.units
+    .map((u) => ({ unit: u, processes: order.stages.flatMap((s) => s.processes.filter((p) => p.unitId === u.id)) }))
+    .filter((x) => x.processes.length)
+  if (!units.length) return null
+  return (
+    <section aria-labelledby={`send-${order.id}`} className="rounded-md border border-rule">
+      <h3 id={`send-${order.id}`} className="border-b border-rule bg-surface-2 px-4 py-2.5 text-sm font-semibold text-ink">
+        Send to units
+        <span className="block text-xs font-normal text-muted">Download each unit’s sheet and send it to that unit’s in-charge.</span>
+      </h3>
+      <ul className="divide-y divide-rule">
+        {units.map(({ unit, processes }) => (
+          <li key={unit.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-ink">{unit.name}</p>
+              <p className="truncate text-xs text-muted">{processes.map((p) => p.name).join(' · ')}</p>
+            </div>
+            <DownloadButton size="sm" variant="secondary" icon={<Printer className="h-3.5 w-3.5" />} doc={() => unitJobSheetDoc(read, order.id, unit.id)} title={`${unit.name}: ${processes.length} process(es) of ${order.code}`}>
+              {unit.shortName} sheet
+            </DownloadButton>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }

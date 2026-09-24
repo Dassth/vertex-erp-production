@@ -5,7 +5,7 @@ import { saveMaterial, materialToDraft, deleteProduct, setProductActive } from '
 import { cancelPlan, savePlan, submitPlan } from './planning'
 import type { PlanDraft } from './planning'
 import { finalizeCosting, openCosting } from './orderCosting'
-import { assignProcessResources, completeProcess, reportProcessProblem, startProcess } from './production'
+import { assignProcessResources, completeProcess, finishOrderProduction, reportProcessProblem, startProcess } from './production'
 import { confirmDispatch, confirmDispatchReceived } from './dispatch'
 import type { DispatchRequest } from './dispatch'
 import { saveCompanyProfile } from './system'
@@ -220,6 +220,29 @@ describe('production workflow across units', () => {
     const r = startProcess(order.id, die.id)(ready, unit(2))
     expect(r.ok).toBe(false)
     if (!r.ok) expect(r.error).toMatch(/Waiting for/)
+  })
+
+  it('marks a whole order’s work finished from Dispatch in one step, once', () => {
+    const base = toProduction()
+    const order = base.order
+    const db = must(
+      saveCompanyProfile({ name: 'Vertex Print Pack', address: 'Factory road', phone: '', email: '', gstin: '33AAAAA0000A1Z5', invoicePrefix: 'INV', bankDetails: '', invoiceTerms: '' })(base.db, admin()),
+    ).db
+    expect(confirmDispatch(req(order.id, 'early', 10))(db, admin()).ok).toBe(false)
+    // Only accounts that dispatch may do it.
+    for (const ctx of [billingOnly(), retiredUnit()]) expect(finishOrderProduction(order.id)(db, ctx).ok).toBe(false)
+
+    const r = must(finishOrderProduction(order.id)(db, admin(1)))
+    const finished = r.db.orders[0]
+    expect(finished.status).toBe('Completed')
+    expect(finished.completedQty).toBe(1000)
+    expect(finished.stages.every((s) => s.status === 'Completed')).toBe(true)
+    expect(finished.stages.flatMap((s) => s.processes).every((p) => p.done && p.doneBy === 'Administrator 2')).toBe(true)
+    expect(r.db.audit[0]).toMatchObject({ action: 'Production completed', user: 'Administrator 2' })
+    // It is now dispatchable, and repeating the action changes nothing.
+    expect(confirmDispatch(req(order.id, 'after', 10))(r.db, admin()).ok).toBe(true)
+    const again = must(finishOrderProduction(order.id)(r.db, admin()))
+    expect(again.db).toBe(r.db)
   })
 
   it('completes the order only when the last process finishes, making it dispatchable', () => {

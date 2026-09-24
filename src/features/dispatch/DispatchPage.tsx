@@ -8,9 +8,10 @@ import { isReceived, orderBalance } from '../../lib/billing'
 import { productionDates } from '../../lib/schedule'
 import { companyInvoiceIssues, confirmDispatch, confirmDispatchReceived, finalizedCostingFor, orderInvoices, validateDispatchRequest } from '../../domain/dispatch'
 import type { DispatchRequest } from '../../domain/dispatch'
+import { finishOrderProduction } from '../../domain/production'
 import { cx, fmtDate, fmtDateTime, moneyPaise, moneyPrecise, pct, pieces, uid } from '../../lib/format'
 import { Badge, Button, Card, CardHead, ConfirmDialog, EmptyState, Field, Input, ProgressBar, Segmented, Textarea } from '../../components/ui'
-import { Detail, LinkButton, NumberInput, PageHeader, StatStrip, StatTile, useDocumentTitle } from '../../components/page'
+import { Detail, NumberInput, PageHeader, StatStrip, StatTile, useDocumentTitle } from '../../components/page'
 import { CompanyProfileDialog } from '../../components/AdminDialogs'
 import { DocumentPreview, DownloadButton, ExcelButton, InvoiceDocActions, statementDoc } from '../../components/DocumentPreview'
 import type { PreviewDoc } from '../../components/DocumentPreview'
@@ -104,8 +105,8 @@ export function DispatchPage() {
             <EmptyState
               icon={<Truck className="h-6 w-6" />}
               title={filter === 'ready' ? 'Nothing to ship' : 'No orders here'}
-              message={filter === 'ready' ? 'Orders appear here automatically when all their production stages are completed.' : 'Choose another list.'}
-              action={filter === 'ready' ? <LinkButton to="/production" variant="secondary">Open Production</LinkButton> : undefined}
+              message={filter === 'ready' ? 'Open “In production”, choose a job and mark its work finished — it then appears here.' : 'Choose another list.'}
+              action={filter === 'ready' ? <Button variant="secondary" onClick={() => set({ filter: 'production' })}>Show in production</Button> : undefined}
             />
           ) : (
             <ul>
@@ -331,7 +332,7 @@ function OrderDispatch({ order, onPreview, companyBlocked }: { order: Production
       ) : null}
 
       {order.status !== 'Completed' ? (
-        <Card className="vx-anim-up p-5 text-sm text-muted">Production is not complete. This order becomes dispatchable automatically when its last stage is closed.</Card>
+        <FinishWork order={order} />
       ) : balance.remainingQty > 0 ? (
         <Card className="vx-anim-up">
           <CardHead title={`New dispatch #${dispatches.length + 1}`} subtitle="Dispatch the full remaining quantity or any part of it" />
@@ -504,5 +505,41 @@ function OrderDispatch({ order, onPreview, companyBlocked }: { order: Production
         onConfirm={confirm}
       />
     </div>
+  )
+}
+
+/** Units report on paper: when they say the job is done, the whole order is marked finished here. */
+function FinishWork({ order }: { order: ProductionOrder }) {
+  const { run, pushToast, can } = useStore()
+  const [open, setOpen] = useState(false)
+  const units = [...new Set(order.stages.flatMap((s) => s.processes.map((p) => p.unitId)).filter(Boolean))]
+  return (
+    <Card className="vx-anim-up p-5">
+      <p className="text-sm font-semibold text-ink">Still in production</p>
+      <p className="mt-1 text-sm text-muted">
+        When {units.length ? units.join(', ') : 'the units'} report that {order.code} is done, mark the work finished. The order then moves to “To ship”.
+      </p>
+      {can('dispatch') ? (
+        <Button className="mt-3" icon={<CheckCircle2 className="h-4 w-4" />} onClick={() => setOpen(true)}>
+          Work finished…
+        </Button>
+      ) : null}
+      <ConfirmDialog
+        open={open}
+        title={`Mark ${order.code} finished?`}
+        body={`All work on ${pieces(order.quantity)} of ${order.productName} is recorded as completed today, and the order becomes ready to dispatch.`}
+        confirmLabel="Mark work finished"
+        onCancel={() => setOpen(false)}
+        onConfirm={async () => {
+          setOpen(false)
+          const r = await run(finishOrderProduction(order.id))
+          if (!r.ok) {
+            pushToast({ title: 'Could not mark it finished', message: r.error, level: 'danger' })
+            return
+          }
+          pushToast({ title: `${order.code} work finished`, message: 'The order is now ready to dispatch.', level: 'success' })
+        }}
+      />
+    </Card>
   )
 }

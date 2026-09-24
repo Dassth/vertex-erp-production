@@ -139,6 +139,31 @@ export const unitJobSheetDoc = (read: () => VertexDB, orderId: string, unitId: s
   }
 }
 
+/** Everything planned for one unit today — the list sent to the unit's in-charge each morning. */
+export const unitTodayDoc = (read: () => VertexDB, unitId: string): PreviewDoc => {
+  const unit = read().units.find((u) => u.id === unitId)
+  const label = unit?.shortName || unit?.name || unitId
+  const today = new Date()
+  const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  return {
+    title: `${label} — today’s work`,
+    fileName: `${label}-work-${iso}.pdf`.replace(/[^A-Za-z0-9.-]+/g, '-'),
+    build: async () => {
+      const db = read()
+      const [{ workListDefinition }, { renderPdf }, { unitWork }, { onDay }] = await Promise.all([import('../lib/pdfDocs'), import('../lib/pdfRender'), import('../lib/selectors'), import('../lib/unitDay')])
+      const now = new Date()
+      const work = unitWork(db.orders, unitId, now)
+      const rows = [...work.ready, ...work.waiting]
+        .filter((r) => onDay(r.process.plannedStart, r.process.plannedEnd, now))
+        .sort((a, b) => a.process.plannedStart.localeCompare(b.process.plannedStart))
+      if (!rows.length) throw new DocumentBlockedError('Nothing is planned for this unit today.')
+      const name = (id: string) => db.units.find((u) => u.id === id)?.shortName ?? id
+      const scope = now.toLocaleDateString('en-IN', { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' })
+      return renderPdf(workListDefinition(rows, { title: `${db.company.name} — ${unit?.name ?? label}: today’s work`, scope, unitName: name }, now, watermarkOn(db.company)))
+    },
+  }
+}
+
 /** The costing sheet as a PDF. Internal figures — it is never sent to a customer. */
 export const costingDoc = (read: () => VertexDB, costingId: string): PreviewDoc => {
   const code = read().costings.find((c) => c.id === costingId)?.code ?? costingId

@@ -774,8 +774,9 @@ export function jobCardDefinition(card: JobCard, company: CompanySnapshot, gener
 
 /**
  * The sheet an administrator prints or sends to a unit's in-charge: one job,
- * only that unit's processes, the materials for its stages, and room to sign
- * each process off. Pass a card already narrowed with `unitJobSheet`.
+ * only that unit's processes, the materials for its stages, and room to tick
+ * and sign each process off by hand — units report on paper, not in the ERP.
+ * Pass a card already narrowed with `unitJobSheet`.
  */
 export function unitJobSheetDefinition(card: JobCard, unit: { name: string; speciality: string }, company: CompanySnapshot, generatedAt = new Date(), mark = false): TDocumentDefinitions {
   const p = card.plan
@@ -797,7 +798,7 @@ export function unitJobSheetDefinition(card: JobCard, unit: { name: string; spec
           ['Job ID', code],
           ['Priority', p.priority],
           ['Delivery', day(p.deliveryDate)],
-          ['Progress', `${card.progress.done} of ${card.progress.total} done${card.progress.running ? ` · ${card.progress.running} running` : ''}`],
+          ['Processes', String(card.processes.length)],
           ['Printed', generated],
         ]),
         partyBoxes(
@@ -817,24 +818,16 @@ export function unitJobSheetDefinition(card: JobCard, unit: { name: string; spec
               table: {
                 headerRows: 1,
                 dontBreakRows: true,
-                widths: [12, '*', 90, 90, 70, 52, 50],
+                widths: [14, '*', 110, 40, 90],
                 body: [
-                  th(['#', 'Stage / process', 'Person', 'Machine', 'Planned', 'Status', 'Done / sign']),
-                  ...card.processes.flatMap((x, i): TableCell[][] => {
-                    const row: TableCell[] = [
-                      String(i + 1),
-                      { text: [{ text: x.name, bold: true }, `\n${x.stage}`, x.method ? { text: ` · ${x.method}`, color: MUTED } : ''] },
-                      { text: x.person, color: x.person === 'Not assigned' ? WARN : INK },
-                      { text: x.machine, color: x.machine === 'Not assigned' ? WARN : INK },
-                      x.planned || '—',
-                      { text: x.status, bold: x.done || x.status === 'In Progress', color: x.status === 'Blocked' || x.status === 'Delayed' ? WARN : INK },
-                      '',
-                    ]
-                    const remarks = [x.problem && `Problem: ${x.problem}`, x.note && `Note: ${x.note}`].filter(Boolean).join('   ')
-                    return remarks
-                      ? [row, [{ text: '', border: [false, false, false, false] }, { text: remarks, colSpan: 6, fontSize: 7, color: x.problem ? WARN : MUTED, fillColor: x.problem ? WARN_WASH : undefined }, '', '', '', '', '']]
-                      : [row]
-                  }),
+                  th(['#', 'Stage / process', 'Planned', 'Done', 'Sign']),
+                  ...card.processes.map((x, i): TableCell[] => [
+                    String(i + 1),
+                    { text: [{ text: x.name, bold: true }, `\n${x.stage}`, x.method ? { text: ` · ${x.method}`, color: MUTED } : ''] },
+                    x.planned || '—',
+                    '',
+                    '',
+                  ]),
                 ],
               },
             },

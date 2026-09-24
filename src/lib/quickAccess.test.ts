@@ -21,8 +21,7 @@ describe('quick access ranking', () => {
   it('reads plain English sentences the way a person writes them', () => {
     // Either GST answer is right; what matters is that the topic beats generic help.
     expect(['report.gst', 'invoice.gst']).toContain(top('i have a question about gst'))
-    // Administrators now record process problems too, so either problem answer is right.
-    expect(['help.problem', 'help.support']).toContain(top('i have a problem'))
+    expect(top('i have a problem')).toBe('help.problem')
     expect(top('i need customer support')).toBe('help.guide')
     expect(top('how do i make a plan')).toBe('plan.new')
     expect(top('where is production')).toBe('go.production')

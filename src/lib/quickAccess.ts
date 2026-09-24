@@ -175,8 +175,8 @@ export function places(): QuickTarget[] {
 
     { id: 'help.guide', title: 'How the workflow works', hint: 'Step-by-step guide: Master → Planning → Costing → Production → Billing', to: '/home?guide=1', group: 'Do', keywords: ['help', 'guide', 'how', 'question', 'doubt', 'support', 'learn', 'explain', 'steps', 'workflow', 'training', 'tutorial'] },
     { id: 'help.problem', title: 'Something is wrong — what needs attention', hint: 'Problems reported by units, late jobs and unconfirmed deliveries', to: '/home', group: 'Do', need: 'billing', keywords: ['problem', 'issue', 'wrong', 'error', 'stuck', 'delay', 'late', 'attention', 'complaint', 'broken', 'help'] },
-    { id: 'help.support', title: 'Report a problem on a process', hint: 'Units → the unit → the process → Report a problem', to: '/units', group: 'Do', need: 'production.work', keywords: ['problem', 'issue', 'report', 'machine', 'breakdown', 'stop', 'help', 'support', 'stuck'] },
-    { id: 'go.units', title: 'Units — allocate, record and print each unit’s jobs', hint: 'Open a unit, then a job, to print its job sheet', to: '/units', group: 'Go to', need: 'units.monitor', keywords: ['print', 'sheet', 'whatsapp', 'send', 'allocate', 'allocation', 'start', 'complete', 'unit', 'units', 'shop', 'floor', 'monitor', 'watch', 'team', 'load', 'u1', 'u2', 'u3', 'u4'] },
+    { id: 'work.finished', title: 'Mark a job’s work finished', hint: 'Dispatch → In production → the job → Work finished', to: '/dispatch?filter=production', group: 'Do', need: 'dispatch', keywords: ['finished', 'finish', 'done', 'complete', 'completed', 'work', 'job', 'over', 'ready'] },
+    { id: 'go.units', title: 'Units — each unit’s work and today’s download', hint: 'Open a unit to download today’s work or a job’s sheet', to: '/units', group: 'Go to', need: 'units.monitor', keywords: ['print', 'sheet', 'whatsapp', 'send', 'today', 'download', 'unit', 'units', 'shop', 'floor', 'monitor', 'watch', 'team', 'load', 'u1', 'u2', 'u3', 'u4'] },
 
     // Go to
     { id: 'go.home', title: 'Home', hint: 'What needs you today', to: '/home', group: 'Go to', need: 'billing', keywords: ['home', 'dashboard', 'start', 'overview'] },
@@ -223,7 +223,7 @@ export function records(db: VertexDB, limitPerKind = 60): QuickTarget[] {
 const stem = (w: string) => (w.length > 3 && w.endsWith('s') ? w.slice(0, -1) : w)
 
 /** Entries that answer "help me" rather than "take me somewhere". */
-const HELP_IDS = new Set(['help.guide', 'help.problem', 'help.support'])
+const HELP_IDS = new Set(['help.guide', 'help.problem'])
 
 function scoreOne(target: QuickTarget, tokens: Token[], phrase: string, intent: Intent): number {
   const title = target.title.toLowerCase()
