@@ -1,7 +1,7 @@
 import { UnitResourceSetup } from './UnitResourceSetup'
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { CheckCircle2, CircleSlash, Cog, Factory, Hourglass, Play, Send, Timer, UserCog } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, CircleSlash, Cog, Factory, Hourglass, Play, Printer, Send, Timer, UserCog } from 'lucide-react'
 import { useStore } from '../../store/store'
 import type { UnitId } from '../../lib/types'
 import { processReady, unitWork } from '../../lib/selectors'
@@ -11,19 +11,26 @@ import { activeMachines, activePeople } from '../../domain/resources'
 import { assignProcessResources, completeProcess, reportProcessProblem, saveProcessNote, startProcess } from '../../domain/production'
 import { countdown, cx, fmtDate, fmtDateTime, pieces, planWindow } from '../../lib/format'
 import { Badge, Button, Card, ConfirmDialog, EmptyState, Field, Modal, Segmented, Select, Textarea } from '../../components/ui'
-import { PageHeader, StatStrip, StatTile, useDocumentTitle } from '../../components/page'
+import { LinkButton, PageHeader, StatStrip, StatTile, useDocumentTitle } from '../../components/page'
+import { DocumentPreview, unitJobSheetDoc, useLatestDb } from '../../components/DocumentPreview'
+import type { PreviewDoc } from '../../components/DocumentPreview'
 import { HealthBadge, PriorityBadge, ProcessBadge } from '../../components/status'
 
 type Tab = 'ready' | 'waiting' | 'completed'
 
-/* The shop-floor screen. A unit user sees only the PROCESSES allocated to their
-   unit — never costing, never another unit's work. Each process carries its own
-   responsible person and machine. */
+/* One unit's work, run by an administrator: units have no accounts. Every
+   PROCESS allocated to the unit is listed with its own responsible person and
+   machine; the administrator allocates, prints the unit's job sheet for its
+   in-charge, and records start and completion as the unit reports back. */
 
 export function UnitWorkPage({ unitId }: { unitId: UnitId }) {
   const { db } = useStore()
+  const read = useLatestDb()
   const unit = db.units.find((u) => u.id === unitId)
-  useDocumentTitle(`${unit?.shortName ?? 'Unit'} · Process work`)
+  const unitLabel = unit?.shortName ?? unitId
+  useDocumentTitle(`${unitLabel} · Units`)
+  const [preview, setPreview] = useState<PreviewDoc | null>(null)
+  const printJob = (orderId: string) => setPreview(unitJobSheetDoc(read, orderId, unitId))
   const [params, setParams] = useSearchParams()
   const tab = (params.get('tab') ?? 'ready') as Tab
   const work = useMemo(() => unitWork(db.orders, unitId), [db.orders, unitId])
@@ -38,16 +45,20 @@ export function UnitWorkPage({ unitId }: { unitId: UnitId }) {
 
   return (
     <div className="space-y-6">
+      <LinkButton to="/units" variant="ghost" icon={<ArrowLeft className="h-4 w-4" />}>
+        All units
+      </LinkButton>
+
       <PageHeader
-        eyebrow="Production · Shop floor"
-        title={`${unit?.name ?? unitId} — process work`}
-        subtitle="Only the processes allocated to your unit are listed. Record who is responsible and which machine is used, start the process, then complete it. Completing a process never closes anyone else's work."
+        eyebrow={`Units · ${unitLabel}`}
+        title={unit?.name ?? unitId}
+        subtitle={`Every process allocated to ${unitLabel}. Choose the person and machine, print the job sheet for the unit’s in-charge (open a job number), then record start and completion as the unit reports back.`}
         icon={<Factory className="h-4 w-4" />}
       />
 
       <StatStrip className="grid-cols-2 lg:grid-cols-4">
         <StatTile label="Ready now" value={String(work.ready.length)} icon={<Timer className="h-4 w-4" />} tone="indigo" hint="Earlier processes are done" onClick={() => setTab('ready')} active={tab === 'ready'} />
-        <StatTile label="In progress" value={String(running)} icon={<Play className="h-4 w-4" />} tone="blue" hint="Started by your unit" />
+        <StatTile label="In progress" value={String(running)} icon={<Play className="h-4 w-4" />} tone="blue" hint="Started, not yet completed" />
         <StatTile label="Waiting" value={String(work.waiting.length)} icon={<Hourglass className="h-4 w-4" />} tone="slate" hint="An earlier process is still open" onClick={() => setTab('waiting')} active={tab === 'waiting'} />
         <StatTile label="Needs a person" value={String(work.needsResources.length)} icon={<UserCog className="h-4 w-4" />} tone="amber" hint="Assign before starting" />
       </StatStrip>
@@ -66,22 +77,24 @@ export function UnitWorkPage({ unitId }: { unitId: UnitId }) {
         <Card>
           <EmptyState
             icon={<CheckCircle2 className="h-6 w-6" />}
-            title={tab === 'ready' ? 'No process is ready for your unit' : tab === 'waiting' ? 'Nothing waiting' : 'No completed processes yet'}
+            title={tab === 'ready' ? `No process is ready for ${unitLabel}` : tab === 'waiting' ? 'Nothing waiting' : 'No completed processes yet'}
             message="Work appears here automatically when an order is released to production or an earlier process is completed."
           />
         </Card>
       ) : (
         <div className="space-y-4">
           {list.map((row) => (
-            <ProcessWorkCard key={row.key} row={row} />
+            <ProcessWorkCard key={row.key} row={row} onPrint={() => printJob(row.order.id)} />
           ))}
         </div>
       )}
+
+      <DocumentPreview doc={preview} onClose={() => setPreview(null)} />
     </div>
   )
 }
 
-function ProcessWorkCard({ row }: { row: ProcessWorkRow }) {
+function ProcessWorkCard({ row, onPrint }: { row: ProcessWorkRow; onPrint: () => void }) {
   const { db, run, pushToast } = useStore()
   const { order, stage, process } = row
   const [confirm, setConfirm] = useState(false)
@@ -107,7 +120,11 @@ function ProcessWorkCard({ row }: { row: ProcessWorkRow }) {
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-rule bg-surface-2 px-5 py-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="vx-code text-md font-semibold text-ink">{order.code}</h3>
+            <h3 className="vx-code text-md font-semibold text-ink">
+              <button type="button" onClick={onPrint} className="vx-focus rounded-xs hover:text-accent-text hover:underline" aria-label={`${order.code} — open the job sheet to print or send`}>
+                {order.code}
+              </button>
+            </h3>
             <PriorityBadge priority={order.priority} />
             <HealthBadge health={jobHealth(order)} />
           </div>
@@ -119,6 +136,9 @@ function ProcessWorkCard({ row }: { row: ProcessWorkRow }) {
           <p className="vx-mono-label !mb-0">Quantity</p>
           <p className="vx-code text-lg font-semibold text-ink">{pieces(order.quantity)}</p>
           <p className="text-xs text-muted">Delivery {fmtDate(order.deliveryDate, 'dd MMM')}</p>
+          <Button size="sm" variant="secondary" className="mt-2" icon={<Printer className="h-3.5 w-3.5" />} onClick={onPrint}>
+            Job sheet…
+          </Button>
         </div>
       </div>
 
@@ -320,7 +340,7 @@ function ProcessWorkCard({ row }: { row: ProcessWorkRow }) {
 /* --------------------------- Resource allocation -------------------------- */
 
 export function ResourceDialog({ open, onClose, row }: { open: boolean; onClose: () => void; row: ProcessWorkRow }) {
-  const { db, run, pushToast } = useStore()
+  const { db, run, pushToast, can } = useStore()
   const { order, process } = row
   const people = activePeople(db, process.unitId)
   const machines = activeMachines(db, process.unitId)
@@ -366,7 +386,7 @@ export function ResourceDialog({ open, onClose, row }: { open: boolean; onClose:
       }
     >
       <div className="space-y-4">
-        <Field label="Responsible person" required error={errors.responsiblePersonId} hint={people.length ? 'People registered for your unit.' : 'No staff yet — open Unit settings below and type a name to add one.'}>
+        <Field label="Responsible person" required error={errors.responsiblePersonId} hint={people.length ? `People registered for ${process.unitId}.` : can('administration') ? 'No staff yet — open Unit settings below and type a name to add one.' : 'No staff yet — Administrator 1 adds them in Settings → People.'}>
           <Select value={personId} onChange={(e) => setPersonId(e.target.value)}>
             <option value="">Select a person…</option>
             {people.map((p) => (
@@ -412,13 +432,15 @@ export function ResourceDialog({ open, onClose, row }: { open: boolean; onClose:
               </span>
               <span className="block text-xs text-muted">
                 {process.requiresMachine
-                  ? 'Master expects a machine here. Tick this if your unit runs it by hand — it is recorded as manual work.'
+                  ? 'Master expects a machine here. Tick this if the unit runs it by hand — it is recorded as manual work.'
                   : 'Record this process as manual work.'}
               </span>
             </span>
           </label>
 
-        <UnitResourceSetup unitId={process.unitId} onPersonAdded={setPersonId} onMachineAdded={id => { setMachineId(id); setNoMachine(false) }} />
+        {can('administration') ? (
+          <UnitResourceSetup unitId={process.unitId} onPersonAdded={setPersonId} onMachineAdded={id => { setMachineId(id); setNoMachine(false) }} />
+        ) : null}
 
         {process.historical ? (
           <p className="rounded-md bg-surface-2 px-3 py-2 text-xs text-muted">

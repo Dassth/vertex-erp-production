@@ -6,9 +6,12 @@
  * domain operations and data selectors all answer from this one table.
  *
  *   full       (Administrator 1) — the whole workflow plus administration
- *   operations (Administrator 2) — monitor production, run dispatch, read billing
- *   billing    (Administrator 3) — billing documents only
- *   unit users                   — only the processes allocated to their unit
+ *   operations (Administrator 2) — run production, dispatch, read billing
+ *
+ * Production units have no accounts: administrators allocate and record every
+ * unit's work and send each unit its printed job sheet. The `billing` tier and
+ * the `unit` role remain only so older records still read correctly; no
+ * account is given them, and a `unit` account has no capabilities at all.
  *
  * LIMITATION: these are browser-side controls over a browser-side database.
  * They shape what the application offers and refuses, and they are NOT a
@@ -30,28 +33,26 @@ export type Capability =
   | 'costing.internals'
   /** Admin production dashboard — monitoring only. */
   | 'production.monitor'
-  /** Shop-floor process updates for one's own unit. */
+  /** Allocate people and machines and record process progress, for every unit. */
   | 'production.work'
   | 'dispatch'
   | 'billing'
-  /** Watch every unit's work, read-only. Held by all administrator tiers. */
+  /** Open the Units screens: each unit's work and its printable job sheets. */
   | 'units.monitor'
   /** Company profile, units, people, machines, accounts, data reset. */
   | 'administration'
 
 const TIER_CAPABILITIES: Record<AdminTier, Capability[]> = {
-  full: ['master', 'planning', 'costing', 'costing.internals', 'production.monitor', 'units.monitor', 'dispatch', 'billing', 'administration'],
-  operations: ['production.monitor', 'units.monitor', 'dispatch', 'billing'],
+  full: ['master', 'planning', 'costing', 'costing.internals', 'production.monitor', 'production.work', 'units.monitor', 'dispatch', 'billing', 'administration'],
+  operations: ['production.monitor', 'production.work', 'units.monitor', 'dispatch', 'billing'],
   billing: ['units.monitor', 'billing'],
 }
-
-const UNIT_CAPABILITIES: Capability[] = ['production.work']
 
 export type Principal = Pick<User, 'role' | 'adminTier' | 'unitId'> | null | undefined
 
 export function capabilitiesOf(user: Principal): Capability[] {
   if (!user) return []
-  if (user.role === 'unit') return UNIT_CAPABILITIES
+  if (user.role !== 'admin') return []
   return TIER_CAPABILITIES[user.adminTier ?? 'full'] ?? []
 }
 
@@ -68,7 +69,6 @@ export function canAny(user: Principal, capabilities: Capability[]): boolean {
 /** Where an account belongs after signing in, and where it recovers to. */
 export function landingPath(user: Principal): string {
   if (!user) return '/login'
-  if (user.role === 'unit') return '/unit'
   // Every administrator starts on Home, which shows only what their tier may see.
   if (user.role === 'admin') return '/home'
   return '/account'
@@ -84,7 +84,6 @@ const ROUTE_CAPABILITIES: Array<[string, Capability]> = [
   ['/reports', 'billing'],
   ['/customers', 'billing'],
   ['/units', 'units.monitor'],
-  ['/unit', 'production.work'],
   ['/invoices', 'billing'],
   ['/settings', 'administration'],
 ]
@@ -97,7 +96,7 @@ export function capabilityForPath(pathname: string): Capability | null {
   return null
 }
 
-/** Production is shared: unit users work there, tiered admins monitor there. */
+/** Production opens for anyone who monitors or records production work. */
 export function canOpenPath(user: Principal, pathname: string): boolean {
   const path = pathname.toLowerCase()
   if (path === '/production' || path.startsWith('/production/')) return canAny(user, ['production.monitor', 'production.work'])
@@ -115,7 +114,7 @@ export const ADMIN_TIER_LABEL: Record<AdminTier, string> = {
 
 export function describeAccess(user: Principal): string {
   if (!user) return 'Signed out'
-  if (user.role === 'unit') return 'Own unit process work'
+  if (user.role !== 'admin') return 'No access'
   return ADMIN_TIER_LABEL[user.adminTier ?? 'full']
 }
 

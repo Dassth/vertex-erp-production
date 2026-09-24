@@ -38,7 +38,7 @@ function remember(id: string, usage: Record<string, number>): Record<string, num
 }
 
 export function QuickAccessPanel({ variant, onDone }: { variant: 'page' | 'dialog'; onDone?: () => void }) {
-  const { db, user, can } = useStore()
+  const { db, can } = useStore()
   const navigate = useNavigate()
   const listId = useId()
   const [query, setQuery] = useState('')
@@ -49,10 +49,9 @@ export function QuickAccessPanel({ variant, onDone }: { variant: 'page' | 'dialo
   const box = useRef<HTMLDivElement>(null)
 
   const allowed = useMemo(() => {
-    const isUnit = user?.role === 'unit'
-    const permitted = (need?: Capability | 'unit') => (!need ? true : need === 'unit' ? isUnit : !isUnit && can(need))
+    const permitted = (need?: Capability) => (!need ? true : can(need))
     return [...places(), ...records(db)].filter((t) => permitted(t.need))
-  }, [db, user, can])
+  }, [db, can])
 
   // Today's real needs, so an empty box still helps.
   const hints = useMemo(() => suggestions(db, allowed, { usage }), [db, allowed, usage])

@@ -62,20 +62,23 @@ describe('server state and permissions', () => {
     for (const u of r.db.users) expect(u.passwordSalt).toBeNull()
     expect(JSON.stringify(r.db)).not.toMatch(/[0-9a-f]{64}/)
     // Password hashes cannot be set through the generic command endpoint.
-    const sneaky = await service.command(token, 'setPasswordHash', ['USR-U3', 'x', 'y', 'first-time'])
+    const sneaky = await service.command(token, 'setPasswordHash', ['USR-ADM2', 'x', 'y', 'first-time'])
     expect(sneaky.ok).toBe(false)
   })
 
   it('enforces role permissions server-side and confirms each write with a new revision', async () => {
     const admin1 = await signIn('USR-ADM1')
     const admin2 = await signIn('USR-ADM2')
-    const admin3 = await signIn('USR-ADM3')
     const before = (await service.state()).revision
 
+    // Only two accounts exist: Administrator 3 and unit logins were retired.
+    expect((await service.createFirstPassword('USR-ADM3', PASSWORD, PASSWORD)).ok).toBe(false)
+    expect((await service.createFirstPassword('USR-U1', PASSWORD, PASSWORD)).ok).toBe(false)
+
     const denied2 = await service.command(admin2, 'importProductTemplates', [JEWELLERY_BATCH_ID])
-    const denied3 = await service.command(admin3, 'saveCustomer', [{ code: '', company: 'X', contactPerson: '', phone: '', email: '', billingAddress: 'Y', deliveryAddress: '', gstin: '', placeOfSupply: '', paymentTerms: '', notes: '' }])
+    const denied2b = await service.command(admin2, 'saveCustomer', [{ code: '', company: 'X', contactPerson: '', phone: '', email: '', billingAddress: 'Y', deliveryAddress: '', gstin: '', placeOfSupply: '', paymentTerms: '', notes: '' }])
     expect(denied2).toMatchObject({ ok: false, status: 403 })
-    expect(denied3).toMatchObject({ ok: false, status: 403 })
+    expect(denied2b).toMatchObject({ ok: false, status: 403 })
     expect((await service.state()).revision).toBe(before)
 
     const imported = await service.command(admin1, 'importProductTemplates', [JEWELLERY_BATCH_ID])

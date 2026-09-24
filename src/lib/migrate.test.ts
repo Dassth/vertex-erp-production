@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { VertexDB } from './types'
-import { MIGRATION_PROCESS_ALLOCATION, migrateToProcessAllocation } from './migrate'
+import { MIGRATION_ADMIN_ONLY_ACCOUNTS, MIGRATION_PROCESS_ALLOCATION, migrateToProcessAllocation } from './migrate'
 import { normalizeDB } from './db'
 import { buildEmptyDB } from './defaults'
 import { ctxFor, must } from '../test/fixtures'
@@ -143,8 +143,12 @@ function legacyDB(): VertexDB {
 
   return {
     ...base,
-    // Accounts written before tiers existed.
-    users: base.users.map((u) => ({ ...u, adminTier: null })),
+    // Accounts written before tiers existed — including Administrator 3 and the unit logins of that build.
+    users: [
+      ...base.users,
+      { ...base.users[0], id: 'USR-ADM3', name: 'Administrator 3', email: 'admin3@vertex.local', initials: 'A3' },
+      ...[1, 2, 3, 4].map((n) => ({ ...base.users[0], id: `USR-U${n}`, name: `Unit ${n} Supervisor`, email: `unit${n}@vertex.local`, role: 'unit' as const, unitId: `U${n}`, initials: `U${n}` })),
+    ].map((u) => ({ ...u, adminTier: null })),
     products: [product],
     plans: [plan],
     orders: [order],
@@ -194,6 +198,22 @@ describe('migration to process-level allocation', () => {
     expect(processes[0].status).toBe('Completed')
   })
 
+  it('retires Administrator 3 and every unit login on load, keeping their history', () => {
+    const legacy = legacyDB()
+    expect(legacy.users.map((u) => u.id)).toEqual(['USR-ADM1', 'USR-ADM2', 'USR-ADM3', 'USR-U1', 'USR-U2', 'USR-U3', 'USR-U4'])
+    const db = normalizeDB(legacy)
+    expect(db.users.map((u) => [u.id, u.adminTier])).toEqual([
+      ['USR-ADM1', 'full'],
+      ['USR-ADM2', 'operations'],
+    ])
+    expect(db.migrations.filter((m) => m === MIGRATION_ADMIN_ONLY_ACCOUNTS)).toHaveLength(1)
+    // The unit's past work still names who did it.
+    expect(db.audit.some((a) => a.userId === 'USR-U1' && a.user === 'Unit 1 Supervisor')).toBe(true)
+    expect(db.orders[0].stages[0].processes[0].doneBy).toBe('Unit 1 Supervisor')
+    // Idempotent: a second load changes nothing.
+    expect(JSON.stringify(normalizeDB(JSON.parse(JSON.stringify(db))))).toBe(JSON.stringify(db))
+  })
+
   it('assigns administrator tiers and defaults product processes to manual', () => {
     const db = migrateToProcessAllocation(legacyDB())
     expect(db.users.find((u) => u.id === 'USR-ADM1')!.adminTier).toBe('full')
@@ -233,7 +253,8 @@ describe('migration to process-level allocation', () => {
 
 describe('migrated records accept new execution detail', () => {
   const admin = () => ctxFor({ id: 'USR-ADM1', name: 'Administrator 1', role: 'admin' as const, unitId: null, adminTier: 'full' as const })
-  const unit2 = () => ctxFor({ id: 'USR-U2', name: 'Unit 2 Supervisor', role: 'unit' as const, unitId: 'U2', adminTier: null })
+  /** Units have no accounts: Administrator 2 records Unit 2's work. */
+  const unit2 = () => ctxFor({ id: 'USR-ADM2', name: 'Administrator 2', role: 'admin' as const, unitId: null, adminTier: 'operations' as const })
 
   /** Migrated database plus one person and one machine for Unit 2. */
   function migratedWithResources() {
@@ -245,7 +266,7 @@ describe('migrated records accept new execution detail', () => {
     return { db, personId: person.value.id, machineId: machine.value.id }
   }
 
-  it('lets a unit record person, machine and real timings on an UNFINISHED migrated process', () => {
+  it('lets an administrator record person, machine and real timings on an UNFINISHED migrated process', () => {
     const base = migratedWithResources()
     const open = base.db.orders[0].stages[1].processes[0]
     expect(open.historical).toBe(true)
@@ -264,7 +285,7 @@ describe('migrated records accept new execution detail', () => {
     expect(after.status).toBe('Completed')
     expect(after.actualStart).toBeTruthy()
     expect(after.actualEnd).toBeTruthy()
-    expect(after.doneBy).toBe('Unit 2 Supervisor')
+    expect(after.doneBy).toBe('Administrator 2')
     // …while the record keeps its provenance, which is not a lock.
     expect(after.historical).toBe(true)
     expect(finished.db.orders[0].stages[1].status).toBe('Completed')

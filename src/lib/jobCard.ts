@@ -21,6 +21,8 @@ import type { Plan, VertexDB } from './types'
 export interface JobCardProcess {
   stage: string
   name: string
+  /** The unit the process is allocated to ('' when not allocated yet). */
+  unitId: string
   unit: string
   method: string
   resource: string
@@ -111,6 +113,7 @@ export function jobCard(db: VertexDB, planId: string, mode: JobCardMode = 'live'
           return {
             stage: s.name,
             name: p.name,
+            unitId: p.unitId,
             unit: unitName(p.unitId),
             method: def?.method ?? '',
             resource: [person(p.responsiblePersonId), p.noMachineRequired ? 'No machine' : machine(p.machineId)].filter(Boolean).join(' · ') || (p.requiresMachine ? 'Machine to assign' : '—'),
@@ -129,6 +132,7 @@ export function jobCard(db: VertexDB, planId: string, mode: JobCardMode = 'live'
         s.processes.map((p) => ({
           stage: s.name,
           name: p.name,
+          unitId: plan.processUnits[p.id] ?? plan.stageUnits?.[s.id] ?? '',
           unit: unitName(plan.processUnits[p.id] ?? plan.stageUnits?.[s.id]),
           method: p.method ?? '',
           resource: p.requiresMachine ? 'Machine required' : '—',
@@ -215,5 +219,25 @@ export function jobCard(db: VertexDB, planId: string, mode: JobCardMode = 'live'
     materials,
     materialsNote: lines ? 'Quantities from the finalized costing, including wastage and purchase rounding.' : 'Quantities per plan quantity, before wastage — finalize costing for issue quantities.',
     dispatches: mode === 'plan' ? [] : dispatches,
+  }
+}
+
+/**
+ * One unit's share of a job — what its in-charge receives on paper or on
+ * WhatsApp: only the processes allocated to that unit and the materials of
+ * the stages it works on. No customer contact, costing or dispatch details.
+ */
+export function unitJobSheet(card: JobCard, unitId: string): JobCard {
+  const processes = card.processes.filter((p) => p.unitId === unitId)
+  const stages = new Set(processes.map((p) => p.stage))
+  const materials = card.materials.filter((m) => stages.has(m.usedIn.split(' / ')[0]))
+  return {
+    ...card,
+    customer: { ...card.customer, contact: '', gstin: '', address: '' },
+    costing: '',
+    progress: { done: processes.filter((p) => p.done).length, running: processes.filter((p) => p.status === 'In Progress').length, total: processes.length },
+    processes,
+    materials,
+    dispatches: [],
   }
 }

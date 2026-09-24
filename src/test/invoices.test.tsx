@@ -74,10 +74,9 @@ beforeEach(() => {
 afterEach(() => cleanup())
 
 const PENDING = 'Confirm delivery received in Dispatch to enable invoice download.'
-const PENDING_BILLING = 'Awaiting delivery confirmation from Administrator 1 or 2.'
 
 describe('Invoices page', () => {
-  it.each(['Administrator 1', 'Administrator 2', 'Administrator 3'])('%s sees dispatched / received / awaiting quantities and gated downloads', async (name) => {
+  it.each(['Administrator 1', 'Administrator 2'])('%s sees dispatched / received / awaiting quantities and gated downloads', async (name) => {
     const { router, view } = mount()
     const user = await signIn(name)
     const nav = (await screen.findAllByRole('navigation', { name: 'Modules' }))[0]
@@ -97,8 +96,8 @@ describe('Invoices page', () => {
     const [first, second] = stored().invoices
     expect((screen.getByRole('button', { name: `Download this dispatch invoice — invoice ${first.number}` }) as HTMLButtonElement).disabled).toBe(false)
     expect((screen.getByRole('button', { name: `Download this dispatch invoice — invoice ${second.number}` }) as HTMLButtonElement).disabled).toBe(true)
-    expect(screen.getByText(name === 'Administrator 3' ? PENDING_BILLING : PENDING)).toBeTruthy()
-    expect(screen.queryAllByRole('link', { name: /Confirm received/ })).toHaveLength(name === 'Administrator 3' ? 0 : 1)
+    expect(screen.getByText(PENDING)).toBeTruthy()
+    expect(screen.queryAllByRole('link', { name: /Confirm received/ })).toHaveLength(1)
 
     // Survives a reload.
     const url = `${router.state.location.pathname}${router.state.location.search}`
@@ -111,15 +110,11 @@ describe('Invoices page', () => {
     await user.click(await screen.findByRole('button', { name: 'CUS-0001-20260915-02' }))
     expect(await screen.findByText('Nothing dispatched yet')).toBeTruthy()
     expect((screen.getByRole('button', { name: 'Download PDF — cumulative invoice summary' }) as HTMLButtonElement).disabled).toBe(true)
-    expect(screen.getByText(name === 'Administrator 3' ? PENDING_BILLING : PENDING)).toBeTruthy()
+    expect(screen.getByText(PENDING)).toBeTruthy()
 
     // Viewing never creates financial records.
     expect(JSON.stringify({ invoices: stored().invoices, counters: stored().counters })).toBe(records)
 
-    if (name === 'Administrator 3') {
-      await again.router.navigate('/dispatch')
-      await waitFor(() => expect(again.router.state.location.pathname).toBe('/home'))
-    }
     if (name === 'Administrator 2') {
       await again.router.navigate('/costing')
       await waitFor(() => expect(again.router.state.location.pathname).toBe('/home'))
@@ -157,14 +152,4 @@ describe('Invoices page', () => {
     await expect(invoiceDoc(pending, () => db).build()).rejects.toBeInstanceOf(DocumentBlockedError)
   })
 
-  it('unit users do not get Invoices', async () => {
-    const { router } = mount()
-    await signIn('Unit 1 Supervisor')
-    await screen.findByRole('heading', { name: /Unit 1/ }, { timeout: 5000 })
-    const nav = screen.getAllByRole('navigation', { name: 'Modules' })[0]
-    expect(within(nav).queryByRole('link', { name: /Invoices/ })).toBeNull()
-    await router.navigate('/invoices')
-    // A unit account recovers to its own Home.
-    await waitFor(() => expect(router.state.location.pathname).toBe('/unit'))
-  }, 30000)
 })

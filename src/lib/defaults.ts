@@ -46,16 +46,14 @@ function account(
   }
 }
 
-/** Three administrators with separate identities AND different access. */
+/** Two administrators with separate identities AND different access. Units have no accounts. */
 export const DEFAULT_USERS: User[] = [
   account('USR-ADM1', 'Administrator 1', 'admin1@vertex.local', 'admin', null, 'Workflow administrator', 'A1', 'full'),
   account('USR-ADM2', 'Administrator 2', 'admin2@vertex.local', 'admin', null, 'Production & dispatch', 'A2', 'operations'),
-  account('USR-ADM3', 'Administrator 3', 'admin3@vertex.local', 'admin', null, 'Billing', 'A3', 'billing'),
-  account('USR-U1', 'Unit 1 Supervisor', 'unit1@vertex.local', 'unit', 'U1', 'Unit 1 shop floor', 'U1'),
-  account('USR-U2', 'Unit 2 Supervisor', 'unit2@vertex.local', 'unit', 'U2', 'Unit 2 shop floor', 'U2'),
-  account('USR-U3', 'Unit 3 Supervisor', 'unit3@vertex.local', 'unit', 'U3', 'Unit 3 shop floor', 'U3'),
-  account('USR-U4', 'Unit 4 Supervisor', 'unit4@vertex.local', 'unit', 'U4', 'Unit 4 shop floor', 'U4'),
 ]
+
+/** Accounts that older databases carry and this version removes: Administrator 3 and every unit login. */
+export const RETIRED_USER_IDS = new Set(['USR-ADM3', 'USR-U1', 'USR-U2', 'USR-U3', 'USR-U4'])
 
 export function defaultCompany(): CompanyProfile {
   return {

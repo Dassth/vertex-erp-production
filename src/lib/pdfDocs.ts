@@ -770,6 +770,107 @@ export function jobCardDefinition(card: JobCard, company: CompanySnapshot, gener
   }
 }
 
+/* ------------------------------ Unit job sheet ----------------------------- */
+
+/**
+ * The sheet an administrator prints or sends to a unit's in-charge: one job,
+ * only that unit's processes, the materials for its stages, and room to sign
+ * each process off. Pass a card already narrowed with `unitJobSheet`.
+ */
+export function unitJobSheetDefinition(card: JobCard, unit: { name: string; speciality: string }, company: CompanySnapshot, generatedAt = new Date(), mark = false): TDocumentDefinitions {
+  const p = card.plan
+  const code = card.orderCode ?? p.code
+  const generated = format(generatedAt, 'dd MMM yyyy, hh:mm a')
+  const th = (labels: string[], right: number[] = []): TableCell[] => labels.map((h, i) => ({ text: h, style: 'th', alignment: right.includes(i) ? 'right' : 'left' }))
+  const heading = (text: string): Content => ({ text: text.toUpperCase(), style: 'label', margin: [0, 12, 0, 4] })
+  const spec = [
+    p.dimensions ? { text: [{ text: 'Size: ', bold: true }, p.dimensions] } : null,
+    p.options ? { text: [{ text: 'Options: ', bold: true }, p.options] } : null,
+    p.instructions ? { text: [{ text: 'Instructions: ', bold: true }, p.instructions] } : null,
+  ].filter(present) as Content[]
+  return {
+    ...base(`Job sheet ${code} — ${unit.name}`, `${card.product.name} · ${unit.name}`, generatedAt.toISOString()),
+    footer: footer(`Job sheet · ${code} · ${unit.name} · printed ${generated}`, A4_WIDTH, mark),
+    content: (
+      [
+        ...companyHeader(company, `JOB SHEET — ${unit.name.toUpperCase()}`, [
+          ['Job ID', code],
+          ['Priority', p.priority],
+          ['Delivery', day(p.deliveryDate)],
+          ['Progress', `${card.progress.done} of ${card.progress.total} done${card.progress.running ? ` · ${card.progress.running} running` : ''}`],
+          ['Printed', generated],
+        ]),
+        partyBoxes(
+          {
+            title: 'Job',
+            lines: [`${card.product.name}${card.product.code ? ` (${card.product.code})` : ''}`, `Quantity ${qty(p.quantity)} ${card.product.uom}`, `For ${card.customer.company}`],
+          },
+          { title: 'Unit', lines: [unit.name, unit.speciality] },
+        ),
+        spec.length ? { layout: boxed, table: { widths: ['*'], body: [[{ stack: [{ text: 'SPECIFICATION', style: 'label', margin: [0, 0, 0, 3] }, ...spec] }]] } } : null,
+        heading(`Work for ${unit.name}`),
+        !card.processes.length
+          ? note(`No process of this job is allocated to ${unit.name}.`)
+          : {
+              layout: rules,
+              fontSize: 8,
+              table: {
+                headerRows: 1,
+                dontBreakRows: true,
+                widths: [12, '*', 90, 90, 70, 52, 50],
+                body: [
+                  th(['#', 'Stage / process', 'Person', 'Machine', 'Planned', 'Status', 'Done / sign']),
+                  ...card.processes.flatMap((x, i): TableCell[][] => {
+                    const row: TableCell[] = [
+                      String(i + 1),
+                      { text: [{ text: x.name, bold: true }, `\n${x.stage}`, x.method ? { text: ` · ${x.method}`, color: MUTED } : ''] },
+                      { text: x.person, color: x.person === 'Not assigned' ? WARN : INK },
+                      { text: x.machine, color: x.machine === 'Not assigned' ? WARN : INK },
+                      x.planned || '—',
+                      { text: x.status, bold: x.done || x.status === 'In Progress', color: x.status === 'Blocked' || x.status === 'Delayed' ? WARN : INK },
+                      '',
+                    ]
+                    const remarks = [x.problem && `Problem: ${x.problem}`, x.note && `Note: ${x.note}`].filter(Boolean).join('   ')
+                    return remarks
+                      ? [row, [{ text: '', border: [false, false, false, false] }, { text: remarks, colSpan: 6, fontSize: 7, color: x.problem ? WARN : MUTED, fillColor: x.problem ? WARN_WASH : undefined }, '', '', '', '', '']]
+                      : [row]
+                  }),
+                ],
+              },
+            },
+        card.materials.length ? heading('Materials for this unit') : null,
+        card.materials.length
+          ? {
+              layout: rules,
+              fontSize: 8,
+              table: {
+                headerRows: 1,
+                dontBreakRows: true,
+                widths: [50, '*', 100, 80, 70, 60],
+                body: [
+                  th(['Code', 'Material', 'Used in', 'Per piece / layout', 'Required', 'Issue'], [4, 5]),
+                  ...card.materials.map((m): TableCell[] => [m.code, m.name, m.usedIn, m.perPiece, { text: m.required, alignment: 'right' }, { text: m.issue, alignment: 'right' }]),
+                ],
+              },
+            }
+          : null,
+        heading('Remarks from the unit'),
+        { layout: boxed, table: { widths: ['*'], heights: [54], body: [[{ text: '' }]] } },
+        {
+          unbreakable: true,
+          margin: [0, 16, 0, 0],
+          columns: ['Issued by', `${unit.name} in-charge`, 'Work received back'].map((label) => ({
+            stack: [
+              { canvas: [{ type: 'line', x1: 0, y1: 18, x2: 140, y2: 18, lineWidth: 0.6, lineColor: RULE }] },
+              { text: label, style: 'muted', margin: [0, 3, 0, 0] },
+            ],
+          })),
+        },
+      ] as Array<Content | null>
+    ).filter(present),
+  }
+}
+
 /* -------------------------------- Work list ------------------------------- */
 
 export function workListDefinition(rows: ProcessWorkRow[], meta: { title: string; scope: string; unitName: (id: string) => string }, generatedAt = new Date(), mark = false): TDocumentDefinitions {

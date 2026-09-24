@@ -22,7 +22,7 @@ describe('persistence migration', () => {
     expect(event).toBe('created')
     expect(db.products).toHaveLength(0)
     expect(db.customers).toHaveLength(0)
-    expect(db.users.filter((u) => u.role === 'admin')).toHaveLength(3)
+    expect(db.users.map((u) => u.id)).toEqual(['USR-ADM1', 'USR-ADM2'])
     expect(db.users.every((u) => u.passwordHash === null)).toBe(true)
     expect(s.map.has(DB_KEY)).toBe(true)
   })

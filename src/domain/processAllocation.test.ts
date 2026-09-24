@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ProductStage, VertexDB } from '../lib/types'
-import { ADMIN, ctxFor, must, seedResources } from '../test/fixtures'
+import { ADMIN, UNIT, ctxFor, must, seedResources } from '../test/fixtures'
 import { buildEmptyDB } from '../lib/defaults'
 import { blankMaterialDraft, saveCustomer, saveMaterial, saveProduct } from './master'
 import { savePlan, submitPlan } from './planning'
@@ -13,7 +13,8 @@ import { isStageDone } from '../lib/schedule'
    processes, each allocated to a different unit. */
 
 const admin = () => ctxFor(ADMIN[0])
-const unit = (n: number) => ctxFor({ id: `USR-U${n}`, name: `Unit ${n} Supervisor`, role: 'unit' as const, unitId: `U${n}`, adminTier: null })
+/** Units have no accounts: Administrator 2 records unit n's work. */
+const unit = (_n: number) => ctxFor(UNIT(_n))
 
 const STAGE: ProductStage = {
   id: 'STG-001',

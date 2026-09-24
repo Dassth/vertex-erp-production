@@ -3,8 +3,8 @@ import { buildEmptyDB } from './defaults'
 import { parse, places, rank, records, suggestions, words } from './quickAccess'
 import type { Customer, Dispatch, Invoice, Plan, ProductionOrder, VertexDB } from './types'
 
-/** What an administrator sees: everything except the unit-only entries. */
-const adminPlaces = () => places().filter((t) => t.need !== 'production.work' && t.need !== 'unit')
+/** What Administrator 1 sees: every place (units have no accounts). */
+const adminPlaces = () => places()
 const top = (query: string, extra = adminPlaces()) => rank(extra, query)[0]?.id
 
 describe('quick access ranking', () => {
@@ -21,7 +21,8 @@ describe('quick access ranking', () => {
   it('reads plain English sentences the way a person writes them', () => {
     // Either GST answer is right; what matters is that the topic beats generic help.
     expect(['report.gst', 'invoice.gst']).toContain(top('i have a question about gst'))
-    expect(top('i have a problem')).toBe('help.problem')
+    // Administrators now record process problems too, so either problem answer is right.
+    expect(['help.problem', 'help.support']).toContain(top('i have a problem'))
     expect(top('i need customer support')).toBe('help.guide')
     expect(top('how do i make a plan')).toBe('plan.new')
     expect(top('where is production')).toBe('go.production')

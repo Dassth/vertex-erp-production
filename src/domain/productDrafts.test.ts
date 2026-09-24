@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ADMIN, NOW, ctxFor, must, seedMaster } from '../test/fixtures'
+import { ADMIN, NOW, ctxFor, must, seedMaster, BILLING_ONLY } from '../test/fixtures'
 import type { Product, ProductMaterial, VertexDB } from '../lib/types'
 import { saveProduct } from './master'
 import type { ProductDraft } from './master'
@@ -242,7 +242,7 @@ describe('jewellery template import', () => {
 
   it('only Administrator 1 can import', () => {
     const db = seedMaster().db
-    for (const n of [1, 2]) expect(importProductTemplates(JEWELLERY_BATCH_ID)(db, admin(n)).ok).toBe(false)
+    for (const ctx of [admin(1), ctxFor(BILLING_ONLY)]) expect(importProductTemplates(JEWELLERY_BATCH_ID)(db, ctx).ok).toBe(false)
   })
 
   it('imported products stay editable and every nested reference survives a save and reload', () => {

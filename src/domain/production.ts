@@ -13,10 +13,11 @@ import { audit, fail, isIsoDate, notify, ok, requireCapability, command } from '
 import type { Ctx, Op, OpFailure } from './common'
 
 /* ---------------------------------------------------------------------------
- * Shop-floor updates belong to unit users, and only for the PROCESSES assigned
- * to their own unit. Administrators monitor; Administrator 1 may additionally
- * adjust priority, delivery date and the unit of a process that has not
- * started — never process progress.
+ * Units have no accounts of their own: the administrators who run production
+ * (capability `production.work`) allocate people and machines and record the
+ * progress of every unit's processes, working from the unit's job sheet.
+ * Administrator 1 may additionally adjust priority, delivery date and the unit
+ * of a process that has not started.
  *
  * Process status transitions:
  *   Scheduled/Delayed ──start──▶ In Progress ──complete──▶ Completed
@@ -43,14 +44,11 @@ function find(db: VertexDB, orderId: string, processId: string): Located | OpFai
   return fail('Process not found on this order.')
 }
 
-/** Shop-floor access: the actor must be the unit this process is allocated to. */
+/** Shop-floor access: an administrator who runs production records work for any unit. */
 function locate(db: VertexDB, ctx: Ctx, orderId: string, processId: string): Located | OpFailure {
   const found = find(db, orderId, processId)
   if (isFailure(found)) return found
-  if (ctx.actor.role !== 'unit') return fail('Process progress is updated by the assigned production unit.')
-  if (ctx.actor.unitId !== found.process.unitId)
-    return fail(`This process is allocated to ${found.process.unitId}; you can only update your own unit's processes.`)
-  return found
+  return requireCapability(ctx, 'production.work') ?? found
 }
 
 const isFailure = (v: Located | OpFailure): v is OpFailure => 'ok' in v

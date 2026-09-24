@@ -65,10 +65,7 @@ export function LoginPage() {
     navigate(from && from !== '/login' ? from : '/production', { replace: true })
   }
 
-  const groups = [
-    { title: 'Administrators', list: accounts.filter((u) => u.role === 'admin') },
-    { title: 'Production units', list: accounts.filter((u) => u.role === 'unit') },
-  ]
+  const groups = [{ title: 'Administrators', list: accounts.filter((u) => u.role === 'admin') }]
 
   return (
     <div className="flex min-h-[100dvh] bg-paper">

@@ -109,6 +109,36 @@ export const jobCardDoc = (read: () => VertexDB, planId: string, mode: 'plan' | 
   }
 }
 
+/**
+ * One unit's job sheet for one production order — printed, or sent to the
+ * unit's in-charge. Built from the latest saved state, so allocations made a
+ * moment ago are on the sheet.
+ */
+export const unitJobSheetDoc = (read: () => VertexDB, orderId: string, unitId: string): PreviewDoc => {
+  const now = read()
+  const order = now.orders.find((o) => o.id === orderId)
+  const unit = now.units.find((u) => u.id === unitId)
+  const code = order?.code ?? orderId
+  const unitLabel = unit?.shortName || unit?.name || unitId
+  return {
+    title: `Job sheet ${code} — ${unitLabel}`,
+    fileName: `job-sheet-${code}-${unitLabel}.pdf`.replace(/[^A-Za-z0-9.-]+/g, '-'),
+    build: async () => {
+      const db = read()
+      const latest = db.orders.find((o) => o.id === orderId)
+      const u = db.units.find((x) => x.id === unitId)
+      if (!latest || !u) throw new DocumentBlockedError('This job or unit no longer exists.')
+      const [{ unitJobSheetDefinition }, { renderPdf }, { jobCard, unitJobSheet }] = await Promise.all([import('../lib/pdfDocs'), import('../lib/pdfRender'), import('../lib/jobCard')])
+      const card = jobCard(db, latest.planId, 'live')
+      if (!card) throw new DocumentBlockedError('The plan behind this job no longer exists.')
+      const { updatedAt: _u, updatedBy: _b, ...company } = db.company
+      void _u
+      void _b
+      return renderPdf(unitJobSheetDefinition(unitJobSheet(card, unitId), { name: u.name, speciality: u.speciality }, company, new Date(), watermarkOn(db.company)))
+    },
+  }
+}
+
 /** The costing sheet as a PDF. Internal figures — it is never sent to a customer. */
 export const costingDoc = (read: () => VertexDB, costingId: string): PreviewDoc => {
   const code = read().costings.find((c) => c.id === costingId)?.code ?? costingId

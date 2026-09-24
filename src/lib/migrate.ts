@@ -20,8 +20,10 @@
 
 import type { JobProcess, JobStage, Plan, ProductionOrder, UnitId, VertexDB } from './types'
 import { seedTierFor } from './permissions'
+import { RETIRED_USER_IDS } from './defaults'
 
 export const MIGRATION_PROCESS_ALLOCATION = 'process-level-allocation-v1'
+export const MIGRATION_ADMIN_ONLY_ACCOUNTS = 'admin-only-accounts-v1'
 
 /** A process record written before allocation moved to process level. */
 type LegacyProcess = Partial<JobProcess> & Pick<JobProcess, 'id' | 'processDefId' | 'name'>
@@ -111,5 +113,20 @@ export function migrateToProcessAllocation(db: VertexDB): VertexDB {
     migrations: db.migrations.includes(MIGRATION_PROCESS_ALLOCATION)
       ? db.migrations
       : [...db.migrations, MIGRATION_PROCESS_ALLOCATION],
+  }
+}
+
+/**
+ * Units no longer sign in and there is no Administrator 3: those accounts are
+ * removed. Their names stay on every audit entry and process they touched;
+ * only the ability to sign in as them goes. Idempotent.
+ */
+export function retireUnitAccounts(db: VertexDB): VertexDB {
+  const users = db.users.filter((u) => u.role === 'admin' && !RETIRED_USER_IDS.has(u.id))
+  if (users.length === db.users.length && db.migrations.includes(MIGRATION_ADMIN_ONLY_ACCOUNTS)) return db
+  return {
+    ...db,
+    users,
+    migrations: db.migrations.includes(MIGRATION_ADMIN_ONLY_ACCOUNTS) ? db.migrations : [...db.migrations, MIGRATION_ADMIN_ONLY_ACCOUNTS],
   }
 }

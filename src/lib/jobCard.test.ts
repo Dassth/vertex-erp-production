@@ -8,8 +8,8 @@ import { finalizeCosting, openCosting } from '../domain/orderCosting'
 import { assignProcessResources, completeProcess } from '../domain/production'
 import { confirmDispatch } from '../domain/dispatch'
 import { saveCompanyProfile } from '../domain/system'
-import { jobCard } from './jobCard'
-import { FONT_FAMILY, jobCardDefinition } from './pdfDocs'
+import { jobCard, unitJobSheet } from './jobCard'
+import { FONT_FAMILY, jobCardDefinition, unitJobSheetDefinition } from './pdfDocs'
 import { matchesFilter, sortPlans } from './planList'
 import type { Plan, Priority, VertexDB } from './types'
 
@@ -96,6 +96,35 @@ describe('job card', () => {
       expect(pdf.toString('latin1')).not.toMatch(/₹/)
       if (process.env.PDF_OUT) writeFileSync(process.env.PDF_OUT.replace('.pdf', `-jobcard-${mode}.pdf`), pdf)
     }
+  })
+
+  it('narrows the job to one unit for its job sheet, without customer contact, costing or prices', async () => {
+    const { db, planId } = workflow()
+    const card = jobCard(db, planId, 'live', new Date('2026-09-19T10:00:00'))!
+    const sheet = unitJobSheet(card, 'U2')
+    expect(sheet.processes.length).toBeGreaterThan(0)
+    expect(sheet.processes.every((p) => p.unitId === 'U2')).toBe(true)
+    expect(sheet.processes.length).toBeLessThan(card.processes.length)
+    expect(sheet.progress.total).toBe(sheet.processes.length)
+    expect(sheet.customer).toMatchObject({ contact: '', gstin: '', address: '' })
+    expect(sheet.costing).toBe('')
+    expect(sheet.dispatches).toEqual([])
+
+    const mod = (await import('pdfmake')) as unknown as { default?: PdfMake } & PdfMake
+    const pdfmake = mod.default ?? mod
+    const dir = path.resolve(__dirname, '../assets/fonts')
+    const regular = path.join(dir, 'NotoSansTamil-Regular.ttf')
+    const bold = path.join(dir, 'NotoSansTamil-Bold.ttf')
+    pdfmake.addFonts({ [FONT_FAMILY]: { normal: regular, bold, italics: regular, bolditalics: bold } })
+    pdfmake.setUrlAccessPolicy(() => false)
+    pdfmake.setLocalAccessPolicy((p) => path.resolve(p).startsWith(dir))
+    const { updatedAt: _u, updatedBy: _b, ...company } = db.company
+    void _u
+    void _b
+    const pdf = await pdfmake.createPdf(unitJobSheetDefinition(sheet, { name: 'Unit 2', speciality: 'Die cutting' }, company, new Date('2026-09-19T10:00:00'))).getBuffer()
+    expect(pdf.subarray(0, 4).toString()).toBe('%PDF')
+    expect(pdf.toString('latin1')).not.toMatch(/₹/)
+    if (process.env.PDF_OUT) writeFileSync(process.env.PDF_OUT.replace('.pdf', '-unit-job-sheet.pdf'), pdf)
   })
 })
 

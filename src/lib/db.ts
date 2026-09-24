@@ -19,7 +19,7 @@
 
 import type { AuditEntry, VertexDB } from './types'
 import { DB_VERSION, DEFAULT_USERS, buildEmptyDB, defaultCompany, defaultSettings, emptyCounters } from './defaults'
-import { migrateToProcessAllocation } from './migrate'
+import { migrateToProcessAllocation, retireUnitAccounts } from './migrate'
 
 export const DB_KEY = 'vertex-erp-db-v2'
 export const LEGACY_DB_KEY = 'vertex-erp-db-v1'
@@ -63,7 +63,7 @@ function isV2(value: unknown): value is VertexDB {
   )
 }
 
-/** Fill anything a slightly older v2 build did not write. Never removes data. */
+/** Fill anything a slightly older v2 build did not write. Removes only retired sign-in accounts, never business data. */
 export function normalizeDB(db: VertexDB): VertexDB {
   const users = [...db.users]
   for (const u of DEFAULT_USERS) if (!users.some((x) => x.id === u.id)) users.push({ ...u })
@@ -76,8 +76,9 @@ export function normalizeDB(db: VertexDB): VertexDB {
     migrations: db.migrations ?? [],
     users,
   }
-  // Idempotent: stage-level allocation becomes process-level allocation.
-  return migrateToProcessAllocation(filled)
+  // Idempotent: stage-level allocation becomes process-level allocation, and
+  // unit / Administrator 3 accounts are retired.
+  return retireUnitAccounts(migrateToProcessAllocation(filled))
 }
 
 function describeLegacy(raw: string): string {

@@ -10,7 +10,7 @@ import { StoreProvider } from '../store/store'
 import { DB_KEY } from '../lib/db'
 import { buildEmptyDB } from '../lib/defaults'
 import type { VertexDB } from '../lib/types'
-import { ctxFor, must, PROCESS_UNITS, seedMaster, UNIT } from './fixtures'
+import { ctxFor, must, PROCESS_UNITS, seedMaster } from './fixtures'
 import { savePlan, submitPlan } from '../domain/planning'
 import { finalizeCosting, openCosting } from '../domain/orderCosting'
 
@@ -167,67 +167,39 @@ describe('sign-in through the real UI', () => {
     expect(screen.queryByRole('button', { name: /Reset password/ })).toBeNull()
   }, 30000)
 
-  it('gives Administrator 3 billing only, landing there and recovering there', async () => {
-    localStorage.setItem(DB_KEY, JSON.stringify(seedOrderAcrossUnits()))
-    const { router } = mount()
-    const user = await chooseAccount('Administrator 3')
-    await user.type(screen.getByLabelText(/New password/), TEST_PASSWORD)
-    await user.type(screen.getByLabelText(/Confirm password/), TEST_PASSWORD)
-    await user.click(screen.getByRole('button', { name: /Create password & sign in/ }))
-    await screen.findByRole('heading', { name: 'Billing' }, { timeout: 5000 })
-    expect(router.state.location.pathname).toBe('/home')
-
-    const modules = screen.getAllByRole('navigation', { name: 'Modules' })[0]
-    expect(
-      within(modules)
-        .getAllByRole('link')
-        .map((a) => a.getAttribute('href')),
-    ).toEqual(['/invoices', '/billing'])
-
-    // Every other module, including Production and Dispatch, recovers to Billing without looping.
-    for (const path of ['/production', '/dispatch', '/master/customers', '/planning', '/costing', '/settings']) {
-      await router.navigate(path)
-      await waitFor(() => expect(router.state.location.pathname).toBe('/home'))
-    }
-    expect(screen.queryByRole('heading', { name: 'Production' })).toBeNull()
-    expect(screen.queryByRole('heading', { name: 'Dispatch' })).toBeNull()
+  it('offers only the two administrators on the sign-in screen', async () => {
+    mount()
+    expect(await screen.findByRole('radio', { name: /Administrator 1/ })).toBeTruthy()
+    expect(screen.getByRole('radio', { name: /Administrator 2/ })).toBeTruthy()
+    expect(screen.getAllByRole('radio')).toHaveLength(2)
+    expect(screen.queryByRole('radio', { name: /Administrator 3/ })).toBeNull()
+    expect(screen.queryByRole('radio', { name: /Unit \d Supervisor/ })).toBeNull()
   }, 30000)
-  it('routes a unit user to their own stage work only and blocks admin modules', async () => {
+
+  it('lets an administrator run one unit’s work from Units and print its job sheet', async () => {
     localStorage.setItem(DB_KEY, JSON.stringify(seedOrderAcrossUnits()))
     const { router } = mount()
-    const user = await chooseAccount('Unit 2 Supervisor')
+    const user = await chooseAccount('Administrator 2')
     await user.type(screen.getByLabelText(/New password/), TEST_PASSWORD)
     await user.type(screen.getByLabelText(/Confirm password/), TEST_PASSWORD)
     await user.click(screen.getByRole('button', { name: /Create password & sign in/ }))
-    // Unit accounts land on their own Home, with their unit menu.
-    await waitFor(() => expect(router.state.location.pathname).toBe('/unit'), { timeout: 5000 })
+    await waitFor(() => expect(router.state.location.pathname).toBe('/home'), { timeout: 5000 })
     const modules = (await screen.findAllByRole('navigation', { name: 'Modules' }, { timeout: 5000 }))[0]
-    expect(within(modules).queryByRole('link', { name: 'Planning' })).toBeNull()
-    expect(
-      within(modules)
-        .getAllByRole('link')
-        .map((a) => a.getAttribute('href')),
-    ).toEqual(['/unit', '/unit/allocations', '/production', '/unit/staff', '/unit/machines'])
-    await router.navigate('/production')
-    await screen.findByRole('heading', { name: /Unit 2 — process work/ }, { timeout: 5000 })
+    expect(within(modules).getByRole('link', { name: /Units/ })).toBeTruthy()
+    // The old unit-only area is gone.
+    expect(within(modules).queryByRole('link', { name: /Allocations/ })).toBeNull()
 
-    // Unit 2 is allocated only "Die cut"; other units' processes are not shown.
+    await router.navigate('/units/U2')
+    await screen.findByRole('heading', { level: 1, name: 'Unit 2' }, { timeout: 5000 })
+    // Unit 2 is allocated only "Die cut"; other units' processes are not listed here.
     await user.click(screen.getByRole('button', { name: /Waiting on earlier work/ }))
-    // Stage 2, process 1 — the only work allocated to Unit 2.
     expect(await screen.findByText(/2.1 Die cut/)).toBeTruthy()
-    // No work card exists for another unit's processes (an upstream process may
-    // still be named in the "waiting for" line, which is the point of that line).
     expect(screen.queryByText(/1.1 Plate making/)).toBeNull()
     expect(screen.queryByText(/3.2 Packing/)).toBeNull()
     // The parent stage and its id travel with the process.
     expect(screen.getByText(/Stage ID st-cut/)).toBeTruthy()
+    // Each job can be printed for the unit's in-charge, and no money is shown.
+    expect(screen.getAllByRole('button', { name: /Job sheet/ }).length).toBeGreaterThan(0)
     expect(document.body.textContent).not.toMatch(/₹/)
-
-    for (const path of ['/master/products', '/costing', '/dispatch', '/billing']) {
-      await router.navigate(path)
-      await waitFor(() => expect(router.state.location.pathname).toBe('/unit'))
-    }
-    expect(stored().audit[0]).toMatchObject({ userId: 'USR-U2', role: 'unit', action: 'Signed in' })
-    expect(UNIT(2).unitId).toBe('U2')
   }, 30000)
 })

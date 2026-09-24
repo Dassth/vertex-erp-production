@@ -2,42 +2,41 @@ import { describe, expect, it } from 'vitest'
 import type { User } from './types'
 import { canOpenPath, capabilitiesOf, landingPath, seedTierFor } from './permissions'
 import { buildEmptyDB, DEFAULT_USERS } from './defaults'
-import { ctxFor, must, seedMaster, seedResources, PROCESS_UNITS } from '../test/fixtures'
+import { BILLING_ONLY, RETIRED_UNIT, ctxFor, must, seedMaster, seedResources, PROCESS_UNITS } from '../test/fixtures'
 import { savePlan, submitPlan } from '../domain/planning'
 import { finalizeCosting, openCosting } from '../domain/orderCosting'
 import { saveProduct } from '../domain/master'
 import { confirmDispatch } from '../domain/dispatch'
 import { saveCompanyProfile } from '../domain/system'
 import { savePerson } from '../domain/resources'
-import { assignProcessResources, completeProcess, setOrderPriority } from '../domain/production'
+import { assignProcessResources, completeProcess, setOrderPriority, startProcess } from '../domain/production'
 
 /* The permission matrix, checked in both layers: what the interface offers
-   (capabilities, routes, landings) and what the domain actually commits. */
+   (capabilities, routes, landings) and what the domain actually commits.
+   Two administrators; production units have no accounts. */
 
 const account = (id: string): User => DEFAULT_USERS.find((u) => u.id === id)!
 const ADMIN1 = account('USR-ADM1')
 const ADMIN2 = account('USR-ADM2')
-const ADMIN3 = account('USR-ADM3')
-const UNIT1 = account('USR-U1')
 
 describe('permission matrix', () => {
-  it('seeds each administrator with its own tier', () => {
+  it('seeds exactly two administrators, each with its own tier, and no unit accounts', () => {
+    expect(DEFAULT_USERS.map((u) => u.id)).toEqual(['USR-ADM1', 'USR-ADM2'])
     expect(ADMIN1.adminTier).toBe('full')
     expect(ADMIN2.adminTier).toBe('operations')
-    expect(ADMIN3.adminTier).toBe('billing')
     expect(seedTierFor('USR-ADM2', 'admin')).toBe('operations')
     expect(seedTierFor('USR-U1', 'unit')).toBeNull()
   })
 
-  it('gives Administrator 1 the whole workflow', () => {
+  it('gives Administrator 1 the whole workflow, including shop-floor work', () => {
     const caps = capabilitiesOf(ADMIN1)
     expect(caps).toEqual(
-      expect.arrayContaining(['master', 'planning', 'costing', 'production.monitor', 'dispatch', 'billing', 'administration']),
+      expect.arrayContaining(['master', 'planning', 'costing', 'production.monitor', 'production.work', 'dispatch', 'billing', 'administration']),
     )
   })
 
-  it('limits Administrator 2 to production monitoring, dispatch and billing', () => {
-    expect(capabilitiesOf(ADMIN2).sort()).toEqual(['billing', 'dispatch', 'production.monitor', 'units.monitor'])
+  it('limits Administrator 2 to running production, dispatch and billing', () => {
+    expect(capabilitiesOf(ADMIN2).sort()).toEqual(['billing', 'dispatch', 'production.monitor', 'production.work', 'units.monitor'])
     expect(capabilitiesOf(ADMIN2)).not.toContain('master')
     expect(capabilitiesOf(ADMIN2)).not.toContain('planning')
     expect(capabilitiesOf(ADMIN2)).not.toContain('costing')
@@ -46,52 +45,43 @@ describe('permission matrix', () => {
     expect(capabilitiesOf(ADMIN2)).not.toContain('administration')
   })
 
-  it('limits Administrator 3 to billing, plus watching the units', () => {
-    expect(capabilitiesOf(ADMIN3).sort()).toEqual(['billing', 'units.monitor'])
+  it('gives a leftover unit account from an older database nothing at all', () => {
+    expect(capabilitiesOf(RETIRED_UNIT)).toEqual([])
+    for (const path of ['/units', '/production', '/billing', '/settings']) expect(canOpenPath(RETIRED_UNIT, path)).toBe(false)
   })
 
-  it('lets every administrator watch the units, and no unit account', () => {
-    for (const admin of [ADMIN1, ADMIN2, ADMIN3]) expect(canOpenPath(admin, '/units')).toBe(true)
-    expect(canOpenPath(UNIT1, '/units')).toBe(false)
-    // Watching is not working: only the unit itself reaches its own screens.
-    expect(canOpenPath(ADMIN1, '/unit/staff')).toBe(false)
-  })
-
-  it('limits unit users to their own process work', () => {
-    expect(capabilitiesOf(UNIT1)).toEqual(['production.work'])
+  it('opens the Units screens to both administrators', () => {
+    for (const admin of [ADMIN1, ADMIN2]) {
+      expect(canOpenPath(admin, '/units')).toBe(true)
+      expect(canOpenPath(admin, '/units/U1')).toBe(true)
+    }
   })
 
   it('lands every account on a page it may open', () => {
     expect(landingPath(ADMIN1)).toBe('/home')
     expect(landingPath(ADMIN2)).toBe('/home')
-    expect(landingPath(ADMIN3)).toBe('/home')
-    expect(landingPath(UNIT1)).toBe('/unit')
     expect(landingPath(null)).toBe('/login')
     // Recovery can never loop: the landing page is always allowed.
-    for (const user of [ADMIN1, ADMIN2, ADMIN3, UNIT1]) expect(canOpenPath(user, landingPath(user))).toBe(true)
+    for (const user of [ADMIN1, ADMIN2, RETIRED_UNIT]) expect(canOpenPath(user, landingPath(user))).toBe(true)
   })
 
   it('refuses restricted routes, including deep links and sub-paths', () => {
     const blockedForAdmin2 = ['/master', '/master/products', '/master/products/PRD-1', '/planning', '/planning/PLN-1', '/costing', '/costing/PLN-1', '/settings']
     for (const path of blockedForAdmin2) expect(canOpenPath(ADMIN2, path)).toBe(false)
-    for (const path of ['/production', '/dispatch', '/billing']) expect(canOpenPath(ADMIN2, path)).toBe(true)
+    for (const path of ['/production', '/dispatch', '/billing', '/invoices']) expect(canOpenPath(ADMIN2, path)).toBe(true)
 
-    for (const path of [...blockedForAdmin2, '/production', '/dispatch']) expect(canOpenPath(ADMIN3, path)).toBe(false)
-    expect(canOpenPath(ADMIN3, '/billing')).toBe(true)
+    // The retired billing-only tier still reaches billing and nothing else.
+    for (const path of [...blockedForAdmin2, '/production', '/dispatch']) expect(canOpenPath(BILLING_ONLY, path)).toBe(false)
+    expect(canOpenPath(BILLING_ONLY, '/billing')).toBe(true)
 
-    // Personal account actions stay available to everyone.
-    for (const user of [ADMIN2, ADMIN3, UNIT1]) expect(canOpenPath(user, '/account')).toBe(true)
-    expect(canOpenPath(UNIT1, '/billing')).toBe(false)
-
-    // Invoices: every administrator, no unit user.
-    for (const user of [ADMIN1, ADMIN2, ADMIN3]) expect(canOpenPath(user, '/invoices')).toBe(true)
-    expect(canOpenPath(UNIT1, '/invoices')).toBe(false)
-    expect(canOpenPath(UNIT1, '/production')).toBe(true)
+    // Personal account actions stay available to every administrator.
+    for (const user of [ADMIN1, ADMIN2]) expect(canOpenPath(user, '/account')).toBe(true)
   })
 })
 
 describe('domain refuses what the navigation hides', () => {
-  const actor = (u: User) => ctxFor({ id: u.id, name: u.name, role: u.role, unitId: u.unitId, adminTier: u.adminTier })
+  const actor = (u: Pick<User, 'id' | 'name' | 'role' | 'unitId' | 'adminTier'>) =>
+    ctxFor({ id: u.id, name: u.name, role: u.role, unitId: u.unitId, adminTier: u.adminTier })
 
   /** A finalized order with resources, reached entirely as Administrator 1. */
   function ready() {
@@ -119,7 +109,7 @@ describe('domain refuses what the navigation hides', () => {
     return { ...seeded, ...resources, db: finalized.db, order: finalized.value.order, planId: plan.value.id }
   }
 
-  it('blocks Administrator 2 from master, planning and costing mutations', () => {
+  it('blocks Administrator 2 from master, planning, costing and staff mutations', () => {
     const { db, planId, order } = ready()
     const product = db.products[0]
     const draft = {
@@ -139,14 +129,37 @@ describe('domain refuses what the navigation hides', () => {
     expect(openCosting(planId)(db, actor(ADMIN2)).ok).toBe(false)
     expect(saveCompanyProfile({ name: 'X', address: '', phone: '', email: '', gstin: '', invoicePrefix: 'INV', bankDetails: '', invoiceTerms: '' })(db, actor(ADMIN2)).ok).toBe(false)
     expect(savePerson({ unitId: 'U1', name: 'Someone', designation: '' })(db, actor(ADMIN2)).ok).toBe(false)
-    // Production is monitoring only — even plan-level adjustments are refused.
+    // Plan-level adjustments stay with Administrator 1.
     expect(setOrderPriority(order.id, 'Urgent')(db, actor(ADMIN2)).ok).toBe(false)
   })
 
-  it('blocks Administrator 3 from everything except reading billing', () => {
-    const { db, order } = ready()
-    expect(setOrderPriority(order.id, 'High')(db, actor(ADMIN3)).ok).toBe(false)
-    expect(savePerson({ unitId: 'U1', name: 'Someone', designation: '' })(db, actor(ADMIN3)).ok).toBe(false)
+  it('lets both administrators allocate and record any unit’s process', () => {
+    const { db, order, personOf, machineOf } = ready()
+    const first = order.stages[0].processes[0]
+    const assign = assignProcessResources(order.id, first.id, {
+      responsiblePersonId: personOf(first.unitId),
+      machineId: machineOf(first.unitId),
+      noMachineRequired: false,
+    })
+    for (const admin of [ADMIN1, ADMIN2]) {
+      const allocated = must(assign(db, actor(admin)))
+      expect(allocated.value.responsiblePersonId).toBe(personOf(first.unitId))
+      const started = must(startProcess(order.id, first.id)(allocated.db, actor(admin)))
+      expect(must(completeProcess(order.id, first.id)(started.db, actor(admin))).value.process.status).toBe('Completed')
+    }
+  })
+
+  it('refuses shop-floor work from a leftover unit account and the retired billing tier', () => {
+    const { db, order, personOf, machineOf } = ready()
+    const first = order.stages[0].processes[0]
+    const assign = assignProcessResources(order.id, first.id, {
+      responsiblePersonId: personOf(first.unitId),
+      machineId: machineOf(first.unitId),
+      noMachineRequired: false,
+    })
+    expect(assign(db, actor(RETIRED_UNIT)).ok).toBe(false)
+    expect(assign(db, actor(BILLING_ONLY)).ok).toBe(false)
+    expect(setOrderPriority(order.id, 'High')(db, actor(BILLING_ONLY)).ok).toBe(false)
     const dispatch = confirmDispatch({
       requestId: 'r1',
       orderId: order.id,
@@ -156,32 +169,18 @@ describe('domain refuses what the navigation hides', () => {
       transporter: '',
       vehicleNo: '',
       notes: '',
-    })(db, actor(ADMIN3))
+    })(db, actor(BILLING_ONLY))
     expect(dispatch.ok).toBe(false)
-  })
-
-  it('blocks administrators from shop-floor progress and units from other units’ processes', () => {
-    const { db, order, personOf, machineOf } = ready()
-    const first = order.stages[0].processes[0]
-    const assign = assignProcessResources(order.id, first.id, {
-      responsiblePersonId: personOf(first.unitId),
-      machineId: machineOf(first.unitId),
-      noMachineRequired: false,
-    })
-    // Administrators never update process progress, whatever their tier.
-    expect(assign(db, actor(ADMIN1)).ok).toBe(false)
-    expect(completeProcess(order.id, first.id)(db, actor(ADMIN1)).ok).toBe(false)
-    // A unit may not touch another unit's process.
-    expect(assign(db, actor(account('USR-U3'))).ok).toBe(false)
-    const own = must(assign(db, actor(UNIT1)))
-    expect(own.value.responsiblePersonId).toBe(personOf(first.unitId))
   })
 })
 
 describe('a fresh database', () => {
-  it('starts with tiered administrators and empty resource registers', () => {
+  it('starts with two tiered administrators and empty resource registers', () => {
     const db = buildEmptyDB(new Date('2026-09-16T10:00:00'))
-    expect(db.users.filter((u) => u.role === 'admin').map((u) => u.adminTier)).toEqual(['full', 'operations', 'billing'])
+    expect(db.users.map((u) => [u.id, u.adminTier])).toEqual([
+      ['USR-ADM1', 'full'],
+      ['USR-ADM2', 'operations'],
+    ])
     expect(db.people).toEqual([])
     expect(db.machines).toEqual([])
   })

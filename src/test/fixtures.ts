@@ -7,16 +7,24 @@ import { buildEmptyDB } from '../lib/defaults'
 
 export const NOW = new Date('2026-09-15T10:00:00')
 
-/** The three administrators carry different access tiers (see lib/permissions). */
-const TIERS = ['full', 'operations', 'billing'] as const
-export const ADMIN = [1, 2, 3].map((n) => ({
+/** The two administrators carry different access tiers (see lib/permissions). */
+const TIERS = ['full', 'operations'] as const
+export const ADMIN = [1, 2].map((n) => ({
   id: `USR-ADM${n}`,
   name: `Administrator ${n}`,
   role: 'admin' as const,
   unitId: null,
   adminTier: TIERS[n - 1],
 }))
-export const UNIT = (n: number) => ({ id: `USR-U${n}`, name: `Unit ${n} Supervisor`, role: 'unit' as const, unitId: `U${n}` })
+/**
+ * Units have no accounts: Administrator 2 records every unit's shop-floor work.
+ * `UNIT(n)` names who records unit n's work, so the scenarios still read per unit.
+ */
+export const UNIT = (_n: number) => ADMIN[1]
+/** The retired billing-only tier, kept to prove such an account can do nothing it should not. */
+export const BILLING_ONLY = { id: 'USR-ADM3', name: 'Administrator 3', role: 'admin' as const, unitId: null, adminTier: 'billing' as const }
+/** A leftover unit account from an older database: it has no capabilities at all. */
+export const RETIRED_UNIT = { id: 'USR-U1', name: 'Unit 1 Supervisor', role: 'unit' as const, unitId: 'U1', adminTier: null }
 
 let seq = 0
 export function ctxFor(actor: Ctx['actor'] = ADMIN[0], now: Date = NOW): Ctx {

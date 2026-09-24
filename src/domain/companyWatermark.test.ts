@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildEmptyDB } from '../lib/defaults'
 import { watermarkOn } from '../lib/brand'
-import { ADMIN, UNIT, ctxFor, must } from '../test/fixtures'
+import { ADMIN, BILLING_ONLY, RETIRED_UNIT, ctxFor, must } from '../test/fixtures'
 import { saveCompanyProfile } from './system'
 
 const draft = (documentWatermark?: boolean) => ({
@@ -31,6 +31,6 @@ describe('the document watermark setting', () => {
 
   it('stays with Administrator 1 — no other account may change it', () => {
     const db = buildEmptyDB()
-    for (const actor of [ADMIN[1], ADMIN[2], UNIT(1)]) expect(saveCompanyProfile(draft(false))(db, ctxFor(actor)).ok).toBe(false)
+    for (const actor of [ADMIN[1], BILLING_ONLY, RETIRED_UNIT]) expect(saveCompanyProfile(draft(false))(db, ctxFor(actor)).ok).toBe(false)
   })
 })

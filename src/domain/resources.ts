@@ -1,6 +1,6 @@
 import type { JobProcess, ProductionUnit, UnitId, UnitMachine, UnitPerson, VertexDB } from '../lib/types'
 import { audit, docCode, fail, nextSeq, ok, requireCapability, sameText, stampNew, stampUpdate, validationFailure, command } from './common'
-import type { Ctx, Op } from './common'
+import type { Op } from './common'
 
 /* ---------------------------------------------------------------------------
  * Units, responsible people and machines.
@@ -61,10 +61,6 @@ function profileErrors(d: { experienceYears?: number | null; joinedOn?: string |
   return e
 }
 
-/** Unit accounts manage the staff and machines of their own unit; everything else needs administration. */
-function ownUnit(ctx: Ctx, unitId: UnitId): boolean {
-  return ctx.actor.role === 'unit' && ctx.actor.unitId === unitId
-}
 
 /** "JOB — process" labels of processes not yet completed that match. */
 function openAssignments(db: VertexDB, match: (p: JobProcess) => boolean): string[] {
@@ -75,9 +71,7 @@ export const savePerson = command(
   'savePerson',
   (draft: PersonDraft): Op<UnitPerson> =>
   (db, ctx) => {
-    const current = draft.id ? db.people.find((p) => p.id === draft.id) : undefined
-    const mine = ownUnit(ctx, draft.unitId) && (!current || current.unitId === draft.unitId)
-    const denied = mine ? null : requireCapability(ctx, 'administration')
+    const denied = requireCapability(ctx, 'administration')
     if (denied) return denied
     const errors: Record<string, string> = profileErrors(draft, ctx.now)
     if (!draft.name.trim()) errors.name = 'Enter the person’s name.'
@@ -129,7 +123,7 @@ export const setPersonActive = command(
   (db, ctx) => {
     const person = db.people.find((p) => p.id === personId)
     if (!person) return fail('Person not found.')
-    const denied = ownUnit(ctx, person.unitId) ? null : requireCapability(ctx, 'administration')
+    const denied = requireCapability(ctx, 'administration')
     if (denied) return denied
     if (person.active === active) return ok(db, person)
     if (!active) {
@@ -153,9 +147,7 @@ export const saveMachine = command(
   'saveMachine',
   (draft: MachineDraft): Op<UnitMachine> =>
   (db, ctx) => {
-    const current = draft.id ? db.machines.find((m) => m.id === draft.id) : undefined
-    const mine = ownUnit(ctx, draft.unitId) && (!current || current.unitId === draft.unitId)
-    const denied = mine ? null : requireCapability(ctx, 'administration')
+    const denied = requireCapability(ctx, 'administration')
     if (denied) return denied
     const errors: Record<string, string> = profileErrors(draft, ctx.now)
     if (!draft.name.trim()) errors.name = 'Enter the machine name.'
@@ -207,7 +199,7 @@ export const setMachineActive = command(
   (db, ctx) => {
     const machine = db.machines.find((m) => m.id === machineId)
     if (!machine) return fail('Machine not found.')
-    const denied = ownUnit(ctx, machine.unitId) ? null : requireCapability(ctx, 'administration')
+    const denied = requireCapability(ctx, 'administration')
     if (denied) return denied
     if (machine.active === active) return ok(db, machine)
     if (!active) {

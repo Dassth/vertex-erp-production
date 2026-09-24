@@ -22,7 +22,6 @@ import {
   Menu,
   Search,
   Home,
-  Cog,
   PanelLeftClose,
   PanelLeftOpen,
   ReceiptText,
@@ -88,21 +87,16 @@ export const MASTER_SECTIONS: NavChild[] = [
 const NAV: NavItem[] = [
   // Every administrator tier holds billing, so this is Home for all administrators.
   { to: '/home', label: 'Home', hint: 'What needs you today', icon: Home, capabilities: ['billing'] },
-  // Unit accounts: their own area. Administrators never hold production.work, so never see these.
-  { to: '/unit', label: 'Home', hint: 'Your unit today', icon: Home, capabilities: ['production.work'] },
-  { to: '/unit/allocations', label: 'Allocations', hint: 'Person and machine for every process', icon: UserCog, capabilities: ['production.work'] },
   { to: '/master', label: 'Master', hint: 'Shared definitions', icon: Database, capabilities: ['master'], children: MASTER_SECTIONS },
   { to: '/planning', label: 'Planning', hint: 'Allocate every process to a unit', icon: CalendarRange, capabilities: ['planning'] },
   { to: '/costing', label: 'Costing', hint: 'Cost and finalize a planned order', icon: Calculator, capabilities: ['costing'] },
   { to: '/production', label: 'Production', hint: 'Process progress by unit', icon: Factory, capabilities: ['production.monitor', 'production.work'] },
-  { to: '/units', label: 'Units', hint: 'Watch what every unit is working on', icon: Building2, capabilities: ['units.monitor'] },
+  { to: '/units', label: 'Units', hint: 'Allocate, record and print each unit’s jobs', icon: Building2, capabilities: ['units.monitor'] },
   { to: '/billing', label: 'Billing', hint: 'Sales invoices and purchase bills', icon: ReceiptText, capabilities: ['billing'] },
   { to: '/dispatch', label: 'Dispatch', hint: 'Ship completed orders', icon: Truck, capabilities: ['dispatch'] },
   { to: '/invoices', label: 'Invoices', hint: 'Order summaries and invoice downloads', icon: FileStack, capabilities: ['billing'] },
   { to: '/reports', label: 'Reports', hint: 'Monthly GST reports: invoices and bills', icon: FileBarChart, capabilities: ['billing'] },
   { to: '/customers', label: 'Customers', hint: 'Customer ID lookup and full order history', icon: Contact, capabilities: ['billing'] },
-  { to: '/unit/staff', label: 'Staff', hint: 'Add and remove your unit’s people', icon: Users, capabilities: ['production.work'] },
-  { to: '/unit/machines', label: 'Machines', hint: 'Add and remove your unit’s machines', icon: Cog, capabilities: ['production.work'] },
 ]
 
 type Dialog = 'audit' | 'company' | 'account' | 'clear' | 'guide' | 'resources' | null

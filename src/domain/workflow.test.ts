@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ADMIN, NOW, PROCESS_UNITS, UNIT, ctxFor, must, seedMaster, seedResources } from '../test/fixtures'
+import { ADMIN, BILLING_ONLY, NOW, PROCESS_UNITS, RETIRED_UNIT, UNIT, ctxFor, must, seedMaster, seedResources } from '../test/fixtures'
 import type { ProductionOrder, VertexDB } from '../lib/types'
 import { saveMaterial, materialToDraft, deleteProduct, setProductActive } from './master'
 import { cancelPlan, savePlan, submitPlan } from './planning'
@@ -13,6 +13,8 @@ import { DELIVERY_PENDING_MESSAGE, consolidatedStatement, invoiceDownloadBlock, 
 import { toPaise } from '../lib/costing'
 
 const admin = (n = 0) => ctxFor(ADMIN[n])
+const billingOnly = () => ctxFor(BILLING_ONLY)
+const retiredUnit = () => ctxFor(RETIRED_UNIT)
 const unit = (n: number) => ctxFor(UNIT(n))
 
 function plan(db: VertexDB, customerId: string, productId: string, processUnits: Record<string, string>, quantity = 1000): PlanDraft {
@@ -142,13 +144,14 @@ describe('production workflow across units', () => {
     ).db
   }
 
-  it('only the allocated unit updates a process, and administrators cannot', () => {
+  it('administrators record every unit’s work; a leftover unit account cannot', () => {
     const { db, order, personOf, machineOf } = toProduction()
     const first = processes(order)[0]
     const ready = resource(db, order, first.id, personOf, machineOf)
-    expect(startProcess(order.id, first.id)(ready, admin()).ok).toBe(false)
-    expect(startProcess(order.id, first.id)(ready, unit(2)).ok).toBe(false)
-    expect(startProcess(order.id, first.id)(ready, unit(1)).ok).toBe(true)
+    expect(startProcess(order.id, first.id)(ready, retiredUnit()).ok).toBe(false)
+    expect(startProcess(order.id, first.id)(ready, billingOnly()).ok).toBe(false)
+    expect(startProcess(order.id, first.id)(ready, admin()).ok).toBe(true)
+    expect(startProcess(order.id, first.id)(ready, admin(1)).ok).toBe(true)
   })
 
   it('refuses to start before a responsible person is allocated', () => {
@@ -347,14 +350,14 @@ describe('dispatch and billing', () => {
 describe('audit attribution', () => {
   it('records each administrator separately and keeps their identities', () => {
     const { db } = completedOrder()
-    // Administrator 2 operates dispatch; Administrator 3 may not.
-    expect(confirmDispatch(req(db.orders[0].id, 'a', 10))(db, admin(2)).ok).toBe(false)
+    // Administrator 2 operates dispatch; the retired billing-only tier may not.
+    expect(confirmDispatch(req(db.orders[0].id, 'a', 10))(db, billingOnly()).ok).toBe(false)
     const r = must(confirmDispatch(req(db.orders[0].id, 'a', 10))(db, admin(1)))
     const byUser = new Set(r.db.audit.map((a) => a.userId))
     expect(byUser.has('USR-ADM1')).toBe(true)
     expect(byUser.has('USR-ADM2')).toBe(true)
-    // Unit users are attributed for their own process work.
-    expect(byUser.has('USR-U1')).toBe(true)
+    // Shop-floor work is attributed to the administrator who recorded it; no unit account exists.
+    expect([...byUser].some((id) => id.startsWith('USR-U'))).toBe(false)
     expect(r.db.audit.find((a) => a.action === 'Invoice generated')?.user).toBe('Administrator 2')
     expect(NOW.getFullYear()).toBe(2026)
   })
@@ -363,9 +366,9 @@ describe('audit attribution', () => {
 describe('company profile editing', () => {
   const profile = { name: 'Vertex Print Pack', address: 'Factory road', phone: '', email: '', gstin: '33AAAAA0000A1Z5', invoicePrefix: 'INV', bankDetails: '', invoiceTerms: '' }
 
-  it('only Administrator 1 can save it — Administrator 2, 3 and unit users are refused', () => {
+  it('only Administrator 1 can save it — Administrator 2 and retired accounts are refused', () => {
     const { db } = completedOrder()
-    for (const ctx of [admin(1), admin(2), unit(1)]) {
+    for (const ctx of [admin(1), billingOnly(), retiredUnit()]) {
       const r = saveCompanyProfile({ ...profile, name: 'Hijacked', expectedUpdatedAt: db.company.updatedAt })(db, ctx)
       expect(r.ok).toBe(false)
       if (!r.ok) expect(r.error).toMatch(/does not have access/)
@@ -458,8 +461,8 @@ describe('cumulative invoice summary', () => {
     let db = d2.db
     const before = { balance: orderBalance(db.orders[0], db.dispatches), invoices: JSON.stringify(db.invoices), order: JSON.stringify(db.orders[0]) }
 
-    // Administrator 3 and unit users cannot confirm.
-    for (const ctx of [admin(2), unit(1)]) expect(confirmDispatchReceived(d1.value.dispatch.id)(db, ctx).ok).toBe(false)
+    // The retired billing-only tier and leftover unit accounts cannot confirm.
+    for (const ctx of [billingOnly(), retiredUnit()]) expect(confirmDispatchReceived(d1.value.dispatch.id)(db, ctx).ok).toBe(false)
 
     const r = must(confirmDispatchReceived(d1.value.dispatch.id)(db, admin(1)))
     db = r.db

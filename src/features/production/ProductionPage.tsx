@@ -29,13 +29,10 @@ import { Badge, Button, Card, CardHead, EmptyState, Pagination, ProgressBar, Sea
 import { LinkButton, PageHeader, StatStrip, StatTile, useDocumentTitle } from '../../components/page'
 import { HEALTH_LABEL, HEALTH_TONE, HealthBadge, PriorityBadge, ProcessBadge } from '../../components/status'
 import { JobDrawer } from '../../components/JobDrawer'
-import { UnitWorkPage } from './UnitWorkPage'
 
 type Layout = 'board' | 'timeline' | 'list'
 
 export function ProductionPage() {
-  const { user } = useStore()
-  if (user?.role === 'unit' && user.unitId) return <UnitWorkPage unitId={user.unitId} />
   return <AdminProduction />
 }
 

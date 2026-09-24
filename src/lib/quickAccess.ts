@@ -23,8 +23,8 @@ export interface QuickTarget {
   to: string
   group: 'Do' | 'Go to' | 'Plans' | 'Jobs' | 'Customers' | 'Invoices' | 'Purchases' | 'Products' | 'Setup'
   keywords: string[]
-  /** Who may see it: a capability, or 'unit' for unit accounts, or undefined for everyone. */
-  need?: Capability | 'unit'
+  /** Who may see it: a capability, or undefined for everyone. */
+  need?: Capability
 }
 
 export interface ScoredTarget extends QuickTarget {
@@ -175,8 +175,8 @@ export function places(): QuickTarget[] {
 
     { id: 'help.guide', title: 'How the workflow works', hint: 'Step-by-step guide: Master → Planning → Costing → Production → Billing', to: '/home?guide=1', group: 'Do', keywords: ['help', 'guide', 'how', 'question', 'doubt', 'support', 'learn', 'explain', 'steps', 'workflow', 'training', 'tutorial'] },
     { id: 'help.problem', title: 'Something is wrong — what needs attention', hint: 'Problems reported by units, late jobs and unconfirmed deliveries', to: '/home', group: 'Do', need: 'billing', keywords: ['problem', 'issue', 'wrong', 'error', 'stuck', 'delay', 'late', 'attention', 'complaint', 'broken', 'help'] },
-    { id: 'help.support', title: 'Report a problem on a process', hint: 'Production → the process → Report a problem', to: '/production', group: 'Do', need: 'production.work', keywords: ['problem', 'issue', 'report', 'machine', 'breakdown', 'stop', 'help', 'support', 'stuck'] },
-    { id: 'go.units', title: 'Units — what each unit is working on', hint: 'Watch all four production units', to: '/units', group: 'Go to', need: 'units.monitor', keywords: ['unit', 'units', 'shop', 'floor', 'monitor', 'watch', 'team', 'load', 'u1', 'u2', 'u3', 'u4'] },
+    { id: 'help.support', title: 'Report a problem on a process', hint: 'Units → the unit → the process → Report a problem', to: '/units', group: 'Do', need: 'production.work', keywords: ['problem', 'issue', 'report', 'machine', 'breakdown', 'stop', 'help', 'support', 'stuck'] },
+    { id: 'go.units', title: 'Units — allocate, record and print each unit’s jobs', hint: 'Open a unit, then a job, to print its job sheet', to: '/units', group: 'Go to', need: 'units.monitor', keywords: ['print', 'sheet', 'whatsapp', 'send', 'allocate', 'allocation', 'start', 'complete', 'unit', 'units', 'shop', 'floor', 'monitor', 'watch', 'team', 'load', 'u1', 'u2', 'u3', 'u4'] },
 
     // Go to
     { id: 'go.home', title: 'Home', hint: 'What needs you today', to: '/home', group: 'Go to', need: 'billing', keywords: ['home', 'dashboard', 'start', 'overview'] },
@@ -195,13 +195,6 @@ export function places(): QuickTarget[] {
     { id: 'go.master.costing', title: 'Master — Costing', hint: 'Material prices and costing configuration', to: '/master/costing', group: 'Setup', need: 'master', keywords: ['master', 'costing', 'prices', 'material', 'rates', 'charges', 'tax', 'settings', 'configuration'] },
     { id: 'go.master.customers', title: 'Master — Customers', hint: 'Add or edit customers, GSTIN and addresses', to: '/master/customers', group: 'Setup', need: 'master', keywords: ['customer', 'add', 'new', 'edit', 'gstin', 'address', 'master', 'party'] },
     { id: 'go.settings', title: 'Settings', hint: 'Units, people, machines, accounts and data', to: '/settings', group: 'Setup', need: 'administration', keywords: ['settings', 'setting', 'change', 'people', 'staff', 'machines', 'accounts', 'users', 'backup', 'company', 'profile', 'admin', 'password'] },
-
-    // Unit accounts
-    { id: 'unit.home', title: 'Unit home', hint: 'Your unit today', to: '/unit', group: 'Go to', need: 'unit', keywords: ['home', 'unit', 'today', 'dashboard'] },
-    { id: 'unit.allocations', title: 'Allocations', hint: 'Person and machine for every process', to: '/unit/allocations', group: 'Do', need: 'unit', keywords: ['allocate', 'allocation', 'assign', 'person', 'machine', 'operator', 'staff'] },
-    { id: 'unit.work', title: 'Process work', hint: 'Start and complete your unit’s processes', to: '/production', group: 'Do', need: 'unit', keywords: ['work', 'start', 'complete', 'finish', 'process', 'production'] },
-    { id: 'unit.staff', title: 'Staff', hint: 'Add, edit or remove your unit’s people', to: '/unit/staff', group: 'Setup', need: 'unit', keywords: ['staff', 'people', 'person', 'worker', 'operator', 'add', 'remove', 'edit', 'experience'] },
-    { id: 'unit.machines', title: 'Machines', hint: 'Add, edit or remove your unit’s machines', to: '/unit/machines', group: 'Setup', need: 'unit', keywords: ['machine', 'machines', 'press', 'equipment', 'add', 'remove', 'edit', 'service'] },
   ]
 }
 
