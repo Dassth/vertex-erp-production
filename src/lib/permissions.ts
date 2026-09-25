@@ -81,6 +81,7 @@ const ROUTE_CAPABILITIES: Array<[string, Capability]> = [
   ['/costing', 'costing'],
   ['/dispatch', 'dispatch'],
   ['/billing', 'billing'],
+  ['/accounts', 'billing'],
   ['/reports', 'billing'],
   ['/customers', 'billing'],
   ['/units', 'units.monitor'],

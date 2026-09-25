@@ -28,6 +28,7 @@ Master setup → Planning → Order Costing → Production → Dispatch → Bill
 | Costing | `/costing` | Cost one planned order, set profit/discount/tax, finalize (snapshot + production order) |
 | Production | `/production` | Every released order; open a job to download each unit's sheet |
 | Units | `/units` | View a unit's work; download today's work or one job's sheet |
+| Income & Expenses | `/accounts` | Money in and out by month, balance, what customers owe and what we owe suppliers |
 | Dispatch | `/dispatch` | Mark a job's work finished; full or partial dispatch; each dispatch issues an invoice |
 | Billing | `/billing` | Read-only invoice register, preview and PDF download, consolidated order statement |
 
@@ -153,6 +154,17 @@ materials may be entered in mm, cm or inches.
 - **Dispatch**: only Completed orders; whole-number quantity ≤ remaining; date not before production
   completion or the previous dispatch; company profile complete. Each confirmation carries a request id —
   a repeat returns the stored dispatch and invoice (no duplicates).
+
+## Income & expenses (`src/lib/cashbook.ts`, `src/domain/cashbook.ts`)
+
+Every rupee that comes in (a **receipt**, `RCT-0001`) or goes out (a **payment**, `PAY-0001`) is one entry with
+a date, amount, mode (cash, UPI, bank transfer, cheque), kind (customer payment, salary, electricity…),
+party, optional reference and notes. A receipt may settle a sales invoice and a payment a purchase bill —
+never for more than is still due; partial payments are allowed. From these entries the page shows, for any
+month: money in, money out, the month's balance, the balance brought forward and at month end, totals by kind
+and by mode, and an Excel/CSV download. **To collect** lists sales invoices not fully paid; **To pay** lists
+purchase bills not fully paid. Deleting an entry makes its invoice or bill due again. Sums are worked in
+paise. An *Opening balance* entry records the cash and bank money held on the day the book starts.
 
 ## Invoice allocation and rounding (`src/lib/billing.ts`)
 

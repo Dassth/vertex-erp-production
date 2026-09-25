@@ -29,6 +29,7 @@ const AdminHomePage = lazy(() => import('./features/home/AdminHomePage').then((m
 const CustomerHistoryPage = lazy(() => import('./features/customers/CustomerHistoryPage').then((m) => ({ default: m.CustomerHistoryPage })))
 const ReportsPage = lazy(() => import('./features/reports/ReportsPage').then((m) => ({ default: m.ReportsPage })))
 const BillingPage = lazy(() => import('./features/billing/BillingPage').then((m) => ({ default: m.BillingPage })))
+const AccountsPage = lazy(() => import('./features/accounts/AccountsPage').then((m) => ({ default: m.AccountsPage })))
 const SettingsPage = lazy(() => import('./features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })))
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -117,6 +118,7 @@ export default function App() {
                   <Route path="dispatch" element={guarded('dispatch', <DispatchPage />)} />
                   <Route path="invoices" element={guarded('billing', <InvoicesPage />)} />
                   <Route path="billing" element={guarded('billing', <BillingPage />)} />
+                  <Route path="accounts" element={guarded('billing', <AccountsPage />)} />
                   <Route path="reports" element={guarded('billing', <ReportsPage />)} />
                   <Route path="customers" element={guarded('billing', <CustomerHistoryPage />)} />
                   <Route path="home" element={<RequirePermission>{page(<AdminHomePage />)}</RequirePermission>} />
