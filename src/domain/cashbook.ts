@@ -6,7 +6,7 @@ import { audit, command, docCode, fail, hasFieldErrors, isIsoDate, nextSeq, ok, 
 import type { Op } from './common'
 
 /* ---------------------------------------------------------------------------
- * Income & expenses (வரவு செலவு). A receipt records money that came in, a
+ * Income & expenses. A receipt records money that came in, a
  * payment money that went out. A receipt may settle a sales invoice and a
  * payment a purchase bill — never for more than is still due. Every change
  * is audited; deleting an entry needs the billing capability like any other.

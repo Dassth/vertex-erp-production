@@ -14,7 +14,7 @@ import { ExcelButton } from '../../components/DocumentPreview'
 import type { ReportTable } from '../../lib/reportTable'
 
 /* ---------------------------------------------------------------------------
- * Income & expenses (வரவு செலவு). Money in and money out, month by month, and
+ * Income & expenses. Money in and money out, month by month, and
  * what is still due: customers' unpaid invoices ("To collect") and suppliers'
  * unpaid bills ("To pay"). Month and tab live in the URL.
  * ------------------------------------------------------------------------- */
@@ -92,9 +92,9 @@ export function AccountsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Billing · வரவு செலவு"
+        eyebrow="Billing · Money"
         title="Income & Expenses"
-        subtitle="Record every rupee that comes in (வரவு) and goes out (செலவு). See the balance each month, what customers still owe you, and what you still owe suppliers."
+        subtitle="Record every rupee that comes in and goes out. See the balance each month, what customers still owe you, and what you still owe suppliers."
         icon={<Wallet className="h-4 w-4" />}
         actions={
           <div className="flex flex-wrap gap-2">
@@ -120,8 +120,8 @@ export function AccountsPage() {
       </div>
 
       <StatStrip className="grid-cols-2 lg:grid-cols-4">
-        <StatTile label="Money in (வரவு)" value={moneyPaise(sum.moneyIn)} icon={<ArrowDownLeft className="h-4 w-4" />} tone="green" hint={`${entries.filter((e) => e.direction === 'in').length} receipt(s) in ${monthLabel}`} />
-        <StatTile label="Money out (செலவு)" value={moneyPaise(sum.moneyOut)} icon={<ArrowUpRight className="h-4 w-4" />} tone="amber" hint={`${entries.filter((e) => e.direction === 'out').length} payment(s) in ${monthLabel}`} />
+        <StatTile label="Money in" value={moneyPaise(sum.moneyIn)} icon={<ArrowDownLeft className="h-4 w-4" />} tone="green" hint={`${entries.filter((e) => e.direction === 'in').length} receipt(s) in ${monthLabel}`} />
+        <StatTile label="Money out" value={moneyPaise(sum.moneyOut)} icon={<ArrowUpRight className="h-4 w-4" />} tone="amber" hint={`${entries.filter((e) => e.direction === 'out').length} payment(s) in ${monthLabel}`} />
         <StatTile label="This month" value={moneyPaise(sum.balance)} icon={<Scale className="h-4 w-4" />} tone={sum.balance < 0 ? 'red' : 'indigo'} hint={sum.balance < 0 ? 'More went out than came in' : 'Money in − money out'} />
         <StatTile label="Balance at month end" value={moneyPaise(bal.closing)} icon={<Wallet className="h-4 w-4" />} tone={bal.closing < 0 ? 'red' : 'blue'} hint={`Brought forward ${moneyPaise(bal.opening)}`} />
       </StatStrip>
@@ -461,7 +461,7 @@ function MoneyEditor({ draft, onClose }: { draft: MoneyDraft; onClose: () => voi
       onClose={onClose}
       size="lg"
       icon={isIn ? <ArrowDownLeft className="h-5 w-5" /> : <ArrowUpRight className="h-5 w-5" />}
-      title={editing ? `Edit ${draft.id ? (db.cashbook.find((m) => m.id === draft.id)?.code ?? '') : ''}` : isIn ? 'Money in (வரவு)' : 'Money out (செலவு)'}
+      title={editing ? `Edit ${draft.id ? (db.cashbook.find((m) => m.id === draft.id)?.code ?? '') : ''}` : isIn ? 'Money in' : 'Money out'}
       subtitle={isIn ? 'Money you received — from a customer against an invoice, or any other income.' : 'Money you paid — a supplier’s bill, salary, electricity, rent or any other expense.'}
       footer={
         <>
@@ -494,8 +494,8 @@ function MoneyEditor({ draft, onClose }: { draft: MoneyDraft; onClose: () => voi
               value={d.direction}
               onChange={(v) => set({ direction: v, category: v === 'in' ? CUSTOMER_PAYMENT : SUPPLIER_PAYMENT, invoiceId: null, purchaseId: null })}
               options={[
-                { value: 'in', label: 'Money in (வரவு)' },
-                { value: 'out', label: 'Money out (செலவு)' },
+                { value: 'in', label: 'Money in' },
+                { value: 'out', label: 'Money out' },
               ]}
             />
           </div>

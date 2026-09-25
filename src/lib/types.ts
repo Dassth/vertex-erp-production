@@ -771,7 +771,7 @@ export type MoneyDirection = 'in' | 'out'
 export type MoneyMode = 'cash' | 'bank' | 'upi' | 'cheque'
 
 /**
- * One line of the income & expense book (வரவு செலவு). A receipt may settle a
+ * One line of the income & expense book. A receipt may settle a
  * sales invoice and a payment may settle a purchase bill; everything else —
  * salary, electricity, rent, other income — stands on its own.
  */

@@ -1,8 +1,8 @@
 /* ---------------------------------------------------------------------------
- * Income & expenses (வரவு செலவு) — the money side of the business.
+ * Income & expenses — the money side of the business.
  *
- *   Money in  (வரவு)   receipts: customers paying invoices, other income.
- *   Money out (செலவு)  payments: suppliers' bills, salary, power, rent…
+ *   Money in    receipts: customers paying invoices, other income.
+ *   Money out   payments: suppliers' bills, salary, power, rent…
  *   Balance            money in − money out.
  *   To collect         what customers still owe on sales invoices.
  *   To pay             what we still owe suppliers on purchase bills.

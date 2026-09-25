@@ -94,7 +94,7 @@ const NAV: NavItem[] = [
   { to: '/production', label: 'Production', hint: 'Process progress by unit', icon: Factory, capabilities: ['production.monitor', 'production.work'] },
   { to: '/units', label: 'Units', hint: 'Each unit’s work, with today’s download', icon: Building2, capabilities: ['units.monitor'] },
   { to: '/billing', label: 'Billing', hint: 'Sales invoices and purchase bills', icon: ReceiptText, capabilities: ['billing'] },
-  { to: '/accounts', label: 'Income & Expenses', hint: 'வரவு செலவு — money in, money out, dues', icon: Wallet, capabilities: ['billing'] },
+  { to: '/accounts', label: 'Income & Expenses', hint: 'Money in, money out, and what is due', icon: Wallet, capabilities: ['billing'] },
   { to: '/dispatch', label: 'Dispatch', hint: 'Ship completed orders', icon: Truck, capabilities: ['dispatch'] },
   { to: '/invoices', label: 'Invoices', hint: 'Order summaries and invoice downloads', icon: FileStack, capabilities: ['billing'] },
   { to: '/reports', label: 'Reports', hint: 'Monthly GST reports: invoices and bills', icon: FileBarChart, capabilities: ['billing'] },
