@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import path from 'node:path'
+import { writeFileSync } from 'node:fs'
+import type { TDocumentDefinitions } from 'pdfmake/interfaces'
+import { FONT_FAMILY, reportTableDefinition } from '../lib/pdfDocs'
 import type { Invoice, VertexDB } from '../lib/types'
 import { buildEmptyDB } from '../lib/defaults'
 import { normalizeDB } from '../lib/db'
-import { balances, entriesOfMonth, summarise, sumDue, toCollect, toPay } from '../lib/cashbook'
+import { balances, entriesOfMonth, monthReportTable, summarise, sumDue, toCollect, toPay } from '../lib/cashbook'
 import { ADMIN, RETIRED_UNIT, ctxFor, must } from '../test/fixtures'
 import { savePurchaseBill } from './purchases'
 import { deleteMoneyEntry, saveMoneyEntry } from './cashbook'
@@ -152,3 +156,43 @@ describe('deleting and access', () => {
     expect(loaded.counters).toMatchObject({ receipt: 0, payment: 0 })
   })
 })
+
+describe('the month report', () => {
+  it('has the same rows for Excel and PDF, with balances, and renders as a PDF', async () => {
+    let { db } = books()
+    const add = (over: Partial<MoneyDraft>) => (db = must(saveMoneyEntry(draft(over))(db, admin())).db)
+    add({ category: 'Opening balance', party: 'Cash in hand', amount: 20000, date: '2026-08-31', mode: 'cash' })
+    add({ amount: 11800, invoiceId: 'INV-1', date: '2026-09-12' })
+    add({ direction: 'out', category: 'Electricity', party: 'TNEB', amount: 4321.5, date: '2026-09-14', mode: 'bank', reference: 'UTR 99812' })
+
+    const table = monthReportTable(db, '2026-09')
+    expect(table.heading[1]).toBe('Income & expenses — September 2026')
+    expect(table.rows.map((r) => r.kind)).toEqual(['total', 'row', 'row', 'grand', 'total', 'total'])
+    expect(table.rows[0].cells).toEqual(['Balance brought forward', '', '', '', '', '', '', 20000, null])
+    expect(table.rows[1].cells).toEqual(['12 Sep 2026', 'RCT-0002', 'In', 'Customer payment', 'Apex Industries', 'UPI', 'INV/2026-27/0001', 11800, null])
+    expect(table.rows[3].cells.slice(-2)).toEqual([11800, 4321.5])
+    expect(table.rows[5].cells).toEqual(['Balance at month end', '', '', '', '', '', '', 27478.5, null])
+
+    const mod = (await import('pdfmake')) as unknown as { default?: PdfMake } & PdfMake
+    const pdfmake = mod.default ?? mod
+    const dir = path.resolve(__dirname, '../assets/fonts')
+    const regular = path.join(dir, 'NotoSansTamil-Regular.ttf')
+    const bold = path.join(dir, 'NotoSansTamil-Bold.ttf')
+    pdfmake.addFonts({ [FONT_FAMILY]: { normal: regular, bold, italics: regular, bolditalics: bold } })
+    pdfmake.setUrlAccessPolicy(() => false)
+    pdfmake.setLocalAccessPolicy((p) => path.resolve(p).startsWith(dir))
+    const { updatedAt: _u, updatedBy: _b, ...company } = { ...db.company, name: 'Vertex Print Pack' }
+    void _u
+    void _b
+    const pdf = await pdfmake.createPdf(reportTableDefinition(table, company, new Date('2026-09-30T18:00:00'))).getBuffer()
+    expect(pdf.subarray(0, 4).toString()).toBe('%PDF')
+    if (process.env.PDF_OUT) writeFileSync(process.env.PDF_OUT.replace('.pdf', '-income-expenses.pdf'), pdf)
+  })
+})
+
+interface PdfMake {
+  addFonts(f: unknown): void
+  setUrlAccessPolicy(cb: (u: string) => boolean): void
+  setLocalAccessPolicy(cb: (p: string) => boolean): void
+  createPdf(def: TDocumentDefinitions): { getBuffer(): Promise<Buffer> }
+}

@@ -164,6 +164,20 @@ export const unitTodayDoc = (read: () => VertexDB, unitId: string): PreviewDoc =
   }
 }
 
+/** One month of income & expenses as a PDF — the same rows as its Excel file. */
+export const moneyMonthDoc = (read: () => VertexDB, month: string): PreviewDoc => ({
+  title: `Income & expenses ${month}`,
+  fileName: `income-expenses-${month}.pdf`,
+  build: async () => {
+    const db = read()
+    const [{ reportTableDefinition }, { renderPdf }, { monthReportTable }] = await Promise.all([import('../lib/pdfDocs'), import('../lib/pdfRender'), import('../lib/cashbook')])
+    const { updatedAt: _u, updatedBy: _b, ...company } = db.company
+    void _u
+    void _b
+    return renderPdf(reportTableDefinition(monthReportTable(db, month), company, new Date(), watermarkOn(db.company)))
+  },
+})
+
 /** The costing sheet as a PDF. Internal figures — it is never sent to a customer. */
 export const costingDoc = (read: () => VertexDB, costingId: string): PreviewDoc => {
   const code = read().costings.find((c) => c.id === costingId)?.code ?? costingId

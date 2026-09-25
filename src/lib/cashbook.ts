@@ -13,6 +13,8 @@
 import type { Invoice, MoneyDirection, MoneyEntry, MoneyMode, PurchaseBill, VertexDB } from './types'
 import { fromPaise, toPaise } from './costing'
 import { purchaseTotals } from './gst'
+import { fmtDate } from './format'
+import type { ReportTable } from './reportTable'
 
 export const CUSTOMER_PAYMENT = 'Customer payment'
 export const SUPPLIER_PAYMENT = 'Supplier payment'
@@ -118,3 +120,40 @@ export function toPay(db: Pick<VertexDB, 'cashbook' | 'purchases' | 'company'>, 
 }
 
 export const sumDue = <T,>(list: Array<Due<T>>) => fromPaise(list.reduce((s, d) => s + toPaise(d.due), 0))
+
+/** The month's report — the same rows in the Excel file and the PDF: balance brought forward, every entry oldest first, totals and month-end balance. */
+export function monthReportTable(db: Pick<VertexDB, 'cashbook' | 'invoices' | 'purchases' | 'company'>, month: string): ReportTable {
+  const entries = [...entriesOfMonth(db, month)].reverse()
+  const s = summarise(entries)
+  const b = balances(db, month)
+  const [y, m] = month.split('-').map(Number)
+  const monthLabel = new Date(y, m - 1, 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
+  const doc = (e: MoneyEntry) => (e.invoiceId ? db.invoices.find((i) => i.id === e.invoiceId)?.number : e.purchaseId ? (db.purchases ?? []).find((p) => p.id === e.purchaseId)?.code : '') ?? ''
+  const line = (label: string, moneyIn: number | null, moneyOut: number | null) => [label, '', '', '', '', '', '', moneyIn, moneyOut]
+  return {
+    name: `Income & expenses ${month}`,
+    internal: true,
+    heading: [db.company.name, `Income & expenses — ${monthLabel}`],
+    columns: [
+      { label: 'Date', width: 12 },
+      { label: 'No.', width: 11 },
+      { label: 'In / Out', width: 9 },
+      { label: 'Kind', width: 22, wrap: true },
+      { label: 'Party', width: 26, wrap: true },
+      { label: 'Mode', width: 13 },
+      { label: 'Invoice / bill', width: 18 },
+      { label: 'Money in', width: 14, numeric: true },
+      { label: 'Money out', width: 14, numeric: true },
+    ],
+    rows: [
+      { kind: 'total', cells: line('Balance brought forward', b.opening, null) },
+      ...entries.map((e) => ({
+        kind: 'row' as const,
+        cells: [fmtDate(e.date), e.code, e.direction === 'in' ? 'In' : 'Out', e.category, e.party, MODE_LABEL[e.mode], doc(e), e.direction === 'in' ? e.amount : null, e.direction === 'out' ? e.amount : null],
+      })),
+      { kind: 'grand', cells: line('Total this month', s.moneyIn, s.moneyOut) },
+      { kind: 'total', cells: line('This month (in − out)', s.balance, null) },
+      { kind: 'total', cells: line('Balance at month end', b.closing, null) },
+    ],
+  }
+}

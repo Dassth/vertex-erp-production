@@ -1,17 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { addMonths, format, parse } from 'date-fns'
-import { ArrowDownLeft, ArrowUpRight, ChevronLeft, ChevronRight, HandCoins, Pencil, Plus, Scale, Trash2, Wallet } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, ChevronLeft, ChevronRight, Download, HandCoins, Pencil, Plus, Scale, Trash2, Wallet } from 'lucide-react'
 import { useStore } from '../../store/store'
 import type { MoneyDirection, MoneyEntry, MoneyMode } from '../../lib/types'
-import { CATEGORIES, CUSTOMER_PAYMENT, MODE_LABEL, MODES, SUPPLIER_PAYMENT, balances, entriesOfMonth, summarise, sumDue, toCollect, toPay } from '../../lib/cashbook'
+import { CATEGORIES, CUSTOMER_PAYMENT, MODE_LABEL, MODES, SUPPLIER_PAYMENT, balances, entriesOfMonth, monthReportTable, summarise, sumDue, toCollect, toPay } from '../../lib/cashbook'
 import { cx, fmtDate, moneyPaise } from '../../lib/format'
 import { deleteMoneyEntry, saveMoneyEntry, validateMoney } from '../../domain/cashbook'
 import type { MoneyDraft } from '../../domain/cashbook'
 import { Badge, Button, Card, CardHead, ConfirmDialog, EmptyState, Field, IconButton, Input, Modal, Segmented, Select, Textarea } from '../../components/ui'
 import { NumberInput, PageHeader, StatStrip, StatTile, useDocumentTitle } from '../../components/page'
-import { ExcelButton } from '../../components/DocumentPreview'
-import type { ReportTable } from '../../lib/reportTable'
+import { DownloadButton, ExcelButton, moneyMonthDoc, useLatestDb } from '../../components/DocumentPreview'
 
 /* ---------------------------------------------------------------------------
  * Income & expenses. Money in and money out, month by month, and
@@ -307,39 +306,22 @@ export function AccountsPage() {
 function EntriesCard({ entries, month, monthLabel, onEdit, onDelete, onNew }: { entries: MoneyEntry[]; month: string; monthLabel: string; onEdit: (m: MoneyEntry) => void; onDelete: (m: MoneyEntry) => void; onNew: (d: MoneyDirection) => void }) {
   const { db } = useStore()
   const doc = (m: MoneyEntry) => (m.invoiceId ? db.invoices.find((i) => i.id === m.invoiceId)?.number : m.purchaseId ? db.purchases.find((p) => p.id === m.purchaseId)?.code : null)
-  const table = (): ReportTable => {
-    const s = summarise(entries)
-    return {
-      name: `Income & expenses ${month}`,
-      internal: true,
-      heading: [db.company.name, `Income & expenses — ${monthLabel}`],
-      columns: [
-        { label: 'Date', width: 12 },
-        { label: 'No.', width: 11 },
-        { label: 'In / Out', width: 9 },
-        { label: 'Kind', width: 22, wrap: true },
-        { label: 'Party', width: 26, wrap: true },
-        { label: 'Mode', width: 13 },
-        { label: 'Invoice / bill', width: 18 },
-        { label: 'Money in', width: 14, numeric: true },
-        { label: 'Money out', width: 14, numeric: true },
-      ],
-      rows: [
-        ...[...entries].reverse().map((m) => ({
-          kind: 'row' as const,
-          cells: [fmtDate(m.date), m.code, m.direction === 'in' ? 'In' : 'Out', m.category, m.party, MODE_LABEL[m.mode], doc(m) ?? '', m.direction === 'in' ? m.amount : null, m.direction === 'out' ? m.amount : null],
-        })),
-        { kind: 'grand' as const, cells: ['Total', '', '', '', '', '', '', s.moneyIn, s.moneyOut] },
-        { kind: 'total' as const, cells: ['Balance (in − out)', '', '', '', '', '', '', s.balance, null] },
-      ],
-    }
-  }
+  const read = useLatestDb()
   return (
     <Card className="vx-anim-up overflow-hidden">
       <CardHead
         title={`Entries — ${monthLabel}`}
         subtitle="Newest first"
-        actions={entries.length ? <ExcelButton size="sm" variant="secondary" stem={`income-expenses-${month}`} table={table} aria-label={`Download ${monthLabel} entries as a spreadsheet`} /> : undefined}
+        actions={
+          entries.length ? (
+            <div className="flex flex-wrap gap-2">
+              <DownloadButton size="sm" icon={<Download className="h-3.5 w-3.5" />} doc={() => moneyMonthDoc(read, month)} aria-label={`Download the ${monthLabel} report as a PDF`}>
+                Download PDF
+              </DownloadButton>
+              <ExcelButton size="sm" variant="secondary" stem={`income-expenses-${month}`} table={() => monthReportTable(read(), month)} aria-label={`Download the ${monthLabel} report as a spreadsheet`} />
+            </div>
+          ) : undefined
+        }
       />
       {entries.length === 0 ? (
         <EmptyState
