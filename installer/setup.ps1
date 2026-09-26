@@ -95,15 +95,36 @@ function Wait-Server([string]$url, [int]$seconds) {
   return $false
 }
 
+# Windows PowerShell 5.1 turns any line a program writes to stderr into a
+# terminating error while ErrorActionPreference is Stop (e.g. pg_ctl saying the
+# database is already stopped). Programs run here with that relaxed and are
+# judged by their exit code only.
+function Invoke-Program([string]$exe, [string[]]$argv) {
+  $saved = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {
+    $out = & $exe @argv 2>&1 | ForEach-Object { "$_" } | Out-String
+    return [pscustomobject]@{ Code = $LASTEXITCODE; Output = $out }
+  } finally {
+    $ErrorActionPreference = $saved
+  }
+}
+
+# Stop the database if it is running; nothing to do when it is already stopped.
+function Stop-Database {
+  $pgctl = Join-Path $Prog 'pgsql\bin\pg_ctl.exe'
+  $db = Join-Path $Data 'db'
+  if ((Test-Path $pgctl) -and (Test-Path (Join-Path $db 'postmaster.pid'))) {
+    Invoke-Program $pgctl @('stop', '-D', $db, '-m', 'fast', '-w', '-t', '120') | Out-Null
+  }
+}
+
 function Stop-Vertex {
   if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
     Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
   }
   Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.ExecutablePath -like "$Prog\*" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-  $pgctl = Join-Path $Prog 'pgsql\bin\pg_ctl.exe'
-  if ((Test-Path $pgctl) -and (Test-Path (Join-Path $Data 'db\PG_VERSION'))) {
-    & $pgctl stop -D (Join-Path $Data 'db') -m fast -w -t 120 2>$null | Out-Null
-  }
+  Stop-Database
 }
 
 function Grant([string]$path, [string]$who, [string]$rights) {
@@ -126,9 +147,9 @@ function Install-Main([string]$copyDir, [string]$dataZip, $status) {
   $oldMain = Join-Path $Prog 'app\main.js'
   if ((Test-Path (Join-Path $Data 'db\PG_VERSION')) -and (Test-Path $oldNode) -and (Test-Path $oldMain)) {
     $status.Text = 'Backing up your data before the update...'; [System.Windows.Forms.Application]::DoEvents()
-    $out = & $oldNode $oldMain backup --home $Data 2>&1 | Out-String
-    if ($LASTEXITCODE -ne 0) { throw "Your data could not be backed up before the update, so nothing was changed:`n$out" }
-    & (Join-Path $Prog 'pgsql\bin\pg_ctl.exe') stop -D (Join-Path $Data 'db') -m fast -w -t 120 2>$null | Out-Null
+    $r = Invoke-Program $oldNode @($oldMain, 'backup', '--home', $Data)
+    if ($r.Code -ne 0) { throw "Your data could not be backed up before the update, so nothing was changed:`n$($r.Output)" }
+    Stop-Database
   }
   # This computer may have been the second computer until now.
   if (Get-ScheduledTask -TaskName $CopyTask -ErrorAction SilentlyContinue) { Stop-ScheduledTask -TaskName $CopyTask -ErrorAction SilentlyContinue; Unregister-ScheduledTask -TaskName $CopyTask -Confirm:$false }
@@ -176,10 +197,10 @@ function Install-Main([string]$copyDir, [string]$dataZip, $status) {
   # Data prepared on another computer: load it before the server starts for the first time.
   if ($dataZip) {
     $status.Text = 'Loading your data from the backup (a minute)...'; [System.Windows.Forms.Application]::DoEvents()
-    $out = & $node $main restore $dataZip --confirm --home $Data 2>&1 | Out-String
-    if ($LASTEXITCODE -ne 0) { throw "The backup could not be loaded:`n$out" }
+    $r = Invoke-Program $node @($main, 'restore', $dataZip, '--confirm', '--home', $Data)
+    if ($r.Code -ne 0) { throw "The backup could not be loaded:`n$($r.Output)" }
     # The server starts the database again under its own account.
-    & (Join-Path $Prog 'pgsql\bin\pg_ctl.exe') stop -D (Join-Path $Data 'db') -m fast -w -t 120 2>$null | Out-Null
+    Stop-Database
     Grant $Data '*S-1-5-20' '(OI)(CI)M'
   }
 
