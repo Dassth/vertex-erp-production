@@ -15,7 +15,7 @@ MAIN computer (Administrator 1)                 SECOND computer (Administrator 2
 
 1. Create the customer's licence on the control page (below), e.g. `VPP-2026-01`.
 2. `npm run build:windows -- --licence VPP-2026-01 --customer "Vertex Print Pack"`
-3. The result is `release\VertexERP-Setup-VPP-2026-01.exe` (about 70 MB): Node, PostgreSQL 17 and the
+3. The result is `release\VertexERP-Setup-VPP-2026-01-v<version>.exe` (about 70 MB): Node, PostgreSQL 17 and the
    app in one file, built with Windows' own IExpress. Copy it to a USB stick.
 
 ## Install at the customer

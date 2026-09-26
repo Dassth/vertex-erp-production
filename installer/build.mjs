@@ -78,7 +78,8 @@ writeFileSync(join(PACK, 'setup.cmd'), '@echo off\r\npowershell.exe -NoProfile -
 cpSync(join(STAGE, 'VertexERP.ico'), join(PACK, 'VertexERP.ico'))
 
 step('Wrap into one EXE (IExpress)')
-const exe = join(REL, `VertexERP-Setup-${LICENCE}.exe`)
+// The version is in the file name, so a download is never mistaken for an older one.
+const exe = join(REL, `VertexERP-Setup-${LICENCE}-v${VERSION}.exe`)
 rmSync(exe, { force: true })
 const files = ['setup.cmd', 'setup.ps1', 'payload.zip', 'VertexERP.ico']
 const sed = [
