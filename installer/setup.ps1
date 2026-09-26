@@ -110,6 +110,44 @@ function Invoke-Program([string]$exe, [string[]]$argv) {
   }
 }
 
+# Run a Vertex command (backup, restore) as NETWORK SERVICE, the account the
+# server runs as. Run from this elevated setup instead, PostgreSQL drops the
+# administrator rights by itself and then may not write the data folder.
+function Invoke-AsServer([string]$name, [string]$arguments, [int]$timeoutSec) {
+  $task = "Vertex ERP Setup $name"
+  $node = Join-Path $Prog 'node\node.exe'
+  $main = Join-Path $Prog 'app\main.js'
+  $outFile = Join-Path $Data "logs\setup-$name.txt"
+  New-Item -ItemType Directory -Force -Path (Join-Path $Data 'logs') | Out-Null
+  Remove-Item $outFile -Force -ErrorAction SilentlyContinue
+  $cmdLine = "/c `"`"$node`" `"$main`" $arguments --home `"$Data`" > `"$outFile`" 2>&1`""
+  $action = New-ScheduledTaskAction -Execute (Join-Path $env:SystemRoot 'System32\cmd.exe') -Argument $cmdLine -WorkingDirectory (Join-Path $Prog 'app')
+  $principal = New-ScheduledTaskPrincipal -UserId 'NT AUTHORITY\NETWORKSERVICE' -LogonType ServiceAccount
+  $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Seconds $timeoutSec)
+  Register-ScheduledTask -TaskName $task -Action $action -Principal $principal -Settings $settings -Force | Out-Null
+  try {
+    $started = Get-Date
+    Start-ScheduledTask -TaskName $task
+    $deadline = $started.AddSeconds($timeoutSec + 30)
+    while ((Get-Date) -lt $deadline) {
+      [System.Windows.Forms.Application]::DoEvents()
+      Start-Sleep -Milliseconds 500
+      $info = Get-ScheduledTaskInfo -TaskName $task
+      $state = (Get-ScheduledTask -TaskName $task).State
+      # 267009 = still running, 267011 = not started yet.
+      if ($state -ne 'Running' -and $info.LastRunTime -ge $started.AddSeconds(-2) -and $info.LastTaskResult -ne 267009 -and $info.LastTaskResult -ne 267011) { break }
+    }
+    $info = Get-ScheduledTaskInfo -TaskName $task
+    $out = ''
+    if (Test-Path $outFile) { $out = Get-Content $outFile -Raw }
+    $code = $info.LastTaskResult
+    if ((Get-ScheduledTask -TaskName $task).State -eq 'Running') { Stop-ScheduledTask -TaskName $task; $code = -1; $out = "Did not finish in $timeoutSec seconds.`n$out" }
+    return [pscustomobject]@{ Code = $code; Output = $out }
+  } finally {
+    Unregister-ScheduledTask -TaskName $task -Confirm:$false -ErrorAction SilentlyContinue
+  }
+}
+
 # Stop the database if it is running; nothing to do when it is already stopped.
 function Stop-Database {
   $pgctl = Join-Path $Prog 'pgsql\bin\pg_ctl.exe'
@@ -147,7 +185,7 @@ function Install-Main([string]$copyDir, [string]$dataZip, $status) {
   $oldMain = Join-Path $Prog 'app\main.js'
   if ((Test-Path (Join-Path $Data 'db\PG_VERSION')) -and (Test-Path $oldNode) -and (Test-Path $oldMain)) {
     $status.Text = 'Backing up your data before the update...'; [System.Windows.Forms.Application]::DoEvents()
-    $r = Invoke-Program $oldNode @($oldMain, 'backup', '--home', $Data)
+    $r = Invoke-AsServer 'backup' 'backup' 900
     if ($r.Code -ne 0) { throw "Your data could not be backed up before the update, so nothing was changed:`n$($r.Output)" }
     Stop-Database
   }
@@ -197,7 +235,13 @@ function Install-Main([string]$copyDir, [string]$dataZip, $status) {
   # Data prepared on another computer: load it before the server starts for the first time.
   if ($dataZip) {
     $status.Text = 'Loading your data from the backup (a minute)...'; [System.Windows.Forms.Application]::DoEvents()
-    $r = Invoke-Program $node @($main, 'restore', $dataZip, '--confirm', '--home', $Data)
+    # The server account may not read the chosen file where it is (e.g. Downloads).
+    $importDir = Join-Path $Data 'import'
+    New-Item -ItemType Directory -Force -Path $importDir | Out-Null
+    $zipCopy = Join-Path $importDir ([System.IO.Path]::GetFileName($dataZip))
+    Copy-Item -LiteralPath $dataZip -Destination $zipCopy -Force
+    Grant $importDir '*S-1-5-20' '(OI)(CI)M'
+    $r = Invoke-AsServer 'restore' "restore `"$zipCopy`" --confirm" 900
     if ($r.Code -ne 0) { throw "The backup could not be loaded:`n$($r.Output)" }
     # The server starts the database again under its own account.
     Stop-Database
