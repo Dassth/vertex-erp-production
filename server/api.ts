@@ -25,6 +25,8 @@ export interface ApiOptions {
   backup?: { store: BackupStore; passphrase?: string; appVersion?: string; keep: number; schedule: string }
   /** Where this deployment runs (shown to Administrator 1). */
   deployment?: string
+  /** The installed build, e.g. vertex-erp@2026.09.26.1405 — open windows compare it with their own. */
+  version?: string
   /** An installed copy's licence; when it is not active every call except the licence check is refused (423). */
   licence?: { state(): Promise<LicenceState>; check(): Promise<LicenceState>; refreshIfStale?(maxAgeMs: number, waitMs?: number): Promise<void> }
   /** Lets the second computer keep a copy of the data (header x-vertex-pair). */
@@ -113,7 +115,7 @@ export function createApiHandler(service: VertexService, options: ApiOptions = {
 
     if (path === '/api/health' && method === 'GET') {
       const s = await service.state()
-      return json(200, { ok: true, database: service.db.kind, schema: service.db.schema, revision: s.revision, deployment: options.deployment ?? null })
+      return json(200, { ok: true, database: service.db.kind, schema: service.db.schema, revision: s.revision, deployment: options.deployment ?? null, version: options.version ?? null })
     }
     if (path === '/api/accounts' && method === 'GET') {
       const s = await service.state()

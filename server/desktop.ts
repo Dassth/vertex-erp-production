@@ -270,6 +270,7 @@ async function run() {
     port: c.port,
     staticDir: join(APP_DIR, 'client'),
     deployment: 'Windows (offline)',
+    version: c.appVersion,
     licence: new LicenceGuard({ licenceId: c.licenceId, endpoint: c.licenceEndpoint, appVersion: c.appVersion, installId: c.installId }, metaStore(db)),
     backup: { dir: join(HOME, 'backups'), copyDir: c.backupCopyDir || undefined, keep: c.backupKeep, everyMin: c.backupEveryMin, appVersion: c.appVersion },
     replica: c.pairCode ? { pairCode: c.pairCode } : undefined,

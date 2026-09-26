@@ -6,6 +6,7 @@ import App from './App'
 import { StoreProvider } from './store/store'
 import { SERVER_MODE } from './store/remote'
 import { LicenceGate } from './components/LicenceGate'
+import { UpdateBanner } from './components/UpdateBanner'
 
 /* Last-resort screen: an unexpected render error must never leave a dead end.
    Data is already persisted per action, so reloading is safe. */
@@ -40,11 +41,14 @@ const router = createBrowserRouter([
   {
     path: '*',
     element: SERVER_MODE ? (
-      <LicenceGate>
-        <StoreProvider>
-          <App />
-        </StoreProvider>
-      </LicenceGate>
+      <>
+        <UpdateBanner />
+        <LicenceGate>
+          <StoreProvider>
+            <App />
+          </StoreProvider>
+        </LicenceGate>
+      </>
     ) : (
       <StoreProvider>
         <App />

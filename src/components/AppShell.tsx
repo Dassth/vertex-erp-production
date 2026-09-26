@@ -41,6 +41,7 @@ import { format } from 'date-fns'
 import { useStore } from '../store/store'
 import { remote } from '../store/remote'
 import { EXPORT_FORMAT, browserExport, downloadJson, summariseDataset } from '../lib/exportData'
+import { APP_BUILD } from '../lib/build'
 import { cx, fromNow } from '../lib/format'
 import { currentShift } from '../lib/workhours'
 import { isVisibleTo, notificationsFor } from '../lib/notify'
@@ -579,6 +580,9 @@ function UtilityCluster({
                   {user?.designation}
                 </p>
                 <p className="mt-1.5 text-2xs text-muted">{describeAccess(user)}</p>
+                <p className="mt-1 text-2xs text-faint" translate="no">
+                  Version {APP_BUILD}
+                </p>
               </div>
               <div className="border-b border-rule py-1">
                 {/* Every account keeps its own personal actions. */}

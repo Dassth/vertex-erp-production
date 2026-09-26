@@ -24,13 +24,15 @@ const CUSTOMER = arg('--customer', '')
 if (!/^[A-Z0-9][A-Z0-9-]{2,39}$/.test(LICENCE)) throw new Error('Pass --licence <ID>, e.g. --licence VPP-2026-01 (create it first on the licence control page).')
 if (/['@]/.test(CUSTOMER)) throw new Error('The customer name may not contain \' or @.')
 const now = new Date()
-const VERSION = `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')}`
+const p2 = (n) => String(n).padStart(2, '0')
+// Every build gets its own number (date and time), shown in the app and compared by open windows.
+const VERSION = `${now.getFullYear()}.${p2(now.getMonth() + 1)}.${p2(now.getDate())}.${p2(now.getHours())}${p2(now.getMinutes())}`
 
 const REL = join(ROOT, 'release')
 const STAGE = join(REL, 'stage')
 const PACK = join(REL, 'pack')
 const step = (t) => console.log(`\n== ${t}`)
-const run = (cmd) => execSync(cmd, { cwd: ROOT, stdio: 'inherit' })
+const run = (cmd) => execSync(cmd, { cwd: ROOT, stdio: 'inherit', env: { ...process.env, VITE_VERTEX_BUILD: VERSION } })
 
 step('Clean')
 rmSync(STAGE, { recursive: true, force: true })

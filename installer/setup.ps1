@@ -121,6 +121,15 @@ function Get-LanAddress {
 function Install-Main([string]$copyDir, [string]$dataZip, $status) {
   $status.Text = 'Stopping an earlier Vertex ERP, if any...'; [System.Windows.Forms.Application]::DoEvents()
   Stop-Vertex
+  # Upgrading: back up the data with the program that wrote it, before anything is replaced.
+  $oldNode = Join-Path $Prog 'node\node.exe'
+  $oldMain = Join-Path $Prog 'app\main.js'
+  if ((Test-Path (Join-Path $Data 'db\PG_VERSION')) -and (Test-Path $oldNode) -and (Test-Path $oldMain)) {
+    $status.Text = 'Backing up your data before the update...'; [System.Windows.Forms.Application]::DoEvents()
+    $out = & $oldNode $oldMain backup --home $Data 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 0) { throw "Your data could not be backed up before the update, so nothing was changed:`n$out" }
+    & (Join-Path $Prog 'pgsql\bin\pg_ctl.exe') stop -D (Join-Path $Data 'db') -m fast -w -t 120 2>$null | Out-Null
+  }
   # This computer may have been the second computer until now.
   if (Get-ScheduledTask -TaskName $CopyTask -ErrorAction SilentlyContinue) { Stop-ScheduledTask -TaskName $CopyTask -ErrorAction SilentlyContinue; Unregister-ScheduledTask -TaskName $CopyTask -Confirm:$false }
 

@@ -22,6 +22,8 @@ export interface ServeConfig {
   secureCookies?: boolean
   allowedOrigins?: string[]
   deployment: string
+  /** The installed build, reported by /api/health. */
+  version?: string
   backup?: {
     dir: string
     /** A second place (another drive, a USB disk, a synced folder) that keeps one archive per day. */
@@ -67,6 +69,7 @@ export async function startServing(cfg: ServeConfig): Promise<{ stop: () => Prom
     secureCookies: !!cfg.secureCookies,
     allowedOrigins: cfg.allowedOrigins ?? [],
     deployment: cfg.deployment,
+    version: cfg.version,
     licence: cfg.licence,
     replica: cfg.replica,
     backup: b ? { store: fsBackupStore(b.dir), passphrase: b.passphrase, appVersion: b.appVersion, keep: b.keep, schedule: `every ${b.everyMin} min${b.copyDir ? `, daily copy in ${b.copyDir}` : ''}` } : undefined,

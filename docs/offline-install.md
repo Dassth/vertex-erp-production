@@ -82,6 +82,28 @@ filled in automatically; press Install. It becomes the new main computer with al
 - Running setup again **upgrades** the program; the database and backups are never touched.
 - *Uninstall Vertex ERP* (Start menu) removes the program and **keeps the data**.
 
+## Updating to a new version
+
+1. Build a new installer (`npm run build:windows -- --licence <ID> --customer "<name>"`). Every build has its own
+   number, date and time — e.g. `2026.09.26.1405` — shown in the app under the account menu (top right).
+2. Run it on the **main computer**, choose **MAIN computer**, press Install. Setup:
+   - backs up the data first (with the version that wrote it) — if that backup fails, nothing is changed;
+   - replaces only the program in `C:\Program Files\VertexERP`; the database in `C:\ProgramData\VertexERP\db` is kept;
+   - starts Vertex ERP again.
+3. Open windows show **"Vertex ERP has been updated… Reload now"** within 30 seconds. A window keeps the program it
+   opened with until it is reloaded — close it and open it again, or press *Reload now*.
+4. The second computer needs nothing: its icon opens the main computer, which now serves the new version.
+
+**New features that need new data.** The database is changed automatically when the new version starts — nobody runs
+anything:
+
+- Business records live in one versioned dataset. A new kind of record (for example *Income & Expenses* added
+  `cashbook`) is filled with an empty list for older data the first time it loads (`normalizeDB` in `src/lib/db.ts`);
+  existing records are never touched.
+- A new database table goes into `server/migrations.ts` as the next numbered migration. On start the server applies
+  the migrations it has not applied yet, once each, and records them. Released migrations are never edited.
+- Before either happens, setup has already taken the backup above.
+
 ## Licence control (Back Moon Devs)
 
 Control page: **https://vertex-licence.suryadass010405.workers.dev/admin** — the admin key is in

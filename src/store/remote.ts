@@ -76,6 +76,7 @@ export interface LicenceInfo {
 type Failure = { ok: false; error: string; fieldErrors?: Record<string, string>; conflict?: boolean; issues?: OpFailure['issues'] }
 
 export const remote = {
+  health: () => api<{ ok: boolean; version?: string | null; revision?: number }>('/api/health'),
   licence: () => api<LicenceInfo>('/api/licence'),
   licenceCheck: () => api<LicenceInfo>('/api/licence/check', { method: 'POST' }),
   accounts: () => api<{ accounts: PublicAccount[]; company: string }>('/api/accounts'),
