@@ -114,7 +114,7 @@ function Get-LanAddress {
   return ''
 }
 
-function Install-Main([string]$copyDir, $status) {
+function Install-Main([string]$copyDir, [string]$dataZip, $status) {
   $status.Text = 'Stopping an earlier Vertex ERP, if any...'; [System.Windows.Forms.Application]::DoEvents()
   Stop-Vertex
 
@@ -147,9 +147,20 @@ function Install-Main([string]$copyDir, $status) {
   # The database password in config.json: only Windows, administrators and the server.
   & icacls.exe $cfgPath /inheritance:r /grant:r '*S-1-5-18:F' '*S-1-5-32-544:F' '*S-1-5-20:M' /Q | Out-Null
 
-  $status.Text = 'Starting Vertex ERP with Windows...'; [System.Windows.Forms.Application]::DoEvents()
   $node = Join-Path $Prog 'node\node.exe'
   $main = Join-Path $Prog 'app\main.js'
+
+  # Data prepared on another computer: load it before the server starts for the first time.
+  if ($dataZip) {
+    $status.Text = 'Loading your data from the backup (a minute)...'; [System.Windows.Forms.Application]::DoEvents()
+    $out = & $node $main restore $dataZip --confirm --home $Data 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 0) { throw "The backup could not be loaded:`n$out" }
+    # The server starts the database again under its own account.
+    & (Join-Path $Prog 'pgsql\bin\pg_ctl.exe') stop -D (Join-Path $Data 'db') -m fast -w -t 120 2>$null | Out-Null
+    Grant $Data '*S-1-5-20' '(OI)(CI)M'
+  }
+
+  $status.Text = 'Starting Vertex ERP with Windows...'; [System.Windows.Forms.Application]::DoEvents()
   $action = New-ScheduledTaskAction -Execute $node -Argument "`"$main`" service --home `"$Data`"" -WorkingDirectory (Join-Path $Prog 'app')
   $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
   $principal = New-ScheduledTaskPrincipal -UserId 'NT AUTHORITY\NETWORKSERVICE' -LogonType ServiceAccount
@@ -219,7 +230,7 @@ function Install-Second([string]$address, $status) {
 # --- the window ---------------------------------------------------------------
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "Vertex ERP Setup - $Customer"
-$form.Size = New-Object System.Drawing.Size(560, 470)
+$form.Size = New-Object System.Drawing.Size(560, 540)
 $form.StartPosition = 'CenterScreen'
 $form.FormBorderStyle = 'FixedDialog'
 $form.MaximizeBox = $false
@@ -254,38 +265,58 @@ $btnBrowse.Text = 'Browse...'; $btnBrowse.Location = '430,127'; $btnBrowse.Size 
 $btnBrowse.Add_Click({ $d = New-Object System.Windows.Forms.FolderBrowserDialog; if ($d.ShowDialog() -eq 'OK') { $txtCopy.Text = Join-Path $d.SelectedPath 'VertexERP-Backups' } })
 $form.Controls.Add($btnBrowse)
 
+$lblData = New-Object System.Windows.Forms.Label
+$lblData.Text = 'Start with data from a backup file (.zip) - optional:'
+$lblData.Location = '44,164'; $lblData.Size = '480,22'
+$form.Controls.Add($lblData)
+
+$txtData = New-Object System.Windows.Forms.TextBox
+$txtData.Location = '44,188'; $txtData.Size = '380,26'
+$form.Controls.Add($txtData)
+
+$btnData = New-Object System.Windows.Forms.Button
+$btnData.Text = 'Choose...'; $btnData.Location = '430,187'; $btnData.Size = '90,28'
+$btnData.Add_Click({
+  $d = New-Object System.Windows.Forms.OpenFileDialog
+  $d.Filter = 'Vertex ERP backup (*.zip)|*.zip'
+  $d.Title = 'Choose the Vertex ERP backup to start with'
+  if ($d.ShowDialog() -eq 'OK') { $txtData.Text = $d.FileName }
+})
+$form.Controls.Add($btnData)
+
 $rbSecond = New-Object System.Windows.Forms.RadioButton
 $rbSecond.Text = 'SECOND computer - Administrator 2. Uses the main computer''s database.'
-$rbSecond.Location = '24,176'; $rbSecond.Size = '500,40'
+$rbSecond.Location = '24,236'; $rbSecond.Size = '500,40'
 $form.Controls.Add($rbSecond)
 
 $lblAddr = New-Object System.Windows.Forms.Label
 $lblAddr.Text = 'Main computer address (shown when it was installed), e.g. 192.168.1.10:'
-$lblAddr.Location = '44,220'; $lblAddr.Size = '480,22'
+$lblAddr.Location = '44,280'; $lblAddr.Size = '480,22'
 $form.Controls.Add($lblAddr)
 
 $txtAddr = New-Object System.Windows.Forms.TextBox
-$txtAddr.Location = '44,244'; $txtAddr.Size = '380,26'; $txtAddr.Enabled = $false
+$txtAddr.Location = '44,304'; $txtAddr.Size = '380,26'; $txtAddr.Enabled = $false
 $form.Controls.Add($txtAddr)
 
 $status = New-Object System.Windows.Forms.Label
-$status.Location = '24,296'; $status.Size = '500,44'; $status.ForeColor = [System.Drawing.Color]::DimGray
+$status.Location = '24,352'; $status.Size = '500,44'; $status.ForeColor = [System.Drawing.Color]::DimGray
 $status.Text = "Licence $LicenceId - version $Version"
 $form.Controls.Add($status)
 
 $btnInstall = New-Object System.Windows.Forms.Button
-$btnInstall.Text = 'Install'; $btnInstall.Location = '316,360'; $btnInstall.Size = '100,36'
+$btnInstall.Text = 'Install'; $btnInstall.Location = '316,420'; $btnInstall.Size = '100,36'
 $form.Controls.Add($btnInstall)
 $form.AcceptButton = $btnInstall
 
 $btnCancel = New-Object System.Windows.Forms.Button
-$btnCancel.Text = 'Cancel'; $btnCancel.Location = '424,360'; $btnCancel.Size = '100,36'
+$btnCancel.Text = 'Cancel'; $btnCancel.Location = '424,420'; $btnCancel.Size = '100,36'
 $btnCancel.Add_Click({ $form.Close() })
 $form.Controls.Add($btnCancel)
 $form.CancelButton = $btnCancel
 
 $toggle = {
   $txtCopy.Enabled = $rbMain.Checked; $btnBrowse.Enabled = $rbMain.Checked; $txtAddr.Enabled = $rbSecond.Checked
+  $txtData.Enabled = $rbMain.Checked; $btnData.Enabled = $rbMain.Checked
   if ($rbSecond.Checked) { $txtAddr.Focus() | Out-Null }
 }
 $rbMain.Add_CheckedChanged($toggle)
@@ -293,11 +324,20 @@ $rbSecond.Add_CheckedChanged($toggle)
 
 $btnInstall.Add_Click({
   if ($rbSecond.Checked -and -not $txtAddr.Text.Trim()) { Say 'Enter the main computer''s address.' 'Vertex ERP Setup' 'Warning'; $txtAddr.Focus() | Out-Null; return }
+  $dataZip = ''
+  if ($rbMain.Checked -and $txtData.Text.Trim()) {
+    $dataZip = $txtData.Text.Trim().Trim('"')
+    if (-not (Test-Path $dataZip -PathType Leaf)) { Say "The backup file was not found:`n$dataZip" 'Vertex ERP Setup' 'Warning'; $txtData.Focus() | Out-Null; return }
+    if (Test-Path (Join-Path $Data 'db\PG_VERSION')) {
+      $ok = [System.Windows.Forms.MessageBox]::Show("This computer already has Vertex ERP data.`n`nReplace it with the data in the backup? The current data is saved as a backup first.", 'Vertex ERP Setup', 'YesNo', 'Warning')
+      if ($ok -ne 'Yes') { return }
+    }
+  }
   $btnInstall.Enabled = $false; $btnCancel.Enabled = $false; $rbMain.Enabled = $false; $rbSecond.Enabled = $false
   $form.Cursor = 'WaitCursor'
   try {
     if ($rbMain.Checked) {
-      $second = Install-Main $txtCopy.Text.Trim() $status
+      $second = Install-Main $txtCopy.Text.Trim() $dataZip $status
       Say "Vertex ERP is installed and running.`n`nThis computer: use the Vertex ERP icon on the desktop (Administrator 1).`n`nOn the SECOND computer, run this same setup, choose 'Second computer' and enter:`n`n    $($second -replace '^http://', '' -replace ':4580/admin2$', '')`n`nIts Vertex ERP address will be $second`n`n(These details are saved in $Data\README.txt)"
     } else {
       $url = Install-Second $txtAddr.Text $status

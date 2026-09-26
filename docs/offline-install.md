@@ -35,6 +35,18 @@ the licence activates (a phone hotspot is fine).
 6. Ask the customer's network person to **reserve that IP address** for this computer in the router, so the
    second computer's link keeps working.
 
+### Bring data prepared on another computer
+
+Products, customers and prices can be entered on the Back Moon Devs computer first and carried over:
+
+1. On the computer with the data: sign in as Administrator 1 → **Settings → Backup & Restore → Download a
+   fresh backup** (or take the newest file from *Vertex ERP backups* in the Start menu). Copy the `.zip` to the USB stick.
+2. At the customer's main computer, in setup, fill **Start with data from a backup file** with that `.zip`.
+3. Setup loads the data before Vertex ERP starts for the first time. Backups carry no passwords, so each
+   administrator chooses a new password at the first sign-in.
+
+If the computer already has Vertex ERP data, setup asks before replacing it and saves the old data as a backup first.
+
 ### Second computer (Administrator 2)
 
 1. Run the same setup, choose **SECOND computer**, enter the main computer's address, press **Install**.
