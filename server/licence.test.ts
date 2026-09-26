@@ -3,6 +3,8 @@ import { generateKeyPairSync } from 'node:crypto'
 import { LicenceGuard, decodeSigned, evaluate } from './licence'
 import type { LicenceStore } from './licence'
 import { answerFor, handle, signAnswer } from '../licence/worker'
+import { createApiHandler } from './api'
+import type { VertexService } from './service'
 import type { LicenceRecord, LicenceStore as ServiceStore } from '../licence/worker'
 
 /* The licence: signed answers from Back Moon Devs lock or unlock an installed
@@ -160,6 +162,23 @@ describe('an installed copy', () => {
     await g.refreshIfStale(30_000, 4_000)
     expect(calls()).toBe(2)
     expect((await g.state()).mode).toBe('view-only')
+  })
+
+  it('reaches a signed-in window within seconds of a suspension, however long ago the last check was', async () => {
+    const svc = service()
+    await svc.admin({ licenceId: 'VPP-2026-01', status: 'active' })
+    const { g, clock, calls } = guard(svc)
+    const api = createApiHandler({} as VertexService, { licence: g })
+    const poll = async () => (await api(new Request('http://localhost/api/licence'))).json()
+    expect(await poll()).toMatchObject({ active: true })
+    // Suspended while someone is signed in; the window asks again 10 s later.
+    await svc.admin({ licenceId: 'VPP-2026-01', status: 'suspended', message: 'Payment pending' })
+    clock.now += 10_000
+    expect(await poll()).toMatchObject({ active: false, mode: 'view-only', message: 'Payment pending' })
+    // Two windows polling together still make one online check.
+    const before = calls()
+    await Promise.all([poll(), poll()])
+    expect(calls()).toBe(before)
   })
 
   it('refuses an answer that was not signed by Back Moon Devs', async () => {

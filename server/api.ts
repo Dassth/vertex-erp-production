@@ -100,7 +100,12 @@ export function createApiHandler(service: VertexService, options: ApiOptions = {
         headers: { 'content-type': 'application/zip', 'cache-control': 'no-store', 'x-vertex-revision': String(manifest.database.revision), 'x-vertex-exported-at': manifest.exportedAt },
       })
     }
-    if (path === '/api/licence' && method === 'GET') return json(200, { ok: true, managed: !!options.licence, ...(options.licence ? await options.licence.state() : { active: true }) })
+    if (path === '/api/licence' && method === 'GET') {
+      // Open windows ask every 10 s; answer from a check at most 10 s old, so a suspension
+      // reaches a signed-in window within seconds (one online check per computer, not per window).
+      await options.licence?.refreshIfStale?.(10_000, 3_000)
+      return json(200, { ok: true, managed: !!options.licence, ...(options.licence ? await options.licence.state() : { active: true }) })
+    }
     if (path === '/api/licence/check' && method === 'POST') return json(200, { ok: true, managed: !!options.licence, ...(options.licence ? await options.licence.check() : { active: true }) })
     if (options.licence && path !== '/api/health') {
       // Saving waits briefly for a fresh answer when the last one is over 10 s old, so a suspension

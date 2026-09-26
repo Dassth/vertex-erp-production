@@ -47,15 +47,26 @@ export function LicenceGate({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void load()
-    const timer = window.setInterval(() => void load(), 20_000)
+    // Every 10 s while the window is in view, and at once when it comes back into view,
+    // so a suspension made while someone is signed in shows within seconds.
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void load()
+    }, 10_000)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void load()
+    }
     const onLocked = () => {
       void load()
       setNotice(true)
     }
     window.addEventListener('vertex:licence', onLocked)
+    window.addEventListener('focus', onVisible)
+    document.addEventListener('visibilitychange', onVisible)
     return () => {
       window.clearInterval(timer)
       window.removeEventListener('vertex:licence', onLocked)
+      window.removeEventListener('focus', onVisible)
+      document.removeEventListener('visibilitychange', onVisible)
     }
   }, [load])
 
