@@ -1,6 +1,6 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { POWERED_BY } from '../lib/brand'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import {
   ArrowRight,
   Calculator,
@@ -31,13 +31,28 @@ const MODULES = [
   { icon: ReceiptText, label: 'Billing', detail: 'An invoice for every dispatch, as PDF', span: true },
 ]
 
-export function LoginPage() {
+/** This computer's sign-in address (/admin1 or /admin2), remembered so signing out returns to it. */
+export const ENTRY_KEY = 'vertex-entry'
+
+/**
+ * Sign in. With `only`, the page is one computer's entry (/admin1, /admin2): it shows that
+ * account alone — never the other administrator — and remembers itself for sign-out.
+ */
+export function LoginPage({ only }: { only?: string } = {}) {
   useDocumentTitle('Sign in')
   const { db, signIn, createFirstPassword, pushToast, storageMode } = useStore()
   const navigate = useNavigate()
   const location = useLocation()
-  const accounts = useMemo(() => db.users.filter((u) => u.active), [db.users])
-  const [userId, setUserId] = useState(accounts[0]?.id ?? '')
+  const accounts = useMemo(() => db.users.filter((u) => u.active && (!only || u.id === only)), [db.users, only])
+  const [userId, setUserId] = useState(only ?? accounts[0]?.id ?? '')
+  useEffect(() => {
+    if (!only) return
+    try {
+      localStorage.setItem(ENTRY_KEY, location.pathname)
+    } catch {
+      // Storage blocked: signing out then shows the shortcut notice instead.
+    }
+  }, [only, location.pathname])
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [show, setShow] = useState(false)
@@ -118,9 +133,26 @@ export function LoginPage() {
           </div>
 
           <h2 className="font-display text-xl font-semibold tracking-headline text-ink">Sign in</h2>
-          <p className="mt-1.5 text-base text-muted">Choose your account. Each account is recorded separately in the activity log.</p>
+          <p className="mt-1.5 text-base text-muted">{only ? 'This computer signs in as the account below.' : 'Choose your account. Each account is recorded separately in the activity log.'}</p>
 
           <form onSubmit={submit} className="mt-6 space-y-5" noValidate>
+            {only ? (
+              selected ? (
+                <div className="flex items-center gap-2.5 rounded-md border border-accent bg-accent-wash px-3 py-2.5">
+                  <span className="vx-code flex h-8 w-8 shrink-0 items-center justify-center rounded-sm border border-accent-edge bg-surface text-sm font-medium text-accent-text" aria-hidden="true">
+                    {selected.initials}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-ink">{selected.name}</span>
+                    <span className="block truncate text-2xs text-muted">{selected.passwordHash ? selected.email : 'Password not set'}</span>
+                  </span>
+                </div>
+              ) : (
+                <p className="rounded-md bg-surface-2 px-3.5 py-3 text-sm text-muted" role="status">
+                  Loading this computer’s account…
+                </p>
+              )
+            ) : (
             <fieldset>
               <legend className="vx-label">Account</legend>
               <div className="space-y-4">
@@ -169,12 +201,13 @@ export function LoginPage() {
                 ))}
               </div>
             </fieldset>
+            )}
 
             {firstTime ? (
               <p className="flex gap-2 rounded-md bg-accent-wash px-3.5 py-3 text-sm leading-relaxed text-accent-text ring-1 ring-inset ring-accent-edge">
                 <KeyRound className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                 First sign-in for {selected?.name}. Choose a password of at least {MIN_PASSWORD_LENGTH} characters — it is
-                stored only as a hash in this browser.
+                stored only as a hash {storageMode === 'server' ? 'on the Vertex server' : 'in this browser'}.
               </p>
             ) : null}
 
@@ -233,5 +266,33 @@ export function LoginPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+/**
+ * The installed copy never lists both administrators on one screen: /login sends
+ * this computer to its own address, and an unknown computer is told to use its shortcut.
+ */
+export function ComputerEntry() {
+  useDocumentTitle('Sign in')
+  const location = useLocation()
+  let entry: string | null = null
+  try {
+    entry = localStorage.getItem(ENTRY_KEY)
+  } catch {
+    entry = null
+  }
+  if (entry === '/admin1' || entry === '/admin2') return <Navigate to={entry} replace state={location.state} />
+  return (
+    <main className="flex min-h-[100dvh] items-center justify-center bg-paper px-4">
+      <section className="vx-card w-full max-w-md p-6" aria-labelledby="entry-title">
+        <h1 id="entry-title" className="font-display text-xl font-semibold tracking-headline text-ink">
+          Open Vertex ERP from this computer’s shortcut
+        </h1>
+        <p className="mt-2 text-base leading-relaxed text-muted">
+          Each computer has its own Vertex ERP address. Use the <strong className="text-ink">Vertex ERP</strong> icon on this computer’s desktop.
+        </p>
+      </section>
+    </main>
   )
 }

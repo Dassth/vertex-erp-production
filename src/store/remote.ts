@@ -31,6 +31,8 @@ async function api<T>(path: string, init: { method?: string; body?: unknown } = 
   } catch (err) {
     throw new NetworkError(err instanceof Error ? err.message : String(err))
   }
+  // The installed copy's licence is not active: the licence screen takes over.
+  if (res.status === 423 && typeof window !== 'undefined') window.dispatchEvent(new Event('vertex:licence'))
   const text = await res.text()
   let body: T
   try {
@@ -54,9 +56,25 @@ export interface PublicAccount {
   hasPassword: boolean
 }
 
+/** The installed copy's licence, as the server sees it (see server/licence.ts). */
+export interface LicenceInfo {
+  ok: true
+  managed: boolean
+  active: boolean
+  licenceId: string
+  customer: string
+  reason: 'unverified' | 'suspended' | 'deactivated' | 'unknown' | 'expired' | 'clock' | null
+  message: string
+  checkedAt: string | null
+  validUntil: string | null
+  lastError: string | null
+}
+
 type Failure = { ok: false; error: string; fieldErrors?: Record<string, string>; conflict?: boolean; issues?: OpFailure['issues'] }
 
 export const remote = {
+  licence: () => api<LicenceInfo>('/api/licence'),
+  licenceCheck: () => api<LicenceInfo>('/api/licence/check', { method: 'POST' }),
   accounts: () => api<{ accounts: PublicAccount[]; company: string }>('/api/accounts'),
   session: () => api<{ ok: true; userId: string } | Failure>('/api/session'),
   state: (since?: number) => api<({ ok: true; revision: number; db?: VertexDB; unchanged?: boolean }) | Failure>(`/api/state${since ? `?since=${since}` : ''}`),

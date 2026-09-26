@@ -35,6 +35,14 @@ Master setup → Planning → Order Costing → Production → Dispatch → Bill
 Master → Costing (shared configuration) and the main Costing module (one order's calculation) are
 separate on purpose. Planning and Costing read Master definitions; they never edit them.
 
+## Offline Windows installation
+
+Vertex ERP installs on the customer's own computers with one `VertexERP-Setup-<licence>.exe`
+(`npm run build:windows -- --licence <ID> --customer "<name>"`): PostgreSQL 17 and the server on the main
+computer (Administrator 1, `/admin1`), and an icon on the second computer (Administrator 2, `/admin2`) that uses
+the main computer's database. Only the licence check goes online; Back Moon Devs can activate, suspend or
+deactivate a copy from the licence control page. See [docs/offline-install.md](docs/offline-install.md).
+
 ## Accounts
 
 Two administrators with separate audit identities: Administrator 1 (`admin1@vertex.local`, the whole

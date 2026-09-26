@@ -30,3 +30,6 @@ cookies.txt
 generated-db.json
 final-export.json
 test-export.json
+
+# Windows offline package build output
+release/

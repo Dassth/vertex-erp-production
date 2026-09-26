@@ -7,7 +7,9 @@ export default mergeConfig(
   viteConfig,
   defineConfig({
     test: {
-      exclude: ['**/node_modules/**', '**/dist/**', 'e2e/**'],
+      exclude: ['**/node_modules/**', '**/dist/**', 'e2e/**', 'release/**'],
+      // Each test file gets its own process; unbounded, they exhaust memory on this machine.
+      maxWorkers: 4,
       // The embedded PostgreSQL engine (PGlite) crashes V8's optimising WebAssembly
       // compiler on this Node version; the baseline compiler runs it correctly.
       execArgv: ['--liftoff-only'],

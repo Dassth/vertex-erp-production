@@ -21,7 +21,9 @@
     "build:server-app": "tsc -b && vite build --mode server --outDir dist-app-server",
     "cf:build": "npm run build:server-app",
     "cf:dev": "wrangler dev",
-    "cf:deploy": "npm run build:server-app && wrangler deploy"
+    "cf:deploy": "npm run build:server-app && wrangler deploy",
+    "build:windows": "node installer/build.mjs",
+    "licence:deploy": "wrangler deploy --config licence/wrangler.jsonc"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",
@@ -36,6 +38,7 @@
     "react-router-dom": "^7.18.2"
   },
   "devDependencies": {
+    "@embedded-postgres/windows-x64": "17.10.0-beta.17",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@testing-library/dom": "^10.4.2",

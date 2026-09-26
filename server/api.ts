@@ -10,6 +10,7 @@ import type { VertexService } from './service'
 import { SESSION_HOURS, publicAccounts, publicState } from './service'
 import type { BackupStore } from './backup'
 import { ARCHIVE_NAME, archiveName, buildArchive, previewRestore, runBackup, verifyArchive } from './backup'
+import type { LicenceState } from './licence'
 
 export const SESSION_COOKIE = 'vx_session'
 const MAX_BODY = 8 * 1024 * 1024
@@ -24,6 +25,8 @@ export interface ApiOptions {
   backup?: { store: BackupStore; passphrase?: string; appVersion?: string; keep: number; schedule: string }
   /** Where this deployment runs (shown to Administrator 1). */
   deployment?: string
+  /** An installed copy's licence; when it is not active every call except the licence check is refused (423). */
+  licence?: { state(): Promise<LicenceState>; check(): Promise<LicenceState> }
 }
 
 class HttpError extends Error {
@@ -75,6 +78,13 @@ export function createApiHandler(service: VertexService, options: ApiOptions = {
     // Mutations must come from this app: a custom header cannot be sent cross-site without CORS approval.
     if (method !== 'GET' && req.headers.get('x-vertex-request') !== '1') throw new HttpError(403, 'Missing request header.')
     const token = cookie(req, SESSION_COOKIE)
+
+    if (path === '/api/licence' && method === 'GET') return json(200, { ok: true, managed: !!options.licence, ...(options.licence ? await options.licence.state() : { active: true }) })
+    if (path === '/api/licence/check' && method === 'POST') return json(200, { ok: true, managed: !!options.licence, ...(options.licence ? await options.licence.check() : { active: true }) })
+    if (options.licence && path !== '/api/health') {
+      const lic = await options.licence.state()
+      if (!lic.active) return json(423, { ok: false, locked: true, reason: lic.reason, error: lic.message })
+    }
 
     if (path === '/api/health' && method === 'GET') {
       const s = await service.state()

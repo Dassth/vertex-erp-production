@@ -5,7 +5,8 @@ import { useStore } from './store/store'
 import { AppShell } from './components/AppShell'
 import { PageSkeleton, ToastViewport } from './components/ui'
 import { RouteBoundary } from './components/RouteBoundary'
-import { LoginPage } from './pages/LoginPage'
+import { ComputerEntry, LoginPage } from './pages/LoginPage'
+import { SERVER_MODE } from './store/remote'
 import { MasterLayout } from './features/master/MasterLayout'
 // Production is where most accounts land (and the only module unit users use): keep it in the main chunk.
 import { ProductionPage } from './features/production/ProductionPage'
@@ -81,7 +82,10 @@ export default function App() {
   return (
     <>
       <Routes>
-        <Route path="/login" element={user ? <AfterSignIn /> : <LoginPage />} />
+        {/* Each computer has its own address: /admin1 on the main computer, /admin2 on the second. */}
+        <Route path="/admin1" element={user ? <AfterSignIn /> : <LoginPage only="USR-ADM1" />} />
+        <Route path="/admin2" element={user ? <AfterSignIn /> : <LoginPage only="USR-ADM2" />} />
+        <Route path="/login" element={user ? <AfterSignIn /> : SERVER_MODE ? <ComputerEntry /> : <LoginPage />} />
         <Route
           path="/*"
           element={

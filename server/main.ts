@@ -21,6 +21,10 @@
  *   VERTEX_BACKUP_PASSPHRASE encrypts account password hashes inside archives
  *   SECURE_COOKIES           "1" behind HTTPS
  *   ALLOWED_ORIGINS          comma-separated origins allowed to call the API (dev only)
+ *   BACKUP_COPY_DIR          a second place that keeps one archive per day (another drive)
+ *   LICENCE_ID               this installation's licence (required unless --dev)
+ *   LICENCE_ENDPOINT         licence service (default: Back Moon Devs)
+ *   VERTEX_LICENCE           "off" on development machines only
  *
  * Flags --data, --schema, --port, --static and --backup-dir override the matching variables.
  * A .env file in the working directory is read for variables not already set.
@@ -34,8 +38,9 @@ import { migrate, openPostgres, schemaVersion } from './storage'
 import { openPglite } from './storage-pglite'
 import type { Database } from './storage'
 import { VertexService } from './service'
-import { createHttpServer } from './http'
 import { previewRestore, restoreArchive, runBackup, verifyArchive } from './backup'
+import { startServing } from './serve'
+import { LICENCE_ENDPOINT, LicenceGuard, metaStore } from './licence'
 import { fsBackupStore } from './backup-fs'
 
 function loadEnvFile() {
@@ -100,49 +105,35 @@ function describe(db: Database, target: string): string {
   }
 }
 
+/**
+ * Every non-development server holds a licence. Without LICENCE_ID (or with an
+ * inactive licence) the server answers only the licence check — see licence.ts.
+ * VERTEX_LICENCE=off is for development machines only.
+ */
+function licenceFor(db: Database): LicenceGuard | undefined {
+  if (DEV_MODE || env.VERTEX_LICENCE === 'off') return undefined
+  return new LicenceGuard({ licenceId: env.LICENCE_ID || 'UNLICENSED', endpoint: env.LICENCE_ENDPOINT || LICENCE_ENDPOINT, appVersion: appVersion(), installId: env.INSTALL_ID }, metaStore(db))
+}
+
 async function serve() {
   const db = await openConfigured()
-  const service = new VertexService(db)
-  await service.ensureState()
-  const staticDir = arg('--static') ?? env.STATIC_DIR ?? (existsSync('dist-app-server/index.html') ? 'dist-app-server' : undefined)
+  const target = arg('--data') ?? env.DATABASE_URL ?? '.vertex-data'
   const backupDir = arg('--backup-dir') ?? env.BACKUP_DIR
-  const server = createHttpServer(service, {
-    staticDir,
+  if (!backupDir) console.warn('Scheduled backups are OFF — set BACKUP_DIR (on separate storage) to enable them.')
+  const running = await startServing({
+    db,
+    label: describe(db, target),
+    port: Number(arg('--port') ?? env.PORT ?? 8787),
+    staticDir: arg('--static') ?? env.STATIC_DIR ?? (existsSync('dist-app-server/index.html') ? 'dist-app-server' : undefined),
     secureCookies: env.SECURE_COOKIES === '1',
     allowedOrigins: (env.ALLOWED_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
     deployment: 'Node server',
+    licence: licenceFor(db),
     backup: backupDir
-      ? { store: fsBackupStore(backupDir), passphrase: passphrase(), appVersion: appVersion(), keep: Number(env.BACKUP_KEEP ?? 72), schedule: `every ${Number(env.BACKUP_INTERVAL_MIN ?? 60)} min` }
+      ? { dir: backupDir, copyDir: env.BACKUP_COPY_DIR || undefined, keep: Number(env.BACKUP_KEEP ?? 72), everyMin: Number(env.BACKUP_INTERVAL_MIN ?? 60), passphrase: passphrase(), appVersion: appVersion() }
       : undefined,
   })
-  const port = Number(arg('--port') ?? env.PORT ?? 8787)
-  const target = arg('--data') ?? env.DATABASE_URL ?? '.vertex-data'
-  server.listen(port, () => console.log(`Vertex ERP server on http://localhost:${port} (${describe(db, target)}${staticDir ? `, serving ${staticDir}` : ', API only'})`))
-
-  const sweep = setInterval(() => service.sweep().catch((e) => console.error('sweep failed', e)), 60_000)
-  const every = Number(env.BACKUP_INTERVAL_MIN ?? 60)
-  let backups: NodeJS.Timeout | null = null
-  if (backupDir && every > 0) {
-    if (!passphrase()) console.warn('VERTEX_BACKUP_PASSPHRASE is not set — archives will not contain account passwords.')
-    const run = async () => {
-      try {
-        const { name, manifest } = await runBackup(db, fsBackupStore(backupDir), { passphrase: passphrase(), appVersion: appVersion(), keep: Number(env.BACKUP_KEEP ?? 72) })
-        console.log(`backup written: ${backupDir}/${name} (revision ${manifest.database.revision})`)
-      } catch (e) {
-        console.error('scheduled backup FAILED', e)
-      }
-    }
-    void run()
-    backups = setInterval(run, every * 60_000)
-  } else {
-    console.warn('Scheduled backups are OFF — set BACKUP_DIR (on separate storage) to enable them.')
-  }
-
-  const stop = () => {
-    clearInterval(sweep)
-    if (backups) clearInterval(backups)
-    server.close(() => void db.close().then(() => process.exit(0)))
-  }
+  const stop = () => void running.stop().then(() => process.exit(0))
   process.on('SIGINT', stop)
   process.on('SIGTERM', stop)
 }

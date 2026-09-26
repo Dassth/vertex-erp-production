@@ -4,6 +4,8 @@ import { RouterProvider, createBrowserRouter, useRouteError } from 'react-router
 import './index.css'
 import App from './App'
 import { StoreProvider } from './store/store'
+import { SERVER_MODE } from './store/remote'
+import { LicenceGate } from './components/LicenceGate'
 
 /* Last-resort screen: an unexpected render error must never leave a dead end.
    Data is already persisted per action, so reloading is safe. */
@@ -37,7 +39,13 @@ function CrashScreen() {
 const router = createBrowserRouter([
   {
     path: '*',
-    element: (
+    element: SERVER_MODE ? (
+      <LicenceGate>
+        <StoreProvider>
+          <App />
+        </StoreProvider>
+      </LicenceGate>
+    ) : (
       <StoreProvider>
         <App />
       </StoreProvider>
