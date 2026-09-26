@@ -420,7 +420,7 @@ function sortKeys(value: unknown): unknown {
 export async function restoreArchive(
   target: Database,
   content: ArchiveContent,
-  options: { withoutCredentials?: boolean; replace?: boolean; preRestoreStore?: BackupStore; passphrase?: string } = {},
+  options: { withoutCredentials?: boolean; replace?: boolean; preRestoreStore?: BackupStore; passphrase?: string; keepPasswordsOf?: VertexDB['users'] } = {},
 ): Promise<{ revision: number; counts: Record<string, number>; preRestoreBackup: string | null }> {
   const preview = await previewRestore(target, content, options)
   if (preview.blockers.length) throw new Error(preview.blockers.join(' '))
@@ -429,7 +429,12 @@ export async function restoreArchive(
     if (!options.preRestoreStore) throw new Error('A pre-restore backup destination is required when replacing data.')
     preRestoreBackup = `${options.preRestoreStore.label}/${(await runBackup(target, options.preRestoreStore, { passphrase: options.passphrase })).name}`
   }
-  const state = mergeCredentials(content.state, content.credentials)
+  let state = mergeCredentials(content.state, content.credentials)
+  // Importing on a running copy keeps the passwords people already use here.
+  if (options.keepPasswordsOf) {
+    const here = new Map(options.keepPasswordsOf.filter((u) => u.passwordHash).map((u) => [u.id, u]))
+    state = { ...state, users: state.users.map((u) => { const h = here.get(u.id); return h ? { ...u, passwordHash: h.passwordHash, passwordSalt: h.passwordSalt, passwordSetAt: h.passwordSetAt } : u }) }
+  }
   const m = content.manifest.database
   await target.transaction(async (tx) => {
     if (!preview.destination.empty) {

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Download, FileCheck2, HardDriveDownload, RefreshCw, Save } from 'lucide-react'
+import { Download, FileCheck2, HardDriveDownload, RefreshCw, Save, Upload } from 'lucide-react'
 import { useStore } from '../../store/store'
 import { remote } from '../../store/remote'
 import type { BackupStatusResponse, BackupValidation } from '../../store/remote'
 import { fmtDateTime } from '../../lib/format'
-import { Badge, Button, Card, CardHead } from '../../components/ui'
+import { Badge, Button, Card, CardHead, ConfirmDialog } from '../../components/ui'
 
 const COUNT_LABELS: Array<[string, string]> = [
   ['products', 'Products'],
@@ -31,6 +31,10 @@ export function BackupPanel() {
   const [running, setRunning] = useState(false)
   const [checking, setChecking] = useState(false)
   const [validation, setValidation] = useState<{ file: string; result: BackupValidation } | null>(null)
+  const [picked, setPicked] = useState<File | null>(null)
+  const [confirmImport, setConfirmImport] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [imported, setImported] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -73,6 +77,8 @@ export function BackupPanel() {
   const validate = async (file: File) => {
     setChecking(true)
     setValidation(null)
+    setPicked(file)
+    setImported(null)
     try {
       const r = await remote.validateBackup(file)
       if (r.body.ok) setValidation({ file: file.name, result: r.body })
@@ -81,6 +87,25 @@ export function BackupPanel() {
       pushToast({ title: 'Validation failed', message: 'The server could not be reached.', level: 'danger' })
     } finally {
       setChecking(false)
+    }
+  }
+
+  const importNow = async () => {
+    if (!picked || importing) return
+    setConfirmImport(false)
+    setImporting(true)
+    try {
+      const r = await remote.restoreBackup(picked)
+      if (r.body.ok) {
+        setImported(`${picked.name} is now this computer's data (saved ${fmtDateTime(r.body.exportedAt)}). The data that was here before was saved as a backup first.`)
+        setValidation(null)
+        // Sessions end with an import: sign in again with the same password.
+        window.setTimeout(() => window.location.assign('/login'), 4000)
+      } else pushToast({ title: 'Import failed', message: r.body.error, level: 'danger' })
+    } catch {
+      pushToast({ title: 'Import failed', message: 'The server could not be reached.', level: 'danger' })
+    } finally {
+      setImporting(false)
     }
   }
 
@@ -189,12 +214,12 @@ export function BackupPanel() {
       </Card>
 
       <Card className="vx-anim-up overflow-hidden">
-        <CardHead title="Validate a backup" subtitle="Checks an archive and previews what a restore would contain. Nothing is written." icon={<FileCheck2 className="h-4 w-4" />} />
+        <CardHead title="Import a backup" subtitle="Choose a backup file (.zip) — for example data prepared on another computer. It is checked first; nothing changes until you press Import." icon={<FileCheck2 className="h-4 w-4" />} />
         <div className="space-y-3 p-5 text-sm">
           <input
             type="file"
             accept=".zip,application/zip"
-            aria-label="Backup archive to validate"
+            aria-label="Backup file to import"
             disabled={checking}
             onChange={(e) => {
               const f = e.target.files?.[0]
@@ -231,12 +256,30 @@ export function BackupPanel() {
                   {w}
                 </p>
               ))}
-              <p className="text-xs text-muted">
-                A restore is run by the operator: <code>node dist-server/main.js restore &lt;archive&gt; --into &lt;database&gt; --dry-run</code>, then with <code>--confirm</code>. A populated
-                database is never overwritten without <code>--replace</code>, which first writes a pre-restore backup. See RESTORE.md inside the archive.
-              </p>
+              {v.preview.blockers.length ? null : (
+                <div className="flex flex-wrap items-center gap-3 pt-1">
+                  <Button icon={<Upload className="h-4 w-4" />} loading={importing} onClick={() => setConfirmImport(true)}>
+                    Import this backup…
+                  </Button>
+                  <span className="text-xs text-muted">Replaces the data on this computer. The current data is backed up first; your passwords stay the same.</span>
+                </div>
+              )}
             </div>
           ) : null}
+          {imported ? (
+            <p role="status" className="rounded-md bg-ok-wash px-3 py-2 text-ok ring-1 ring-inset ring-ok-edge">
+              {imported} Opening the sign-in page…
+            </p>
+          ) : null}
+          <ConfirmDialog
+            open={confirmImport}
+            tone="danger"
+            title="Import this backup?"
+            body={`The data on this computer is replaced with the data in ${picked?.name ?? 'the backup'}. The current data is saved as a backup first, so this can be undone by importing that backup. Everyone signs in again afterwards.`}
+            confirmLabel="Import"
+            onCancel={() => setConfirmImport(false)}
+            onConfirm={() => void importNow()}
+          />
         </div>
       </Card>
     </div>

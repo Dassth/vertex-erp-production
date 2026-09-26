@@ -8,6 +8,10 @@
  *   node app\main.js run --home …      the server itself (started by `service`)
  *   node app\main.js backup --home …   write a backup now
  *   node app\main.js status --home …   print the database and licence state
+ *   node app\main.js copy --home …     SECOND computer: every 10 minutes, fetch a copy of the
+ *       main computer's data (pairing code) into copies\latest.zip, keeping one a day for
+ *       400 days in copies\daily. If the main computer is ever lost, setup on this computer
+ *       ("MAIN computer") starts from copies\latest.zip.
  *   node app\main.js restore <backup.zip> [--confirm] --home …
  *       put a backup back (after a disk failure or on a new computer). Without
  *       --confirm it only checks the archive and shows what would change. Stop
@@ -34,9 +38,9 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSy
 import { dirname, join, resolve } from 'node:path'
 import pg from 'pg'
 import { migrate, openPostgres } from './storage'
-import { startServing } from './serve'
+import { copyToSecondPlace, startServing } from './serve'
 import { LICENCE_ENDPOINT, LicenceGuard, metaStore } from './licence'
-import { previewRestore, restoreArchive, runBackup, verifyArchive } from './backup'
+import { archiveName, previewRestore, restoreArchive, runBackup, verifyArchive } from './backup'
 import { fsBackupStore } from './backup-fs'
 
 export interface DesktopConfig {
@@ -53,6 +57,11 @@ export interface DesktopConfig {
   /** A second place — another drive, a USB disk, a synced folder — that keeps one archive per day. */
   backupCopyDir: string
   appVersion: string
+  /** The second computer shows this code to fetch copies of the data. */
+  pairCode: string
+  /** SECOND computer only: the main computer's address, e.g. http://192.168.1.10:4580 */
+  mainUrl: string
+  copyEveryMin: number
 }
 
 const flag = (name: string) => {
@@ -97,13 +106,25 @@ export function readConfig(home = HOME): DesktopConfig {
     backupKeep: Number(raw.backupKeep ?? 168),
     backupCopyDir: raw.backupCopyDir ?? '',
     appVersion: raw.appVersion ?? 'vertex-erp',
+    pairCode: raw.pairCode ?? '',
+    mainUrl: raw.mainUrl ?? '',
+    copyEveryMin: Number(raw.copyEveryMin ?? 10),
   }
   // First start: give the database its own password and remember it.
-  if (!cfg.dbPassword || !raw.installId) {
+  if (!cfg.dbPassword || !raw.installId || (!cfg.mainUrl && !cfg.pairCode)) {
     cfg.dbPassword ||= randomBytes(24).toString('base64url')
+    if (!cfg.mainUrl) cfg.pairCode ||= pairingCode()
     writeFileSync(file, JSON.stringify(cfg, null, 2))
   }
   return cfg
+}
+
+/** Eight characters without look-alikes (no 0/O, 1/I/L), shown as ABCD-EFGH. */
+export function pairingCode(): string {
+  const letters = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+  const bytes = randomBytes(8)
+  const code = [...bytes].map((b) => letters[b % letters.length]).join('')
+  return `${code.slice(0, 4)}-${code.slice(4)}`
 }
 
 const dbUrl = (c: DesktopConfig, database = 'vertex') => `postgres://vertex:${encodeURIComponent(c.dbPassword)}@127.0.0.1:${c.pgPort}/${database}`
@@ -251,6 +272,7 @@ async function run() {
     deployment: 'Windows (offline)',
     licence: new LicenceGuard({ licenceId: c.licenceId, endpoint: c.licenceEndpoint, appVersion: c.appVersion, installId: c.installId }, metaStore(db)),
     backup: { dir: join(HOME, 'backups'), copyDir: c.backupCopyDir || undefined, keep: c.backupKeep, everyMin: c.backupEveryMin, appVersion: c.appVersion },
+    replica: c.pairCode ? { pairCode: c.pairCode } : undefined,
     log: (l) => console.log(l),
   })
   const stop = () => void running.stop().then(() => process.exit(0))
@@ -314,9 +336,51 @@ async function restore() {
   }
 }
 
-const commands: Record<string, () => Promise<void>> = { service, run, backup: backupNow, status, restore }
+/** SECOND computer: keep a fresh copy of the main computer's data. */
+async function copy() {
+  const c = readConfig()
+  if (!c.mainUrl || !c.pairCode) throw new Error('This computer is not set up as the second computer (mainUrl and pairCode missing).')
+  const dir = join(HOME, 'copies')
+  const incoming = join(dir, 'incoming')
+  mkdirSync(incoming, { recursive: true })
+  const statusFile = join(dir, 'status.json')
+  const once = async () => {
+    try {
+      const res = await fetch(`${c.mainUrl.replace(/\/$/, '')}/api/replica/backup`, { headers: { 'x-vertex-pair': c.pairCode }, signal: AbortSignal.timeout(120_000) })
+      if (res.status === 401) throw new Error('The main computer refused the pairing code. Run setup on this computer again with the code shown on the main computer.')
+      if (!res.ok) throw new Error(`The main computer answered ${res.status}.`)
+      const buf = Buffer.from(await res.arrayBuffer())
+      const check = verifyArchive(buf)
+      if (!check.ok) throw new Error(`The copy was damaged in transfer: ${check.error}`)
+      const name = archiveName(new Date(check.content.manifest.exportedAt))
+      writeFileSync(join(incoming, name), buf)
+      copyToSecondPlace(incoming, name, join(dir, 'daily'), 400)
+      writeFileSync(join(dir, 'latest.zip.tmp'), buf)
+      renameSync(join(dir, 'latest.zip.tmp'), join(dir, 'latest.zip'))
+      unlinkSync(join(incoming, name))
+      const revision = check.content.manifest.database.revision
+      writeFileSync(statusFile, JSON.stringify({ lastSuccessAt: new Date().toISOString(), revision, from: c.mainUrl, lastError: null }, null, 2))
+      log('copy.log', `copy taken from ${c.mainUrl} (revision ${revision})`)
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e)
+      let before: Record<string, unknown> = {}
+      try {
+        before = JSON.parse(readFileSync(statusFile, 'utf8'))
+      } catch {
+        before = {}
+      }
+      writeFileSync(statusFile, JSON.stringify({ ...before, lastErrorAt: new Date().toISOString(), lastError: message }, null, 2))
+      log('copy.log', `copy not taken: ${message}`)
+    }
+  }
+  log('copy.log', `copying from ${c.mainUrl} every ${c.copyEveryMin} minutes into ${dir}`)
+  await once()
+  setInterval(() => void once(), Math.max(1, c.copyEveryMin) * 60_000)
+}
+
+const commands: Record<string, () => Promise<void>> = { service, run, backup: backupNow, status, restore, copy }
 const cmd = process.argv[2] ?? 'service'
-;(commands[cmd] ?? (async () => { throw new Error(`Unknown command: ${cmd}. Use service, run, backup, status or restore.`) }))().catch((e) => {
+;(commands[cmd] ?? (async () => { throw new Error(`Unknown command: ${cmd}. Use service, run, backup, status, restore or copy.`) }))().catch((e) => {
   log('service.log', `FATAL ${e instanceof Error ? e.stack : e}`)
   process.exit(1)
 })

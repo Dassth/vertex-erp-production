@@ -5,8 +5,11 @@
 #   database, starts it with Windows (a scheduled task, no login needed), opens
 #   the firewall to this network only, and puts "Vertex ERP" on the desktop
 #   (http://localhost:4580/admin1).
-# SECOND computer (Administrator 2): only a "Vertex ERP" desktop icon that
-#   opens the main computer's address /admin2 - the data stays on the main one.
+# SECOND computer (Administrator 2): a "Vertex ERP" desktop icon that opens the
+#   main computer's address /admin2, and a "Vertex ERP Copy" task that fetches a
+#   copy of the main computer's data every 10 minutes (with the pairing code the
+#   main computer shows). If the main computer is ever lost, run setup here and
+#   choose MAIN: it starts from that copy.
 #
 # Running setup again on the main computer upgrades the program and never
 # touches the data in C:\ProgramData\VertexERP.
@@ -21,6 +24,7 @@ $Customer = '@@CUSTOMER@@'
 $Version = '@@VERSION@@'
 $Port = 4580
 $TaskName = 'Vertex ERP Server'
+$CopyTask = 'Vertex ERP Copy'
 $Prog = Join-Path $env:ProgramFiles 'VertexERP'
 $Data = Join-Path $env:ProgramData 'VertexERP'
 if (-not $Payload) { $Payload = Join-Path $PSScriptRoot 'payload.zip' }
@@ -117,6 +121,8 @@ function Get-LanAddress {
 function Install-Main([string]$copyDir, [string]$dataZip, $status) {
   $status.Text = 'Stopping an earlier Vertex ERP, if any...'; [System.Windows.Forms.Application]::DoEvents()
   Stop-Vertex
+  # This computer may have been the second computer until now.
+  if (Get-ScheduledTask -TaskName $CopyTask -ErrorAction SilentlyContinue) { Stop-ScheduledTask -TaskName $CopyTask -ErrorAction SilentlyContinue; Unregister-ScheduledTask -TaskName $CopyTask -Confirm:$false }
 
   $status.Text = 'Copying the program (about a minute)...'; [System.Windows.Forms.Application]::DoEvents()
   foreach ($part in @('app', 'node', 'pgsql')) { if (Test-Path (Join-Path $Prog $part)) { Remove-Item -Recurse -Force (Join-Path $Prog $part) } }
@@ -133,6 +139,14 @@ function Install-Main([string]$copyDir, [string]$dataZip, $status) {
     (Get-Content $cfgPath -Raw | ConvertFrom-Json).PSObject.Properties | ForEach-Object { $cfg[$_.Name] = $_.Value }
   }
   $cfg['port'] = $Port
+  $cfg.Remove('mainUrl')
+  if (-not $cfg['pairCode']) {
+    $letters = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    $bytes = New-Object byte[] 8; $rng.GetBytes($bytes)
+    $code = -join ($bytes | ForEach-Object { $letters[$_ % $letters.Length] })
+    $cfg['pairCode'] = $code.Substring(0, 4) + '-' + $code.Substring(4)
+  }
   $cfg['licenceId'] = $LicenceId
   $cfg['appVersion'] = "vertex-erp@$Version"
   $cfg['backupCopyDir'] = $copyDir
@@ -187,6 +201,7 @@ function Install-Main([string]$copyDir, [string]$dataZip, $status) {
 
   $ip = Get-LanAddress
   $second = "http://$($ip):$Port/admin2"
+  $pair = $cfg['pairCode']
   $notes = @(
     'Vertex ERP - Back Moon Devs',
     "Licence: $LicenceId ($Customer)   Version: $Version",
@@ -194,6 +209,7 @@ function Install-Main([string]$copyDir, [string]$dataZip, $status) {
     "This computer (Administrator 1):  http://localhost:$Port/admin1",
     "Second computer (Administrator 2): $second",
     "   or by name:                     http://$($env:COMPUTERNAME):$Port/admin2",
+    "Pairing code for the second computer: $pair",
     '',
     "Data:     $Data\db",
     "Backups:  $Data\backups (every hour, 7 days)",
@@ -203,23 +219,51 @@ function Install-Main([string]$copyDir, [string]$dataZip, $status) {
     'Ask your network person to reserve this IP address for this computer in the router.'
   )
   $notes | Set-Content -Path (Join-Path $Data 'README.txt') -Encoding ASCII
-  return $second
+  return @{ Url = $second; Pair = $pair }
 }
 
-function Install-Second([string]$address, $status) {
+function Install-Second([string]$address, [string]$pair, $status) {
+  $pair = $pair.Trim().ToUpper()
   $address = $address.Trim() -replace '^https?://', '' -replace '/.*$', ''
   if ($address -notmatch ':\d+$') { $address = "$($address):$Port" }
   $status.Text = "Checking the main computer at $address..."; [System.Windows.Forms.Application]::DoEvents()
   $reachable = Wait-Server "http://$address" 20
   if (-not $reachable) {
-    $answer = [System.Windows.Forms.MessageBox]::Show("The main computer did not answer at http://$address.`n`nIs it switched on, and on the same network?`n`nCreate the icon anyway?", 'Vertex ERP Setup', 'YesNo', 'Warning')
+    $answer = [System.Windows.Forms.MessageBox]::Show("The main computer did not answer at http://$address.`n`nIs it switched on, and on the same network?`n`nInstall anyway?", 'Vertex ERP Setup', 'YesNo', 'Warning')
     if ($answer -ne 'Yes') { throw 'Setup stopped. Nothing was changed.' }
+  } else {
+    try {
+      Invoke-WebRequest -Uri "http://$address/api/replica/backup" -Headers @{ 'x-vertex-pair' = $pair } -UseBasicParsing -TimeoutSec 60 | Out-Null
+    } catch {
+      if ($_.Exception.Response -and [int]$_.Exception.Response.StatusCode -eq 401) { throw 'The pairing code is not right. It is shown on the main computer when it was installed, and in C:\ProgramData\VertexERP\README.txt there.' }
+    }
   }
+
+  $status.Text = 'Copying the program...'; [System.Windows.Forms.Application]::DoEvents()
+  if (Get-ScheduledTask -TaskName $CopyTask -ErrorAction SilentlyContinue) { Stop-ScheduledTask -TaskName $CopyTask -ErrorAction SilentlyContinue }
+  Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.ExecutablePath -like "$Prog\*" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+  foreach ($part in @('app', 'node')) { if (Test-Path (Join-Path $Prog $part)) { Remove-Item -Recurse -Force (Join-Path $Prog $part) } }
   New-Item -ItemType Directory -Force -Path $Prog | Out-Null
   $tar = Join-Path $env:SystemRoot 'System32\tar.exe'
-  if (Test-Path $tar) { & $tar -xf $Payload -C $Prog 'VertexERP.ico' 'uninstall.ps1' 2>$null }
+  if (Test-Path $tar) { & $tar -xf $Payload -C $Prog } else { Expand-Archive -Path $Payload -DestinationPath $Prog -Force }
+
+  # A copy of the main computer's data, every 10 minutes.
+  $status.Text = 'Setting up the automatic data copy...'; [System.Windows.Forms.Application]::DoEvents()
+  foreach ($sub in @('', 'copies', 'logs')) { New-Item -ItemType Directory -Force -Path (Join-Path $Data $sub) | Out-Null }
+  $cfgPath = Join-Path $Data 'config.json'
+  (@{ mainUrl = "http://$address"; pairCode = $pair; copyEveryMin = 10; appVersion = "vertex-erp@$Version"; licenceId = $LicenceId } | ConvertTo-Json) | Set-Content -Path $cfgPath -Encoding ASCII
+  Grant $Data '*S-1-5-20' '(OI)(CI)M'
+  $node = Join-Path $Prog 'node\node.exe'
+  $main = Join-Path $Prog 'app\main.js'
+  $action = New-ScheduledTaskAction -Execute $node -Argument "`"$main`" copy --home `"$Data`"" -WorkingDirectory (Join-Path $Prog 'app')
+  $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
+  $principal = New-ScheduledTaskPrincipal -UserId 'NT AUTHORITY\NETWORKSERVICE' -LogonType ServiceAccount
+  Register-ScheduledTask -TaskName $CopyTask -Action $action -Trigger (New-ScheduledTaskTrigger -AtStartup) -Principal $principal -Settings $settings -Description 'Vertex ERP: copy of the main computer data every 10 minutes (Back Moon Devs)' -Force | Out-Null
+  Start-ScheduledTask -TaskName $CopyTask
+
   $menu = New-AppShortcut "http://$address/admin2" (Join-Path $Prog 'VertexERP.ico')
   $shell = New-Object -ComObject WScript.Shell
+  $cp = $shell.CreateShortcut((Join-Path $menu 'Vertex ERP data copies.lnk')); $cp.TargetPath = (Join-Path $Data 'copies'); $cp.Save()
   $u = $shell.CreateShortcut((Join-Path $menu 'Uninstall Vertex ERP.lnk'))
   $u.TargetPath = 'powershell.exe'
   $u.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$Prog\uninstall.ps1`""
@@ -230,7 +274,7 @@ function Install-Second([string]$address, $status) {
 # --- the window ---------------------------------------------------------------
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "Vertex ERP Setup - $Customer"
-$form.Size = New-Object System.Drawing.Size(560, 540)
+$form.Size = New-Object System.Drawing.Size(560, 600)
 $form.StartPosition = 'CenterScreen'
 $form.FormBorderStyle = 'FixedDialog'
 $form.MaximizeBox = $false
@@ -298,25 +342,40 @@ $txtAddr = New-Object System.Windows.Forms.TextBox
 $txtAddr.Location = '44,304'; $txtAddr.Size = '380,26'; $txtAddr.Enabled = $false
 $form.Controls.Add($txtAddr)
 
+$lblPair = New-Object System.Windows.Forms.Label
+$lblPair.Text = 'Pairing code (shown on the main computer), e.g. ABCD-EFGH:'
+$lblPair.Location = '44,340'; $lblPair.Size = '480,22'
+$form.Controls.Add($lblPair)
+
+$txtPair = New-Object System.Windows.Forms.TextBox
+$txtPair.Location = '44,364'; $txtPair.Size = '180,26'; $txtPair.Enabled = $false; $txtPair.CharacterCasing = 'Upper'
+$form.Controls.Add($txtPair)
+
 $status = New-Object System.Windows.Forms.Label
-$status.Location = '24,352'; $status.Size = '500,44'; $status.ForeColor = [System.Drawing.Color]::DimGray
+$status.Location = '24,410'; $status.Size = '500,44'; $status.ForeColor = [System.Drawing.Color]::DimGray
 $status.Text = "Licence $LicenceId - version $Version"
+# This computer was the second computer: offer its latest copy of the data.
+$latestCopy = Join-Path $Data 'copies\latest.zip'
+if (Test-Path $latestCopy) {
+  $txtData.Text = $latestCopy
+  $status.Text = "This computer holds a copy of the main computer's data - it is filled in above in case this computer now becomes the main one."
+}
 $form.Controls.Add($status)
 
 $btnInstall = New-Object System.Windows.Forms.Button
-$btnInstall.Text = 'Install'; $btnInstall.Location = '316,420'; $btnInstall.Size = '100,36'
+$btnInstall.Text = 'Install'; $btnInstall.Location = '316,480'; $btnInstall.Size = '100,36'
 $form.Controls.Add($btnInstall)
 $form.AcceptButton = $btnInstall
 
 $btnCancel = New-Object System.Windows.Forms.Button
-$btnCancel.Text = 'Cancel'; $btnCancel.Location = '424,420'; $btnCancel.Size = '100,36'
+$btnCancel.Text = 'Cancel'; $btnCancel.Location = '424,480'; $btnCancel.Size = '100,36'
 $btnCancel.Add_Click({ $form.Close() })
 $form.Controls.Add($btnCancel)
 $form.CancelButton = $btnCancel
 
 $toggle = {
   $txtCopy.Enabled = $rbMain.Checked; $btnBrowse.Enabled = $rbMain.Checked; $txtAddr.Enabled = $rbSecond.Checked
-  $txtData.Enabled = $rbMain.Checked; $btnData.Enabled = $rbMain.Checked
+  $txtData.Enabled = $rbMain.Checked; $btnData.Enabled = $rbMain.Checked; $txtPair.Enabled = $rbSecond.Checked
   if ($rbSecond.Checked) { $txtAddr.Focus() | Out-Null }
 }
 $rbMain.Add_CheckedChanged($toggle)
@@ -324,6 +383,7 @@ $rbSecond.Add_CheckedChanged($toggle)
 
 $btnInstall.Add_Click({
   if ($rbSecond.Checked -and -not $txtAddr.Text.Trim()) { Say 'Enter the main computer''s address.' 'Vertex ERP Setup' 'Warning'; $txtAddr.Focus() | Out-Null; return }
+  if ($rbSecond.Checked -and $txtPair.Text.Trim() -notmatch '^[A-Z0-9]{4}-?[A-Z0-9]{4}$') { Say 'Enter the pairing code shown on the main computer (8 letters and digits, e.g. ABCD-EFGH).' 'Vertex ERP Setup' 'Warning'; $txtPair.Focus() | Out-Null; return }
   $dataZip = ''
   if ($rbMain.Checked -and $txtData.Text.Trim()) {
     $dataZip = $txtData.Text.Trim().Trim('"')
@@ -337,11 +397,13 @@ $btnInstall.Add_Click({
   $form.Cursor = 'WaitCursor'
   try {
     if ($rbMain.Checked) {
-      $second = Install-Main $txtCopy.Text.Trim() $dataZip $status
-      Say "Vertex ERP is installed and running.`n`nThis computer: use the Vertex ERP icon on the desktop (Administrator 1).`n`nOn the SECOND computer, run this same setup, choose 'Second computer' and enter:`n`n    $($second -replace '^http://', '' -replace ':4580/admin2$', '')`n`nIts Vertex ERP address will be $second`n`n(These details are saved in $Data\README.txt)"
+      $done = Install-Main $txtCopy.Text.Trim() $dataZip $status
+      Say "Vertex ERP is installed and running.`n`nThis computer: use the Vertex ERP icon on the desktop (Administrator 1).`n`nOn the SECOND computer, run this same setup, choose 'Second computer' and enter:`n`n    Address:       $($done.Url -replace '^http://', '' -replace ':4580/admin2$', '')`n    Pairing code:  $($done.Pair)`n`n(These details are saved in $Data\README.txt)"
     } else {
-      $url = Install-Second $txtAddr.Text $status
-      Say "Done. The Vertex ERP icon on this desktop opens $url (Administrator 2)."
+      $pairText = $txtPair.Text.Trim()
+      if ($pairText -notmatch '-') { $pairText = $pairText.Substring(0, 4) + '-' + $pairText.Substring(4) }
+      $url = Install-Second $txtAddr.Text $pairText $status
+      Say "Done. The Vertex ERP icon on this desktop opens $url (Administrator 2).`n`nThis computer also keeps a copy of all the data, updated every 10 minutes, in $Data\copies."
     }
     $form.Close()
   } catch {

@@ -31,6 +31,7 @@ import {
   ScrollText,
   ShieldCheck,
   Truck,
+  Settings,
   UserCog,
   Wallet,
   Users,
@@ -98,6 +99,7 @@ const NAV: NavItem[] = [
   { to: '/dispatch', label: 'Dispatch', hint: 'Ship completed orders', icon: Truck, capabilities: ['dispatch'] },
   { to: '/invoices', label: 'Invoices', hint: 'Order summaries and invoice downloads', icon: FileStack, capabilities: ['billing'] },
   { to: '/reports', label: 'Reports', hint: 'Monthly GST reports: invoices and bills', icon: FileBarChart, capabilities: ['billing'] },
+  { to: '/settings', label: 'Settings', hint: 'Backup & import, units, people, machines', icon: Settings, capabilities: ['administration'] },
   { to: '/customers', label: 'Customers', hint: 'Customer ID lookup and full order history', icon: Contact, capabilities: ['billing'] },
 ]
 
@@ -311,6 +313,7 @@ function Sidebar({ items, collapsed, onToggle }: { items: NavItem[]; collapsed: 
   const showPlans = useStore().can('planning')
   return (
     <aside
+      data-licence-allow
       className={cx(
         'vx-no-print fixed inset-y-0 left-0 hidden flex-col border-r border-rule-2 bg-surface transition-[width] duration-200 lg:flex',
         collapsed ? 'w-[72px]' : 'w-[248px]',
@@ -349,7 +352,7 @@ function MobileSheet({ open, onClose, items }: { open: boolean; onClose: () => v
 
   if (!open) return null
   return (
-    <div className="vx-no-print fixed inset-0 overscroll-contain bg-scrim/70 lg:hidden" style={{ zIndex: 'var(--z-modal)' }} role="dialog" aria-modal="true" aria-label="Modules">
+    <div data-licence-allow className="vx-no-print fixed inset-0 overscroll-contain bg-scrim/70 lg:hidden" style={{ zIndex: 'var(--z-modal)' }} role="dialog" aria-modal="true" aria-label="Modules">
       <button className="absolute inset-0 cursor-default" aria-label="Close menu" onClick={onClose} />
       <div className="vx-anim-in relative flex h-full w-[280px] max-w-[85vw] flex-col border-r border-rule-2 bg-surface" style={{ boxShadow: 'var(--shadow-drawer)' }}>
         <div className="flex h-16 shrink-0 items-center justify-between border-b border-rule px-4">
@@ -463,7 +466,7 @@ function UtilityCluster({
   return (
     <div className="vx-no-print fixed inset-x-3 top-3 flex items-center gap-2 lg:inset-x-auto lg:right-5 lg:top-4" style={{ zIndex: 'var(--z-sticky)' }}>
       <div className="flex items-center gap-2 rounded-full border border-rule-2 bg-surface/85 p-1 backdrop-blur-xl lg:hidden">
-        <IconButton label="Open menu" onClick={onMenu} className="rounded-full">
+        <IconButton label="Open menu" onClick={onMenu} className="rounded-full" data-licence-allow>
           <Menu className="h-[18px] w-[18px]" />
         </IconButton>
         <span className="flex h-7 w-7 items-center justify-center rounded-sm bg-accent" aria-hidden="true">
@@ -555,7 +558,7 @@ function UtilityCluster({
           ) : null}
         </div>
 
-        <div className="relative" ref={profileRef}>
+        <div className="relative" ref={profileRef} data-licence-allow>
           <button
             type="button"
             onClick={() => setProfileOpen((v) => !v)}

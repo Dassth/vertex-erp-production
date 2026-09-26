@@ -42,7 +42,7 @@ export function SettingsPage() {
       <PageHeader
         eyebrow="Administration"
         title="Settings"
-        subtitle="Manage production units, people, machines, and database backups."
+        subtitle="Download a backup or import one, and manage production units, people and machines."
         icon={<Wrench className="h-4 w-4" />}
       />
 
@@ -57,10 +57,10 @@ export function SettingsPage() {
           value={tab}
           onChange={setTab}
           options={[
+            { value: 'backup', label: 'Backup & Import' },
             { value: 'people', label: 'People', count: db.people.length },
             { value: 'machines', label: 'Machines', count: db.machines.length },
             { value: 'units', label: 'Units', count: db.units.length },
-            { value: 'backup', label: 'Backup & Restore' },
           ]}
         />
         {tab !== 'units' && tab !== 'backup' ? (

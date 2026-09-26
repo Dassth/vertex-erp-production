@@ -11,9 +11,14 @@
  * the public half, so a copied, edited or invented answer is refused. Turning
  * the system clock back is caught too: the latest time ever seen is stored.
  *
- * When the licence is not active every API call except the licence check is
- * refused with 423 Locked. Nothing is deleted — data and backups stay intact,
- * and the copy unlocks as soon as the licence is active again.
+ * Suspended: the copy is VIEW-ONLY — pages open, but every change is refused
+ * with 423 and the customer is told to pay and call. Any other lock
+ * (deactivated, never activated, offline too long, clock moved back) refuses
+ * every call. Nothing is ever deleted; the copy opens again as soon as the
+ * licence is active.
+ *
+ * Lifetime licences (fully paid) have no offline limit and ignore the clock,
+ * but still follow a suspension whenever the copy is next online.
  * ------------------------------------------------------------------------- */
 
 import { createPublicKey, verify } from 'node:crypto'
@@ -31,6 +36,8 @@ export interface LicencePayload {
   /** Shown on the lock screen. */
   message: string
   customer: string
+  /** Fully paid: no offline limit. */
+  permanent?: boolean
   /** Service time the answer was made. */
   issuedAt: string
   /** The answer may be relied on offline until then. */
@@ -44,8 +51,13 @@ export interface SignedLicence {
 
 export type LockReason = 'unverified' | 'suspended' | 'deactivated' | 'unknown' | 'expired' | 'clock'
 
+/** open: works; view-only: suspended — pages open, changes refused; locked: nothing opens. */
+export type LicenceMode = 'open' | 'view-only' | 'locked'
+
 export interface LicenceState {
   active: boolean
+  mode: LicenceMode
+  permanent: boolean
   licenceId: string
   customer: string
   reason: LockReason | null
@@ -83,7 +95,7 @@ export function decodeSigned(signed: SignedLicence, publicKey = LICENCE_PUBLIC_K
 
 const LOCK_TEXT: Record<LockReason, string> = {
   unverified: 'This copy of Vertex ERP has not been activated yet. Connect this computer to the internet once and press “Check again”.',
-  suspended: 'Vertex ERP is suspended. Please contact Back Moon Devs.',
+  suspended: 'Your Vertex ERP is suspended. It will not work until the payment is made. Please call Back Moon Devs on 89400 95659.',
   deactivated: 'This copy of Vertex ERP has been deactivated. Please contact Back Moon Devs.',
   unknown: 'This licence is not recognised. Please contact Back Moon Devs.',
   expired: 'Vertex ERP could not confirm its licence for too long. Connect this computer to the internet and press “Check again”.',
@@ -92,15 +104,25 @@ const LOCK_TEXT: Record<LockReason, string> = {
 
 /** The lock decision, from the latest signed answer and the clock. Pure — tested directly. */
 export function evaluate(licenceId: string, payload: LicencePayload | null, now: number, maxSeen: number): Omit<LicenceState, 'lastError'> {
-  const base = { licenceId, customer: payload?.customer ?? '', checkedAt: payload?.issuedAt ?? null, validUntil: payload?.validUntil ?? null }
-  const lock = (reason: LockReason, message?: string) => ({ ...base, active: false, reason, message: message?.trim() || LOCK_TEXT[reason] })
+  const mine = payload && payload.licenceId === licenceId ? payload : null
+  const permanent = !!mine?.permanent && mine.status === 'active'
+  const base = { licenceId, customer: payload?.customer ?? '', checkedAt: payload?.issuedAt ?? null, validUntil: payload?.validUntil ?? null, permanent }
+  const lock = (reason: LockReason, message?: string) => ({
+    ...base,
+    active: false,
+    mode: (reason === 'suspended' ? 'view-only' : 'locked') as LicenceMode,
+    reason,
+    message: message?.trim() || LOCK_TEXT[reason],
+  })
+  // A lifetime licence never runs out and does not depend on the clock.
+  if (permanent) return { ...base, active: true, mode: 'open', reason: null, message: 'Lifetime licence.' }
   if (now < maxSeen - CLOCK_SLACK_MS) return lock('clock')
   if (!payload || payload.licenceId !== licenceId) return lock('unverified')
   if (payload.status === 'suspended') return lock('suspended', payload.message)
   if (payload.status === 'deactivated') return lock('deactivated', payload.message)
   if (payload.status !== 'active') return lock('unknown', payload.message)
   if (now > Date.parse(payload.validUntil)) return lock('expired')
-  return { ...base, active: true, reason: null, message: payload.message || 'Licence active.' }
+  return { ...base, active: true, mode: 'open', reason: null, message: payload.message || 'Licence active.' }
 }
 
 export interface LicenceConfig {
@@ -199,8 +221,27 @@ export class LicenceGuard {
     return this.state()
   }
 
+  private lastAttempt = 0
+  private inFlight: Promise<LicenceState> | null = null
+
+  /**
+   * Ask again when the last attempt is older than `maxAgeMs`. With `waitMs` the
+   * caller waits that long at most (a save waits, so a suspension stops it);
+   * otherwise the check runs in the background.
+   */
+  async refreshIfStale(maxAgeMs: number, waitMs = 0): Promise<void> {
+    if (!this.inFlight && this.cfg.now() - this.lastAttempt >= maxAgeMs) {
+      this.lastAttempt = this.cfg.now()
+      this.inFlight = this.check().finally(() => {
+        this.inFlight = null
+      })
+    }
+    if (waitMs > 0 && this.inFlight) await Promise.race([this.inFlight, new Promise((r) => setTimeout(r, waitMs))])
+  }
+
   /** Check now and then every `minutes`; returns a stop function. */
-  start(minutes = 30): () => void {
+  start(minutes = 5): () => void {
+    this.lastAttempt = this.cfg.now()
     void this.check()
     const timer = setInterval(() => void this.check(), minutes * 60_000)
     timer.unref?.()

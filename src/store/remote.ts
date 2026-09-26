@@ -61,6 +61,9 @@ export interface LicenceInfo {
   ok: true
   managed: boolean
   active: boolean
+  /** open: works; view-only: suspended — pages open, changes refused; locked: nothing opens. */
+  mode?: 'open' | 'view-only' | 'locked'
+  permanent?: boolean
   licenceId: string
   customer: string
   reason: 'unverified' | 'suspended' | 'deactivated' | 'unknown' | 'expired' | 'clock' | null
@@ -101,6 +104,16 @@ export const remote = {
       headers: { 'content-type': 'application/zip', 'x-vertex-request': '1' },
       body: file,
     })
+    return { status: res.status, body: fromWire(await res.text()) }
+  },
+  async restoreBackup(file: File): Promise<RemoteResponse<{ ok: true; revision: number; counts: Record<string, number>; preRestoreBackup: string | null; exportedAt: string } | Failure>> {
+    const res = await fetch(`${API}/api/backup/restore`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'content-type': 'application/zip', 'x-vertex-request': '1' },
+      body: file,
+    })
+    if (res.status === 423) window.dispatchEvent(new Event('vertex:licence'))
     return { status: res.status, body: fromWire(await res.text()) }
   },
   backupFileUrl: (name: string) => `${API}/api/backup/file/${encodeURIComponent(name)}`,

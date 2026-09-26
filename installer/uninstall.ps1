@@ -20,9 +20,11 @@ Add-Type -AssemblyName System.Windows.Forms
 $answer = [System.Windows.Forms.MessageBox]::Show("Remove Vertex ERP from this computer?`n`nYour data and backups in $Data are KEPT.", 'Uninstall Vertex ERP', 'YesNo', 'Question')
 if ($answer -ne 'Yes') { exit }
 
-if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
-  Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-  Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
+foreach ($t in @($TaskName, 'Vertex ERP Copy')) {
+  if (Get-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue) {
+    Stop-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue
+    Unregister-ScheduledTask -TaskName $t -Confirm:$false
+  }
 }
 Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.ExecutablePath -like "$Prog\*" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 $pgctl = Join-Path $Prog 'pgsql\bin\pg_ctl.exe'

@@ -9,7 +9,7 @@ import { can } from '../src/lib/permissions'
 import type { VertexService } from './service'
 import { SESSION_HOURS, publicAccounts, publicState } from './service'
 import type { BackupStore } from './backup'
-import { ARCHIVE_NAME, archiveName, buildArchive, previewRestore, runBackup, verifyArchive } from './backup'
+import { ARCHIVE_NAME, archiveName, buildArchive, previewRestore, restoreArchive, runBackup, verifyArchive } from './backup'
 import type { LicenceState } from './licence'
 
 export const SESSION_COOKIE = 'vx_session'
@@ -26,7 +26,17 @@ export interface ApiOptions {
   /** Where this deployment runs (shown to Administrator 1). */
   deployment?: string
   /** An installed copy's licence; when it is not active every call except the licence check is refused (423). */
-  licence?: { state(): Promise<LicenceState>; check(): Promise<LicenceState> }
+  licence?: { state(): Promise<LicenceState>; check(): Promise<LicenceState>; refreshIfStale?(maxAgeMs: number, waitMs?: number): Promise<void> }
+  /** Lets the second computer keep a copy of the data (header x-vertex-pair). */
+  replica?: { pairCode: string }
+}
+
+/** Compare secrets without revealing how many characters matched. */
+function sameSecret(a: string, b: string): boolean {
+  if (!a || !b || a.length !== b.length) return false
+  let diff = 0
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  return diff === 0
 }
 
 class HttpError extends Error {
@@ -79,11 +89,26 @@ export function createApiHandler(service: VertexService, options: ApiOptions = {
     if (method !== 'GET' && req.headers.get('x-vertex-request') !== '1') throw new HttpError(403, 'Missing request header.')
     const token = cookie(req, SESSION_COOKIE)
 
+    // The second computer keeps a copy of the data. Its own data, so a licence lock never stops it.
+    if (path === '/api/replica/backup' && method === 'GET') {
+      if (!options.replica || !sameSecret(req.headers.get('x-vertex-pair') ?? '', options.replica.pairCode)) return json(401, { ok: false, error: 'Wrong pairing code.' })
+      const { buffer, manifest } = await buildArchive(service.db, { appVersion: options.backup?.appVersion })
+      return new Response(buffer as unknown as BodyInit, {
+        status: 200,
+        headers: { 'content-type': 'application/zip', 'cache-control': 'no-store', 'x-vertex-revision': String(manifest.database.revision), 'x-vertex-exported-at': manifest.exportedAt },
+      })
+    }
     if (path === '/api/licence' && method === 'GET') return json(200, { ok: true, managed: !!options.licence, ...(options.licence ? await options.licence.state() : { active: true }) })
     if (path === '/api/licence/check' && method === 'POST') return json(200, { ok: true, managed: !!options.licence, ...(options.licence ? await options.licence.check() : { active: true }) })
     if (options.licence && path !== '/api/health') {
+      // Saving waits briefly for a fresh answer when the last one is over 10 s old, so a suspension
+      // stops the very next change; reading nudges a background check every 20 s.
+      const writing = method !== 'GET'
+      await options.licence.refreshIfStale?.(writing ? 10_000 : 20_000, writing ? 4_000 : 0)
       const lic = await options.licence.state()
-      if (!lic.active) return json(423, { ok: false, locked: true, reason: lic.reason, error: lic.message })
+      // Suspended: pages still open (reading, signing in and out), every change is refused.
+      const allowed = lic.mode === 'view-only' && (!writing || path.startsWith('/api/auth/'))
+      if (!lic.active && !allowed) return json(423, { ok: false, locked: true, reason: lic.reason, mode: lic.mode, error: lic.message })
     }
 
     if (path === '/api/health' && method === 'GET') {
@@ -189,6 +214,19 @@ export function createApiHandler(service: VertexService, options: ApiOptions = {
           status: 200,
           headers: { 'content-type': 'application/zip', 'content-disposition': `attachment; filename="${name}"`, 'cache-control': 'no-store' },
         })
+      }
+      // Import: replaces the data with the archive's. The current data is backed up first, and the
+      // passwords already used on this computer are kept. Everyone signs in again afterwards.
+      if (path === '/api/backup/restore' && method === 'POST') {
+        const check = verifyArchive(Buffer.from(await bytes(req, MAX_ARCHIVE)), { passphrase: cfg.passphrase })
+        if (!check.ok) return json(400, { ok: false, error: `This backup cannot be used: ${check.error}` })
+        const current = await service.state()
+        try {
+          const result = await restoreArchive(service.db, check.content, { replace: true, withoutCredentials: true, preRestoreStore: cfg.store, passphrase: cfg.passphrase, keepPasswordsOf: current.db.users })
+          return json(200, { ok: true, revision: result.revision, counts: result.counts, preRestoreBackup: result.preRestoreBackup, exportedAt: check.content.manifest.exportedAt }, { 'set-cookie': sessionCookie(null) })
+        } catch (e) {
+          return json(409, { ok: false, error: e instanceof Error ? e.message : String(e) })
+        }
       }
       if (path === '/api/backup/validate' && method === 'POST') {
         const check = verifyArchive(Buffer.from(await bytes(req, MAX_ARCHIVE)), { passphrase: cfg.passphrase })

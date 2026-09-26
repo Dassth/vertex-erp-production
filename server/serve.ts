@@ -34,6 +34,8 @@ export interface ServeConfig {
     appVersion: string
   }
   licence?: LicenceGuard
+  /** The second computer may fetch a copy of the data with this code. */
+  replica?: { pairCode: string }
   log?: (line: string) => void
 }
 
@@ -66,6 +68,7 @@ export async function startServing(cfg: ServeConfig): Promise<{ stop: () => Prom
     allowedOrigins: cfg.allowedOrigins ?? [],
     deployment: cfg.deployment,
     licence: cfg.licence,
+    replica: cfg.replica,
     backup: b ? { store: fsBackupStore(b.dir), passphrase: b.passphrase, appVersion: b.appVersion, keep: b.keep, schedule: `every ${b.everyMin} min${b.copyDir ? `, daily copy in ${b.copyDir}` : ''}` } : undefined,
   })
   await new Promise<void>((resolve) => server.listen(cfg.port, resolve))

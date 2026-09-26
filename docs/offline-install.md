@@ -6,9 +6,9 @@ Vertex ERP runs entirely on the customer's own computers. Only the **licence che
 MAIN computer (Administrator 1)                 SECOND computer (Administrator 2)
   PostgreSQL 17 database + Vertex server   <──  Vertex ERP icon → http://<main-ip>:4580/admin2
   Vertex ERP icon → http://localhost:4580/admin1
-  hourly backups (+ daily copy on another drive)
+  hourly backups (+ daily copy on another drive)   ──►  copy of all data every 10 min (pairing code)
         │
-        └── every 30 min ──► licence service (Back Moon Devs, internet)
+        └── every 5 min and on activity ──► licence service (Back Moon Devs, internet)
 ```
 
 ## Build the installer (Back Moon Devs, on Windows)
@@ -39,20 +39,29 @@ the licence activates (a phone hotspot is fine).
 
 Products, customers and prices can be entered on the Back Moon Devs computer first and carried over:
 
-1. On the computer with the data: sign in as Administrator 1 → **Settings → Backup & Restore → Download a
-   fresh backup** (or take the newest file from *Vertex ERP backups* in the Start menu). Copy the `.zip` to the USB stick.
+1. On the computer with the data: sign in as Administrator 1 → **Settings** (left menu) → **Backup & Import** →
+   **Download a fresh complete backup**. Copy the `.zip` to the USB stick.
 2. At the customer's main computer, in setup, fill **Start with data from a backup file** with that `.zip`.
 3. Setup loads the data before Vertex ERP starts for the first time. Backups carry no passwords, so each
    administrator chooses a new password at the first sign-in.
 
 If the computer already has Vertex ERP data, setup asks before replacing it and saves the old data as a backup first.
 
+On a computer that is already running, the same file can be brought in from **Settings → Backup & Import →
+Import a backup**: it is checked first, the current data is backed up, and the passwords stay the same.
+
 ### Second computer (Administrator 2)
 
-1. Run the same setup, choose **SECOND computer**, enter the main computer's address, press **Install**.
+1. Run the same setup, choose **SECOND computer**, enter the main computer's **address** and **pairing code**
+   (both shown when the main computer was installed, and in its `C:\ProgramData\VertexERP\README.txt`), press **Install**.
 2. Open **Vertex ERP** on the desktop → it opens **Administrator 2** only. Set the password.
 
-The main computer must be switched on while the second one works.
+The second computer works through the main computer, so the main computer must be switched on while it is used.
+It also keeps its own **copy of all the data**, fetched every 10 minutes (task *Vertex ERP Copy*), in
+`C:\ProgramData\VertexERP\copies` — `latest.zip` plus one per day for 400 days.
+
+**If the main computer is lost:** run setup on the second computer and choose **MAIN computer** — the latest copy is
+filled in automatically; press Install. It becomes the new main computer with all the data up to the last copy.
 
 ## What happens on the main computer
 
@@ -76,17 +85,21 @@ The main computer must be switched on while the second one works.
 ## Licence control (Back Moon Devs)
 
 Control page: **https://vertex-licence.suryadass010405.workers.dev/admin** — the admin key is in
-`BackMoonDevs-Licence-KEEP-SECRET.txt` (Documents on the Back Moon Devs computer; never in this repository).
+`BackMoonDevs-Licence-KEEP-SECRET.txt` (on the Back Moon Devs computer — currently its Desktop; never in this repository).
 
 | Button | Effect on the customer's computers |
 |---|---|
 | **Activate** | Works normally |
-| **Suspend** | Locked — shows your message (e.g. "Payment pending — call 8940095659") |
-| **Deactivate** | Locked — for a permanent stop |
+| **Activate for lifetime** | Fully paid: works for good, with no internet needed ever again |
+| **Suspend** | View-only: pages open, but every button shows "suspended — make the payment, call 89400 95659" (or your message) and nothing can be saved |
+| **Deactivate** | The whole window is locked — for a permanent stop |
 
-- The customer's copy asks every 30 minutes; pressing **Check again** on the lock screen asks at once.
+- While online, a change takes effect within about 20 seconds; any save waits for a fresh answer when the last is over
+  10 seconds old, so a suspension stops the very next change. **Check again** on the customer's screen asks at once.
 - **Offline days allowed** (per licence): how long a copy keeps working without reaching the licence service.
   After that it asks to be connected to the internet. Turning the computer's clock back is detected.
+- **Lifetime** licences show a LIFETIME badge; Suspend and Deactivate are under *More options*. A lifetime copy has no
+  offline limit, but a suspension still reaches it the next time it is online.
 - A locked copy **never deletes anything**: data stays, backups keep running, and everything opens again when
   the licence is active.
 - Answers are signed (Ed25519); the app holds only the public key, so an edited or invented answer is refused.

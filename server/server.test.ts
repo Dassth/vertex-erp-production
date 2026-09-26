@@ -334,3 +334,56 @@ describe('HTTP API', () => {
     expect((await call('/api/state', { cookie: login.cookie })).status).toBe(401)
   }, 60000)
 })
+
+describe('importing a backup through the app', () => {
+  let server: Server
+  let base: string
+
+  beforeEach(async () => {
+    server = createHttpServer(service, { backup: { store: fsBackupStore(join(dir, 'backups')), keep: 10, schedule: 'test' } })
+    await new Promise<void>((resolve) => server.listen(0, resolve))
+    base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+  })
+  afterEach(() => new Promise<void>((resolve) => server.close(() => resolve())))
+
+  const login = async () => {
+    const res = await fetch(`${base}/api/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-vertex-request': '1' }, body: JSON.stringify({ userId: 'USR-ADM1', password: PASSWORD }) })
+    expect(res.status).toBe(200)
+    return res.headers.get('set-cookie')!.split(';')[0]
+  }
+
+  it('replaces the data with the backup, keeps this computer’s password, and backs up what was there', async () => {
+    const token = await signIn('USR-ADM1')
+    await service.command(token, 'importProductTemplates', [JEWELLERY_BATCH_ID])
+    const { buffer } = await buildArchive(db)
+    const withProducts = (await service.state()).revision
+
+    // Later the data changes (here: every product deleted) — then the backup is imported.
+    const cookie = await login()
+    const changed = await service.state()
+    for (const p of changed.db.products) await service.command(token, 'deleteProduct', [p.id])
+    expect((await service.state()).db.products).toHaveLength(0)
+
+    const res = await fetch(`${base}/api/backup/restore`, { method: 'POST', headers: { 'content-type': 'application/zip', 'x-vertex-request': '1', cookie }, body: new Uint8Array(buffer) })
+    const body = fromWire<{ ok: boolean; revision: number; preRestoreBackup: string | null }>(await res.text())
+    expect(res.status).toBe(200)
+    expect(body.ok).toBe(true)
+    expect(body.revision).toBe(withProducts)
+    expect(body.preRestoreBackup).toMatch(/vertex-erp-backup-/)
+
+    const after = await service.state()
+    expect(after.db.products).toHaveLength(10)
+    // The same password still works after the import.
+    await login()
+  })
+
+  it('is refused to anyone but Administrator 1, and refuses a file that is not a backup', async () => {
+    const token = await signIn('USR-ADM1')
+    const cookie = await login()
+    const bad = await fetch(`${base}/api/backup/restore`, { method: 'POST', headers: { 'content-type': 'application/zip', 'x-vertex-request': '1', cookie }, body: new Uint8Array([1, 2, 3]) })
+    expect(bad.status).toBe(400)
+    const none = await fetch(`${base}/api/backup/restore`, { method: 'POST', headers: { 'content-type': 'application/zip', 'x-vertex-request': '1' }, body: new Uint8Array([1]) })
+    expect(none.status).toBe(401)
+    void token
+  })
+})

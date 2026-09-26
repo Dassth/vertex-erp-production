@@ -1,5 +1,5 @@
 {
-  // Back Moon Devs licence service — the only online part of the offline Vertex ERP.
+  // Back Moon Devs licence service — the only online part of the offline Vertex ERP (Worker + D1).
   // Secrets (never in this file): LICENCE_SIGNING_KEY, ADMIN_KEY
   //   npx wrangler secret put LICENCE_SIGNING_KEY --config licence/wrangler.jsonc
   "$schema": "../node_modules/wrangler/config-schema.json",
@@ -8,6 +8,7 @@
   "compatibility_date": "2026-09-01",
   "workers_dev": true,
   "preview_urls": false,
-  "kv_namespaces": [{ "binding": "LICENCES", "id": "f23d3a0ee78c4daab1dd93daeda51cce" }],
+  // D1 is strongly consistent: a change on the control page is what the next check sees.
+  "d1_databases": [{ "binding": "DB", "database_name": "vertex-licences", "database_id": "7e0941c4-7854-48b5-b08c-8272930f092a" }],
   "observability": { "enabled": true }
 }

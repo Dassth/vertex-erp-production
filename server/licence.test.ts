@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { generateKeyPairSync } from 'node:crypto'
 import { LicenceGuard, decodeSigned, evaluate } from './licence'
 import type { LicenceStore } from './licence'
-import worker, { answerFor, signAnswer } from '../licence/worker'
-import type { Env, LicenceRecord } from '../licence/worker'
+import { answerFor, handle, signAnswer } from '../licence/worker'
+import type { LicenceRecord, LicenceStore as ServiceStore } from '../licence/worker'
 
 /* The licence: signed answers from Back Moon Devs lock or unlock an installed
    copy; nothing else may. */
@@ -16,23 +16,28 @@ const other = generateKeyPairSync('ed25519').privateKey.export({ format: 'der', 
 const DAY = 86_400_000
 const T0 = Date.parse('2026-09-26T10:00:00Z')
 
-function memoryKV(): Env['LICENCES'] & { data: Map<string, string> } {
-  const data = new Map<string, string>()
+/** The licence service's tables, in memory. */
+function memoryService(): ServiceStore & { licences: Map<string, string>; seen: Map<string, string> } {
+  const licences = new Map<string, string>()
+  const seen = new Map<string, string>()
   return {
-    data,
-    get: async (k) => data.get(k) ?? null,
-    put: async (k, v) => void data.set(k, v),
-    list: async ({ prefix }) => ({ keys: [...data.keys()].filter((k) => k.startsWith(prefix)).map((name) => ({ name })) }),
+    licences,
+    seen,
+    get: async (id) => (licences.has(id) ? JSON.parse(licences.get(id)!) : null),
+    put: async (rec) => void licences.set(rec.licenceId, JSON.stringify(rec)),
+    list: async () => [...licences.values()].map((v) => JSON.parse(v)),
+    getSeen: async (id) => (seen.has(id) ? JSON.parse(seen.get(id)!) : null),
+    putSeen: async (id, v) => void seen.set(id, JSON.stringify(v)),
   }
 }
 
 function service() {
-  const kv = memoryKV()
-  const env: Env = { LICENCES: kv, LICENCE_SIGNING_KEY: PRIVATE, ADMIN_KEY: 'test-admin-key-0123456789' }
-  const call = (path: string, init: RequestInit = {}) => worker.fetch(new Request(`https://licence.test${path}`, init), env)
+  const store = memoryService()
+  const env = { LICENCE_SIGNING_KEY: PRIVATE, ADMIN_KEY: 'test-admin-key-0123456789' }
+  const call = (path: string, init: RequestInit = {}) => handle(new Request(`https://licence.test${path}`, init), env, store)
   const admin = (body: Partial<LicenceRecord>, key = env.ADMIN_KEY) =>
     call('/admin/api/licences', { method: 'POST', headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' }, body: JSON.stringify(body) })
-  return { env, kv, call, admin }
+  return { env, store, call, admin }
 }
 
 function memoryStore(): LicenceStore & { data: Map<string, string> } {
@@ -41,11 +46,14 @@ function memoryStore(): LicenceStore & { data: Map<string, string> } {
 }
 
 function guard(svc: ReturnType<typeof service> | null, store = memoryStore(), clock = { now: T0 }) {
+  let calls = 0
   const fetcher: typeof fetch = async (input, init) => {
+    calls++
     if (!svc) throw new TypeError('fetch failed')
     return svc.call(new URL(String(input)).pathname, init)
   }
-  return { g: new LicenceGuard({ licenceId: 'VPP-2026-01', endpoint: 'https://licence.test', publicKey: PUBLIC, fetch: fetcher, now: () => clock.now }, store), store, clock }
+  const g = new LicenceGuard({ licenceId: 'VPP-2026-01', endpoint: 'https://licence.test', publicKey: PUBLIC, fetch: fetcher, now: () => clock.now }, store)
+  return { g, store, clock, calls: () => calls }
 }
 
 describe('signed answers', () => {
@@ -59,40 +67,46 @@ describe('signed answers', () => {
     expect(decodeSigned({ payload: forged, signature: good.signature }, PUBLIC)).toBeNull()
   })
 
-  it('decide the lock: active, suspended, deactivated, unknown, expired and clock moved back', () => {
-    const p = (status: string, validUntil = new Date(T0 + 7 * DAY).toISOString()) =>
-      ({ licenceId: 'X-1', status, message: '', customer: 'C', issuedAt: new Date(T0).toISOString(), validUntil }) as Parameters<typeof evaluate>[1]
-    expect(evaluate('X-1', p('active'), T0, T0).active).toBe(true)
-    expect(evaluate('X-1', p('suspended'), T0, T0).reason).toBe('suspended')
-    expect(evaluate('X-1', p('deactivated'), T0, T0).reason).toBe('deactivated')
+  it('decide the lock: suspended is view-only, everything else that is not active locks', () => {
+    const p = (status: string, over: object = {}) =>
+      ({ licenceId: 'X-1', status, message: '', customer: 'C', issuedAt: new Date(T0).toISOString(), validUntil: new Date(T0 + 7 * DAY).toISOString(), ...over }) as Parameters<typeof evaluate>[1]
+    expect(evaluate('X-1', p('active'), T0, T0)).toMatchObject({ active: true, mode: 'open' })
+    expect(evaluate('X-1', p('suspended'), T0, T0)).toMatchObject({ active: false, mode: 'view-only', reason: 'suspended' })
+    expect(evaluate('X-1', p('suspended'), T0, T0).message).toMatch(/until the payment is made.*89400 95659/)
+    expect(evaluate('X-1', p('deactivated'), T0, T0)).toMatchObject({ mode: 'locked', reason: 'deactivated' })
     expect(evaluate('X-1', p('unknown'), T0, T0).reason).toBe('unknown')
     expect(evaluate('X-1', null, T0, 0).reason).toBe('unverified')
     expect(evaluate('Y-2', p('active'), T0, T0).reason).toBe('unverified')
     expect(evaluate('X-1', p('active'), T0 + 8 * DAY, T0).reason).toBe('expired')
     expect(evaluate('X-1', p('active'), T0 - 2 * DAY, T0).reason).toBe('clock')
   })
+
+  it('treat a lifetime licence as open for good, whatever the clock says, until it is suspended', () => {
+    const life = { licenceId: 'X-1', status: 'active', permanent: true, message: '', customer: 'C', issuedAt: new Date(T0).toISOString(), validUntil: new Date(T0 + 7 * DAY).toISOString() } as Parameters<typeof evaluate>[1]
+    expect(evaluate('X-1', life, T0 + 5000 * DAY, T0)).toMatchObject({ active: true, permanent: true })
+    expect(evaluate('X-1', life, T0 - 30 * DAY, T0).active).toBe(true)
+    expect(evaluate('X-1', { ...life!, status: 'suspended' }, T0, T0)).toMatchObject({ mode: 'view-only', permanent: false })
+  })
 })
 
 describe('an installed copy', () => {
-  it('stays locked until activated, then works, and locks again when suspended', async () => {
+  it('stays locked until activated, then works, and turns view-only when suspended', async () => {
     const svc = service()
     const { g } = guard(svc)
     expect((await g.check()).reason).toBe('unknown')
 
     expect((await (await svc.admin({ licenceId: 'VPP-2026-01', customer: 'Vertex Print Pack', status: 'active' })).json()).ok).toBe(true)
-    const on = await g.check()
-    expect(on).toMatchObject({ active: true, customer: 'Vertex Print Pack', lastError: null })
+    expect(await g.check()).toMatchObject({ active: true, mode: 'open', customer: 'Vertex Print Pack', lastError: null })
 
-    await svc.admin({ licenceId: 'VPP-2026-01', status: 'suspended', message: 'Payment pending — call 8940095659' })
-    expect(await g.check()).toMatchObject({ active: false, reason: 'suspended', message: 'Payment pending — call 8940095659' })
+    await svc.admin({ licenceId: 'VPP-2026-01', status: 'suspended', message: 'Payment pending — call 89400 95659' })
+    expect(await g.check()).toMatchObject({ active: false, mode: 'view-only', reason: 'suspended', message: 'Payment pending — call 89400 95659' })
 
     await svc.admin({ licenceId: 'VPP-2026-01', status: 'active', message: '' })
     expect((await g.check()).active).toBe(true)
-    // The service records every call made after the licence existed.
-    expect(JSON.parse(svc.kv.data.get('seen:VPP-2026-01')!)).toMatchObject({ checks: 3 })
-    expect(JSON.parse(svc.kv.data.get('lic:VPP-2026-01')!)).toMatchObject({ status: 'active' })
     // A copy calling in never writes the licence itself, so it cannot put back an older status.
-    expect(JSON.parse(svc.kv.data.get('lic:VPP-2026-01')!).checks).toBeUndefined()
+    expect(JSON.parse(svc.store.licences.get('VPP-2026-01')!)).toMatchObject({ status: 'active' })
+    expect(JSON.parse(svc.store.licences.get('VPP-2026-01')!).checks).toBeUndefined()
+    expect(JSON.parse(svc.store.seen.get('VPP-2026-01')!)).toMatchObject({ checks: 1 })
   })
 
   it('works offline on its last answer for the grace days, then asks for internet', async () => {
@@ -111,6 +125,18 @@ describe('an installed copy', () => {
     expect((await offline.state()).reason).toBe('expired')
   })
 
+  it('once activated for lifetime, works offline for years — and a later suspension still reaches it when online', async () => {
+    const svc = service()
+    await svc.admin({ licenceId: 'VPP-2026-01', status: 'active', permanent: true })
+    const { g, store, clock } = guard(svc)
+    expect(await g.check()).toMatchObject({ active: true, permanent: true })
+    clock.now = T0 + 3 * 365 * DAY
+    expect((await guard(null, store, clock).g.state()).active).toBe(true)
+
+    await svc.admin({ licenceId: 'VPP-2026-01', status: 'suspended' })
+    expect(await guard(svc, store, clock).g.check()).toMatchObject({ mode: 'view-only', reason: 'suspended' })
+  })
+
   it('notices the clock being turned back to stretch the grace', async () => {
     const svc = service()
     await svc.admin({ licenceId: 'VPP-2026-01', status: 'active' })
@@ -119,8 +145,21 @@ describe('an installed copy', () => {
     clock.now = T0 + 6 * DAY
     expect((await g.state()).active).toBe(true)
     clock.now = T0 + 1 * DAY
-    const back = await guard(null, store, clock).g.state()
-    expect(back.reason).toBe('clock')
+    expect((await guard(null, store, clock).g.state()).reason).toBe('clock')
+  })
+
+  it('asks again on activity, at most once per interval', async () => {
+    const svc = service()
+    await svc.admin({ licenceId: 'VPP-2026-01', status: 'active' })
+    const { g, clock, calls } = guard(svc)
+    await g.refreshIfStale(30_000, 4_000)
+    await g.refreshIfStale(30_000, 4_000)
+    expect(calls()).toBe(1)
+    await svc.admin({ licenceId: 'VPP-2026-01', status: 'suspended' })
+    clock.now += 31_000
+    await g.refreshIfStale(30_000, 4_000)
+    expect(calls()).toBe(2)
+    expect((await g.state()).mode).toBe('view-only')
   })
 
   it('refuses an answer that was not signed by Back Moon Devs', async () => {
