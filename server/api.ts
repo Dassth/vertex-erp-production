@@ -238,7 +238,8 @@ export function createApiHandler(service: VertexService, options: ApiOptions = {
       if (path === '/api/backup/validate' && method === 'POST') {
         const check = verifyArchive(Buffer.from(await bytes(req, MAX_ARCHIVE)), { passphrase: cfg.passphrase })
         if (!check.ok) return json(200, { ok: true, valid: false, error: check.error })
-        const preview = await previewRestore(service.db, check.content)
+        // Checked exactly as Import will run it: replacing this computer's data, keeping its passwords.
+        const preview = await previewRestore(service.db, check.content, { replace: true, withoutCredentials: true, keepPasswords: true })
         return json(200, {
           ok: true,
           valid: true,

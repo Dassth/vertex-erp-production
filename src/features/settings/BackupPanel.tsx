@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Download, FileCheck2, HardDriveDownload, RefreshCw, Save, Upload } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Download, FileCheck2, FolderOpen, HardDriveDownload, RefreshCw, Save, Upload } from 'lucide-react'
 import { useStore } from '../../store/store'
 import { remote } from '../../store/remote'
 import type { BackupStatusResponse, BackupValidation } from '../../store/remote'
@@ -15,6 +15,8 @@ const COUNT_LABELS: Array<[string, string]> = [
   ['orders', 'Orders'],
   ['dispatches', 'Dispatches'],
   ['invoices', 'Invoices'],
+  ['purchases', 'Purchase bills'],
+  ['moneyEntries', 'Income & expenses'],
   ['people', 'People'],
   ['machines', 'Machines'],
   ['users', 'Accounts'],
@@ -35,6 +37,8 @@ export function BackupPanel() {
   const [confirmImport, setConfirmImport] = useState(false)
   const [importing, setImporting] = useState(false)
   const [imported, setImported] = useState<string | null>(null)
+  const [needFile, setNeedFile] = useState(false)
+  const fileInput = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
     try {
@@ -217,16 +221,43 @@ export function BackupPanel() {
         <CardHead title="Import a backup" subtitle="Choose a backup file (.zip) — for example data prepared on another computer. It is checked first; nothing changes until you press Import." icon={<FileCheck2 className="h-4 w-4" />} />
         <div className="space-y-3 p-5 text-sm">
           <input
+            ref={fileInput}
             type="file"
             accept=".zip,application/zip"
             aria-label="Backup file to import"
-            disabled={checking}
+            className="sr-only"
+            tabIndex={-1}
             onChange={(e) => {
               const f = e.target.files?.[0]
               if (f) void validate(f)
               e.target.value = ''
             }}
           />
+          <div className="flex flex-wrap items-center gap-3">
+            <Button variant="secondary" icon={<FolderOpen className="h-4 w-4" />} loading={checking} onClick={() => fileInput.current?.click()}>
+              {picked ? 'Choose another file…' : 'Choose backup file…'}
+            </Button>
+            <Button
+              icon={<Upload className="h-4 w-4" />}
+              loading={importing}
+              onClick={() => {
+                if (!picked || !v) {
+                  setNeedFile(true)
+                  fileInput.current?.click()
+                } else if (v.valid && !v.preview.blockers.length) setConfirmImport(true)
+              }}
+            >
+              Import
+            </Button>
+            <span className="min-w-0 truncate text-ink-2" translate="no">
+              {picked ? picked.name : 'No file chosen'}
+            </span>
+          </div>
+          {needFile && !picked ? (
+            <p role="alert" aria-live="polite" className="text-warn">
+              Choose a backup file (.zip) first — then press Import.
+            </p>
+          ) : null}
           {checking ? <p role="status">Checking…</p> : null}
           {validation && v && !v.valid ? (
             <p role="alert" className="rounded-md bg-risk-wash px-3 py-2 text-risk ring-1 ring-inset ring-risk-edge">
@@ -247,22 +278,14 @@ export function BackupPanel() {
                   </div>
                 ))}
               </dl>
-              <p>
-                Destination: {v.preview.destination.kind} schema {v.preview.destination.schema} —{' '}
-                {v.preview.destination.empty ? 'empty' : `already holds data (revision ${v.preview.destination.revision})`}.
-              </p>
+              <p>{v.preview.destination.empty ? 'This computer has no data yet.' : 'The data now on this computer will be replaced — it is saved as a backup first, so nothing is lost.'}</p>
               {[...v.warnings, ...v.preview.blockers].map((w) => (
                 <p key={w} className="text-warn">
                   {w}
                 </p>
               ))}
               {v.preview.blockers.length ? null : (
-                <div className="flex flex-wrap items-center gap-3 pt-1">
-                  <Button icon={<Upload className="h-4 w-4" />} loading={importing} onClick={() => setConfirmImport(true)}>
-                    Import this backup…
-                  </Button>
-                  <span className="text-xs text-muted">Replaces the data on this computer. The current data is backed up first; your passwords stay the same.</span>
-                </div>
+                <p className="pt-1 font-medium text-ok">Ready — press Import. It replaces the data on this computer; the current data is backed up first and your passwords stay the same.</p>
               )}
             </div>
           ) : null}

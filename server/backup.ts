@@ -89,6 +89,8 @@ export function summarise(state: VertexDB, drafts: unknown[] = []): Record<strin
     dispatches: state.dispatches.length,
     dispatchesReceived: state.dispatches.filter((d) => d.receivedAt).length,
     invoices: state.invoices.length,
+    purchases: state.purchases?.length ?? 0,
+    moneyEntries: state.cashbook?.length ?? 0,
     notifications: state.notifications?.length ?? 0,
     auditEntries: state.audit.length,
     drafts: drafts.length,
@@ -377,7 +379,7 @@ export interface RestorePreview {
   blockers: string[]
 }
 
-export async function previewRestore(target: Database, content: ArchiveContent, options: { withoutCredentials?: boolean; replace?: boolean } = {}): Promise<RestorePreview> {
+export async function previewRestore(target: Database, content: ArchiveContent, options: { withoutCredentials?: boolean; replace?: boolean; keepPasswords?: boolean } = {}): Promise<RestorePreview> {
   const existing = await readState(target)
   const blockers: string[] = []
   const warnings: string[] = []
@@ -385,13 +387,14 @@ export async function previewRestore(target: Database, content: ArchiveContent, 
   const needsCredentials = content.manifest.credentials !== 'none-set' || (content.credentials && Object.keys(content.credentials).length > 0)
   if (needsCredentials && !content.credentials && !options.withoutCredentials)
     blockers.push('Account passwords are not available (missing or wrong passphrase). Provide the passphrase, or use --without-credentials so accounts choose new passwords.')
-  if (needsCredentials && !content.credentials && options.withoutCredentials) warnings.push('Accounts will have no passwords after the restore; each chooses one at first sign-in.')
+  if (needsCredentials && !content.credentials && options.withoutCredentials && !options.keepPasswords) warnings.push('Accounts will have no passwords after the restore; each chooses one at first sign-in.')
   return {
     destination: { kind: target.kind, schema: target.schema, empty: !existing, revision: existing?.revision ?? null, counts: existing ? summarise(existing.data) : null },
     archive: {
       exportedAt: content.manifest.exportedAt,
       revision: content.manifest.database.revision,
-      counts: content.manifest.counts,
+      // Counted from the data itself: archives from older versions list fewer kinds.
+      counts: summarise(content.state, content.drafts),
       credentials: content.credentials ? 'available' : content.manifest.credentials,
       notice: content.manifest.notice,
     },

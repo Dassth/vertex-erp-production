@@ -165,7 +165,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         onQuickAccess={() => setQuickOpen(true)}
         onMenu={() => setSheetOpen(true)}
         scopeLabel={isAdmin ? 'All units' : (unit?.shortName ?? 'Unit')}
-        open={(d) => (d === 'resources' ? navigate('/settings') : setDialog(d))}
+        open={(d) => (d === 'resources' ? navigate('/settings?tab=people') : setDialog(d))}
         onLogout={() => {
           logout()
           navigate('/login')

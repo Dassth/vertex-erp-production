@@ -18,12 +18,12 @@ export function SettingsPage() {
   useDocumentTitle('Settings')
   const { db } = useStore()
   const [params, setParams] = useSearchParams()
-  const tab = (params.get('tab') ?? 'people') as Tab
+  const tab = (params.get('tab') ?? 'backup') as Tab
   const unitFilter = params.get('unit') ?? ''
 
   const setTab = (t: Tab) => {
     const next = new URLSearchParams(params)
-    if (t === 'people') next.delete('tab')
+    if (t === 'backup') next.delete('tab')
     else next.set('tab', t)
     setParams(next, { replace: true })
   }
