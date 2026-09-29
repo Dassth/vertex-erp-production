@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Boxes, CheckCircle2, FileInput, Layers, Package, Pencil, Plus, Search, TriangleAlert } from 'lucide-react'
+import { Boxes, CheckCircle2, FileInput, FileUp, Layers, Package, Pencil, Plus, Search, TriangleAlert } from 'lucide-react'
 import { useStore } from '../../../store/store'
 import type { Product } from '../../../lib/types'
 import { deleteProduct, setProductActive } from '../../../domain/master'
@@ -12,6 +12,7 @@ import { JEWELLERY_BATCH_ID } from '../../../lib/templates/jewelleryBoxes'
 import { LinkButton, PageHeader, StatStrip, StatTile, useDocumentTitle } from '../../../components/page'
 import { ActiveBadge } from '../../../components/status'
 import { productIssues } from '../masterSelectors'
+import { AddFromFileDialog } from './AddFromFileDialog'
 
 type StatusFilter = 'all' | 'active' | 'inactive' | 'issues'
 
@@ -19,6 +20,7 @@ export function ProductsPage() {
   useDocumentTitle('Master · Products')
   const { db, run, pushToast, can } = useStore()
   const [importOpen, setImportOpen] = useState(false)
+  const [fileOpen, setFileOpen] = useState(false)
   const [params, setParams] = useSearchParams()
   const q = params.get('q') ?? ''
   const status = (params.get('status') ?? 'all') as StatusFilter
@@ -65,12 +67,17 @@ export function ProductsPage() {
         actions={
           <div className="flex flex-wrap gap-2">
             {can('master') ? (
-              <Button variant="secondary" icon={<FileInput className="h-4 w-4" />} onClick={() => setImportOpen(true)}>
-                Import product templates…
+              <Button variant="ghost" icon={<FileInput className="h-4 w-4" />} onClick={() => setImportOpen(true)}>
+                Templates…
+              </Button>
+            ) : null}
+            {can('master') ? (
+              <Button variant="secondary" icon={<FileUp className="h-4 w-4" />} onClick={() => setFileOpen(true)}>
+                Add from file…
               </Button>
             ) : null}
             <LinkButton to="/master/products/new" icon={<Plus className="h-4 w-4" />}>
-              New product
+              Add manually
             </LinkButton>
           </div>
         }
@@ -219,6 +226,7 @@ export function ProductsPage() {
       </Card>
 
       {importOpen ? <ImportTemplatesDialog onClose={() => setImportOpen(false)} /> : null}
+      {fileOpen ? <AddFromFileDialog onClose={() => setFileOpen(false)} /> : null}
 
       <ConfirmDialog
         open={!!pendingDelete}

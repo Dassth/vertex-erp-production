@@ -19,6 +19,8 @@ import {
   templateSpec,
 } from '../lib/templates/jewelleryBoxes'
 import type { MaterialTemplate, ProductTemplate } from '../lib/templates/jewelleryBoxes'
+import type { SheetProduct } from '../lib/productSheet'
+import { blankMaterialDraft, saveMaterial, saveProduct } from './master'
 import { audit, docCode, fail, nextSeq, ok, requireCapability, sameText, stampNew, command } from './common'
 import type { Op } from './common'
 
@@ -231,6 +233,157 @@ export const importProductTemplates = command(
       entityId: batchId,
       entityLabel: batch.title,
       newValue: `${result.created.length} created, ${result.skipped.length} skipped, ${result.materialsCreated} candidate materials added`,
+    })
+    return ok(next, result)
+  },
+)
+
+/* ---------------------------------------------------------------------------
+ * Products from a file (Master → Products → Add from file). Whatever the file
+ * gives is saved; what it does not give stays empty and shows up later as a
+ * missing detail in costing — never a reason to refuse the product.
+ * ------------------------------------------------------------------------- */
+
+export interface FileImportResult {
+  created: Array<{ id: string; code: string; name: string }>
+  skipped: Array<{ name: string; reason: string }>
+  materialsCreated: string[]
+}
+
+const positive = (n: number | null) => (n !== null && Number.isFinite(n) && n > 0 ? n : null)
+const zeroOrMore = (n: number | null) => (n !== null && Number.isFinite(n) && n >= 0 ? n : null)
+
+export const importProductsFromFile = command(
+  'importProductsFromFile',
+  (products: SheetProduct[], fileName: string): Op<FileImportResult> =>
+  (db, ctx) => {
+    const denied = requireCapability(ctx, 'master')
+    if (denied) return denied
+    if (!Array.isArray(products) || !products.length) return fail('The file has no products to add.')
+    let next = db
+    const result: FileImportResult = { created: [], skipped: [], materialsCreated: [] }
+
+    for (const p of products) {
+      const name = String(p.name ?? '').trim()
+      if (!name) {
+        result.skipped.push({ name: '(no name)', reason: 'The product has no name.' })
+        continue
+      }
+      if (next.products.some((x) => sameText(x.name, name))) {
+        result.skipped.push({ name, reason: 'A product with this name already exists — it was left as it is.' })
+        continue
+      }
+      let attempt = next
+      const newMaterials: string[] = []
+
+      // Stages in file order; processes under them.
+      const stages: ProductStage[] = []
+      for (const pr of p.processes ?? []) {
+        const stageName = String(pr.stage || 'Production').trim()
+        let stage = stages.find((s) => sameText(s.name, stageName))
+        if (!stage) {
+          stage = { id: ctx.newId('STG'), name: stageName, description: '', processes: [] }
+          stages.push(stage)
+        }
+        stage.processes.push({
+          id: ctx.newId('PRC'),
+          name: String(pr.name || `Process ${stage.processes.length + 1}`).trim(),
+          description: '',
+          setupHours: zeroOrMore(pr.setupHours),
+          runHoursPer1000: zeroOrMore(pr.runHoursPer1000),
+          chargeId: null,
+          costBasis: pr.costBasis ?? 'per_1000',
+          rate: zeroOrMore(pr.rate),
+          setupCharge: zeroOrMore(pr.setupCharge),
+          requiresMachine: false,
+        })
+      }
+      if (!stages.length)
+        stages.push({
+          id: ctx.newId('STG'),
+          name: 'Production',
+          description: 'Added because the file had no processes — replace with the real stages.',
+          processes: [{ id: ctx.newId('PRC'), name: 'Production', description: '', setupHours: null, runHoursPer1000: null, chargeId: null, costBasis: 'per_1000', rate: null, setupCharge: null, requiresMachine: false }],
+        })
+
+      const lines: ProductMaterial[] = []
+      let failed = ''
+      for (const m of p.materials ?? []) {
+        const mName = String(m.name ?? '').trim()
+        if (!mName) continue
+        let material = attempt.materials.find((x) => sameText(x.name, mName))
+        if (!material) {
+          const draft = {
+            ...blankMaterialDraft(m.kind === 'sheet' ? 'sheet' : 'quantity'),
+            name: mName,
+            price: zeroOrMore(m.price),
+            gsm: positive(m.gsm),
+            sheetLengthMm: m.kind === 'sheet' ? positive(m.sheetLengthMm) : null,
+            sheetWidthMm: m.kind === 'sheet' ? positive(m.sheetWidthMm) : null,
+            wastagePct: m.wastagePct !== null && m.wastagePct >= 0 && m.wastagePct < 100 ? m.wastagePct : 0,
+            notes: `Added from ${fileName}`,
+          }
+          if (m.uom?.trim() && m.kind !== 'sheet') draft.uom = m.uom.trim()
+          const saved = saveMaterial(draft)(attempt, ctx)
+          if (!saved.ok) {
+            failed = `Material “${mName}”: ${Object.values(saved.fieldErrors ?? {})[0] ?? saved.error}`
+            break
+          }
+          attempt = saved.db
+          material = saved.value
+          newMaterials.push(mName)
+        }
+        const allProcesses = stages.flatMap((s) => s.processes.map((pr) => ({ stageId: s.id, pr })))
+        const at = m.process ? allProcesses.find((x) => sameText(x.pr.name, m.process)) : undefined
+        lines.push({
+          id: ctx.newId('BOM'),
+          materialId: material.id,
+          stageId: at?.stageId ?? null,
+          processId: at?.pr.id ?? null,
+          qtyPerPiece: material.kind === 'sheet' ? 0 : positive(m.qtyPerPiece),
+          piecesPerProduct: material.kind === 'sheet' ? (positive(m.piecesPerProduct) !== null ? Math.max(1, Math.round(m.piecesPerProduct!)) : 1) : 1,
+          cutLengthMm: material.kind === 'sheet' ? positive(m.cutLengthMm) : null,
+          cutWidthMm: material.kind === 'sheet' ? positive(m.cutWidthMm) : null,
+          rotationAllowed: true,
+          upsOverride: null,
+          upsOverrideReason: '',
+          note: '',
+        })
+      }
+      if (failed) {
+        result.skipped.push({ name, reason: failed })
+        continue
+      }
+
+      const tax = p.taxPct !== null && p.taxPct >= 0 && p.taxPct <= 100 ? p.taxPct : null
+      const saved = saveProduct({
+        code: '',
+        name,
+        category: String(p.category ?? '').trim(),
+        description: [String(p.description ?? '').trim(), `Added from ${fileName}.`].filter(Boolean).join('\n'),
+        hsn: String(p.hsn ?? '').trim(),
+        uom: String(p.uom ?? '').trim() || 'pcs',
+        taxPct: tax,
+        stages,
+        materials: lines,
+      })(attempt, ctx)
+      if (!saved.ok) {
+        result.skipped.push({ name, reason: Object.values(saved.fieldErrors ?? {})[0] ?? saved.error })
+        continue
+      }
+      next = saved.db
+      result.created.push({ id: saved.value.id, code: saved.value.code, name })
+      result.materialsCreated.push(...newMaterials)
+    }
+
+    if (!result.created.length) return fail(result.skipped.map((s) => `${s.name}: ${s.reason}`).join(' '))
+    next = audit(next, ctx, {
+      action: 'Products added from file',
+      entity: 'Product',
+      entityId: result.created.map((c) => c.id).join(','),
+      entityLabel: fileName,
+      field: 'Products',
+      newValue: `${result.created.length} added${result.skipped.length ? `, ${result.skipped.length} skipped` : ''}${result.materialsCreated.length ? `, ${result.materialsCreated.length} new material(s)` : ''}`,
     })
     return ok(next, result)
   },

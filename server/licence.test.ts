@@ -16,7 +16,8 @@ const PRIVATE = keys.privateKey.export({ format: 'der', type: 'pkcs8' }).toStrin
 const other = generateKeyPairSync('ed25519').privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64')
 
 const DAY = 86_400_000
-const T0 = Date.parse('2026-09-26T10:00:00Z')
+// The licence service stamps its answers with the real time, so the copy's clock starts there too.
+const T0 = Date.now()
 
 /** The licence service's tables, in memory. */
 function memoryService(): ServiceStore & { licences: Map<string, string>; seen: Map<string, string> } {
