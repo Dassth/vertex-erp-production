@@ -139,6 +139,9 @@ export interface CostingSource {
   spec?: ProductSpec | null
 }
 
+/** Problems that are a detail not yet entered, as opposed to a wrong value. */
+const isMissing = (problem: string) => /missing|not entered|does not fit/i.test(problem)
+
 export function computeOrderCosting(args: {
   quantity: number
   product: CostingSource
@@ -150,6 +153,8 @@ export function computeOrderCosting(args: {
   const issues: CostingIssue[] = []
   const error = (message: string, fix?: CostingIssue['fix']) => issues.push({ level: 'error', message, fix })
   const warn = (message: string, fix?: CostingIssue['fix']) => issues.push({ level: 'warning', message, fix })
+  /** A detail not entered yet: counted as zero; finalizing is allowed once accepted. */
+  const gap = (message: string, fix?: CostingIssue['fix']) => issues.push({ level: 'error', message, fix, gap: true })
   const productFix = { label: 'Open product in Master', to: `/master/products/${product.productId}` }
 
   const qty = args.quantity
@@ -158,7 +163,7 @@ export function computeOrderCosting(args: {
 
   if (product.spec?.status === 'proposed') {
     const open = product.spec.openItems.length ? ` Open: ${product.spec.openItems.slice(0, 3).join('; ')}${product.spec.openItems.length > 3 ? '; …' : ''}.` : ''
-    error(`Specification is a proposal awaiting customer confirmation (size ${product.spec.rawSize || 'not given'}, unit ${product.spec.sizeUnit ?? 'unknown'}).${open}`, productFix)
+    gap(`Specification is a proposal awaiting customer confirmation (size ${product.spec.rawSize || 'not given'}, unit ${product.spec.sizeUnit ?? 'unknown'}).${open}`, productFix)
   }
   if (!product.stages.length) error('The product has no stages.', productFix)
   for (const s of product.stages) {
@@ -177,13 +182,13 @@ export function computeOrderCosting(args: {
   for (const bom of product.materials) {
     const m = byId.get(bom.materialId)
     if (!m) {
-      error('A material used by this product no longer exists in the registry.', productFix)
+      gap('A material used by this product no longer exists in the registry.', productFix)
       continue
     }
     const materialFix = { label: `Configure ${m.name}`, to: `/master/costing?material=${m.id}` }
     if (!m.active) warn(`${m.name} is deactivated in Master but still used by this product.`, materialFix)
-    for (const problem of materialConfigIssues(m)) error(`${m.name}: ${problem}.`, materialFix)
-    for (const problem of usageConfigIssues(bom, m)) error(`${m.name}: ${problem}.`, materialFix)
+    for (const problem of materialConfigIssues(m)) (isMissing(problem) ? gap : error)(`${m.name}: ${problem}.`, materialFix)
+    for (const problem of usageConfigIssues(bom, m)) (isMissing(problem) ? gap : error)(`${m.name}: ${problem}.`, materialFix)
 
     const line: MaterialCostLine = {
       bomLineId: bom.id,
@@ -281,8 +286,8 @@ export function computeOrderCosting(args: {
   const processLines: ProcessCostLine[] = []
   for (const stage of product.stages) {
     for (const p of stage.processes) {
-      if (p.setupHours === null) error(`${stage.name} › ${p.name}: setup time not entered (enter 0 if none).`, productFix)
-      if (p.runHoursPer1000 === null) error(`${stage.name} › ${p.name}: run time not entered.`, productFix)
+      if (p.setupHours === null) gap(`${stage.name} › ${p.name}: setup time not entered (enter 0 if none).`, productFix)
+      if (p.runHoursPer1000 === null) gap(`${stage.name} › ${p.name}: run time not entered.`, productFix)
       const runHours = (Math.max(0, p.runHoursPer1000 ?? 0) * q) / 1000
       const hours = round2(Math.max(0, p.setupHours ?? 0) + runHours)
       let basis = p.costBasis
@@ -294,7 +299,7 @@ export function computeOrderCosting(args: {
         const charge = settings.processCharges.find((c) => c.id === p.chargeId)
         const chargeFix = { label: 'Open process charges', to: '/master/costing?tab=charges' }
         if (!charge) {
-          error(`${stage.name} › ${p.name}: its process charge was removed from Master.`, productFix)
+          gap(`${stage.name} › ${p.name}: its process charge was removed from Master.`, productFix)
           rate = null
           setupCharge = null
         } else {
@@ -303,13 +308,13 @@ export function computeOrderCosting(args: {
           rate = charge.rate
           setupCharge = charge.setupCharge
           if (!charge.active) warn(`Process charge “${charge.name}” is deactivated but still referenced.`, chargeFix)
-          if (rate === null) error(`Process charge “${charge.name}” has no rate.`, chargeFix)
-          if (setupCharge === null) error(`Process charge “${charge.name}” has no setup charge (enter 0 if none).`, chargeFix)
+          if (rate === null) gap(`Process charge “${charge.name}” has no rate.`, chargeFix)
+          if (setupCharge === null) gap(`Process charge “${charge.name}” has no setup charge (enter 0 if none).`, chargeFix)
         }
       } else {
-        if (rate === null) error(`${stage.name} › ${p.name}: process rate missing (enter 0 if no charge).`, productFix)
+        if (rate === null) gap(`${stage.name} › ${p.name}: process rate missing (enter 0 if no charge).`, productFix)
         if (setupCharge === null)
-          error(`${stage.name} › ${p.name}: setup charge missing (enter 0 if none).`, productFix)
+          gap(`${stage.name} › ${p.name}: setup charge missing (enter 0 if none).`, productFix)
       }
       if ((rate !== null && rate < 0) || (setupCharge !== null && setupCharge < 0))
         error(`${stage.name} › ${p.name}: charges cannot be negative.`, productFix)
@@ -350,7 +355,7 @@ export function computeOrderCosting(args: {
   for (const c of inputs.charges) {
     const label = c.name.trim() || 'Unnamed charge'
     if (!c.name.trim()) error('Every additional order charge needs a name.')
-    if (c.amount === null) error(`${label}: amount missing (enter 0 or remove the charge).`)
+    if (c.amount === null) gap(`${label}: amount missing (enter 0 or remove the charge).`)
     else if (c.amount < 0) error(`${label}: amount cannot be negative.`)
     const a = c.amount !== null && c.amount >= 0 ? c.amount : 0
     const amount =

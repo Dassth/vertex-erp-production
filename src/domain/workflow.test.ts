@@ -105,6 +105,35 @@ describe('costing finalization', () => {
     expect(c.db.orders).toHaveLength(0)
   })
 
+  it('finalizes with a missing price once someone accepts it counts as zero, and remembers what was missing', () => {
+    const seeded = seedMaster(undefined, { sheetPrice: null })
+    let db = seeded.db
+    const p = must(savePlan(plan(db, seeded.customerId, seeded.productId, PROCESS_UNITS))(db, admin()))
+    db = must(submitPlan(p.value.id)(p.db, admin())).db
+    const c = must(openCosting(p.value.id)(db, admin()))
+    const refused = finalizeCosting(c.value.id)(c.db, admin())
+    expect(refused.ok).toBe(false)
+    if (!refused.ok) expect(refused.issues?.every((i) => i.gap)).toBe(true)
+    const f = must(finalizeCosting(c.value.id, undefined, undefined, true)(c.db, admin()))
+    expect(f.value.created).toBe(true)
+    expect(f.value.costing.snapshot?.missingAtFinalize?.join(' ')).toMatch(/Price missing/)
+    expect(f.db.audit.find((a) => a.action === 'Costing finalized')?.newValue).toMatch(/missing detail/)
+  })
+
+  it('never finalizes a wrong value, even when missing details are accepted', () => {
+    const { db: base, costingId } = (() => {
+      const seeded = seedMaster()
+      let db = seeded.db
+      const p = must(savePlan(plan(db, seeded.customerId, seeded.productId, PROCESS_UNITS))(db, admin()))
+      db = must(submitPlan(p.value.id)(p.db, admin())).db
+      const c = must(openCosting(p.value.id)(db, admin()))
+      return { db: c.db, costingId: c.value.id }
+    })()
+    const costing = base.costings.find((c) => c.id === costingId)!
+    const r = finalizeCosting(costingId, { ...costing.inputs, discountValue: -5 }, costing.updatedAt, true)(base, admin())
+    expect(r.ok).toBe(false)
+  })
+
   it('creates exactly one production order on repeated confirmation', () => {
     const { db, costingId, order } = toProduction()
     const again = must(finalizeCosting(costingId)(db, admin()))

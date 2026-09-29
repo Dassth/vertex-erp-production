@@ -447,6 +447,11 @@ export interface CostingIssue {
   level: 'error' | 'warning'
   message: string
   fix?: { label: string; to: string }
+  /**
+   * A detail not entered yet (price, time, size…). It counts as zero, so the
+   * price is not exact; the costing may still be finalized once someone accepts that.
+   */
+  gap?: boolean
 }
 
 export interface CostingResult {
@@ -492,6 +497,8 @@ export interface ProductSnapshot {
 export interface CostingSnapshot {
   takenAt: string
   takenBy: string
+  /** Details that were missing (counted as zero) when this costing was finalized. */
+  missingAtFinalize?: string[]
   customer: CustomerSnapshot
   product: ProductSnapshot
   processCharges: ProcessCharge[]

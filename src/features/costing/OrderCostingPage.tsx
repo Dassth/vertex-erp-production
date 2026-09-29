@@ -67,6 +67,7 @@ function CostingWorkspace({ plan, costing, back }: { plan: Plan; costing: OrderC
     setConflict('')
   }
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [acceptMissing, setAcceptMissing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [finalizeIssues, setFinalizeIssues] = useState<CostingResult['issues']>([])
   const [templateId, setTemplateId] = useState('')
@@ -101,14 +102,17 @@ function CostingWorkspace({ plan, costing, back }: { plan: Plan; costing: OrderC
   }, [finalized, costing.snapshot, product, plan.quantity, db.materials, db.settings, inputs])
 
   const set = (patch: Partial<CostingInputs>) => setInputs((i) => ({ ...i, ...patch }))
-  const errors = result?.issues.filter((i) => i.level === 'error') ?? []
+  const allErrors = result?.issues.filter((i) => i.level === 'error') ?? []
+  // Wrong values must be corrected; missing details may be accepted (counted as zero).
+  const errors = allErrors.filter((i) => !i.gap)
+  const missing = allErrors.filter((i) => i.gap)
   const warnings = result?.issues.filter((i) => i.level === 'warning') ?? []
 
   const doFinalize = async () => {
     if (inFlight.current) return
     inFlight.current = true
     setBusy(true)
-    const r = await run(finalizeCosting(costing.id, inputs, base.updatedAt))
+    const r = await run(finalizeCosting(costing.id, inputs, base.updatedAt, missing.length > 0 && acceptMissing))
     setBusy(false)
     setConfirmOpen(false)
     inFlight.current = false
@@ -189,9 +193,19 @@ function CostingWorkspace({ plan, costing, back }: { plan: Plan; costing: OrderC
         <>
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px] xl:items-start">
             <div className="min-w-0 space-y-6">
-              {!finalized && (errors.length || warnings.length || finalizeIssues.length) ? (
+              {!finalized && (errors.length || missing.length || warnings.length || finalizeIssues.length) ? (
                 <Card className="vx-anim-up p-5">
-                  <IssueList issues={errors.length ? errors : finalizeIssues.length ? finalizeIssues : []} title={`${errors.length || finalizeIssues.length} input(s) must be completed before finalizing`} />
+                  {errors.length || (finalizeIssues.length && !missing.length) ? (
+                    <IssueList issues={errors.length ? errors : finalizeIssues} title={`${errors.length || finalizeIssues.length} value(s) must be corrected before finalizing`} />
+                  ) : null}
+                  {missing.length ? (
+                    <div className={errors.length ? 'mt-3' : ''}>
+                      <p className="mb-2 rounded-md bg-warn-wash px-3 py-2 text-sm text-warn ring-1 ring-inset ring-warn-edge">
+                        {missing.length} detail(s) are not entered yet. You can still finalize — they count as zero, so the price will not be exact. For an exact price, open each item below and add it.
+                      </p>
+                      <IssueList issues={missing.map((i) => ({ ...i, level: 'warning' as const }))} />
+                    </div>
+                  ) : null}
                   {warnings.length ? <IssueList issues={warnings} className="mt-3" /> : null}
                 </Card>
               ) : null}
@@ -272,7 +286,7 @@ function CostingWorkspace({ plan, costing, back }: { plan: Plan; costing: OrderC
               <Card className="vx-anim-up overflow-hidden">
                 <div className="border-b border-rule bg-surface-2 px-5 py-5">
                   <p className="font-mono text-2xs uppercase tracking-[0.10em] text-accent-text">Final customer amount</p>
-                  <p className="vx-code mt-1.5 font-display text-3xl font-semibold leading-none tracking-tight text-ink">{errors.length && !finalized ? '—' : moneyPaise(result.grandTotal)}</p>
+                  <p className="vx-code mt-1.5 font-display text-3xl font-semibold leading-none tracking-tight text-ink">{errors.length && !finalized ? '—' : moneyPaise(result.grandTotal)}{missing.length && !errors.length && !finalized ? <span className="ml-2 align-middle text-xs font-normal text-warn">not exact</span> : null}</p>
                   <p className="mt-2 text-sm text-muted">
                     Includes {result.taxLabel} {result.taxPct}% · selling price {moneyPaise(result.sellingPerPiece)} per piece before tax
                   </p>
@@ -362,7 +376,7 @@ function CostingWorkspace({ plan, costing, back }: { plan: Plan; costing: OrderC
                       Finalize & release to production
                     </Button>
                     <p className="text-center text-xs text-muted" aria-live="polite">
-                      {errors.length ? `Complete ${errors.length} input(s) above to finalize.` : dirty ? 'Unsaved inputs are saved when you finalize.' : 'Ready to finalize.'}
+                      {errors.length ? `Correct ${errors.length} value(s) above to finalize.` : missing.length ? `${missing.length} detail(s) missing — the price will not be exact.` : dirty ? 'Unsaved inputs are saved when you finalize.' : 'Ready to finalize.'}
                     </p>
                   </div>
                 </Card>
@@ -389,6 +403,21 @@ function CostingWorkspace({ plan, costing, back }: { plan: Plan; costing: OrderC
                 <p>
                   Final customer amount <strong className="text-ink">{moneyPaise(result.grandTotal)}</strong> (including {result.taxLabel}) for {pieces(plan.quantity)} at a selling price of {moneyPaise(result.sellingPerPiece)} per piece before tax. Production cost is {moneyPrecise(result.costPerPiece)} per piece.
                 </p>
+                {missing.length ? (
+                  <div className="rounded-md bg-warn-wash p-3 text-warn ring-1 ring-inset ring-warn-edge">
+                    <p className="font-medium">{missing.length} detail(s) are missing and count as zero:</p>
+                    <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs">
+                      {missing.slice(0, 6).map((i) => (
+                        <li key={i.message}>{i.message}</li>
+                      ))}
+                      {missing.length > 6 ? <li>…and {missing.length - 6} more</li> : null}
+                    </ul>
+                    <label className="mt-2 flex cursor-pointer items-start gap-2 py-1 text-ink">
+                      <input type="checkbox" className="mt-0.5 h-4 w-4" checked={acceptMissing} onChange={(e) => setAcceptMissing(e.target.checked)} />
+                      <span>I understand the price may be lower than it should be. Finalize anyway.</span>
+                    </label>
+                  </div>
+                ) : null}
                 <ul className="list-disc space-y-0.5 pl-5">
                   <li>A snapshot of prices, quantities, rates and selling prices is saved.</li>
                   <li>A production order is created and {product?.stages.length ?? 0} stages are scheduled for their assigned units.</li>
@@ -397,7 +426,13 @@ function CostingWorkspace({ plan, costing, back }: { plan: Plan; costing: OrderC
               </div>
             }
             onCancel={() => setConfirmOpen(false)}
-            onConfirm={doFinalize}
+            onConfirm={() => {
+              if (missing.length && !acceptMissing) {
+                pushToast({ title: 'Tick the box first', message: 'Some details are missing — tick “I understand…” to finalize anyway.', level: 'warn' })
+                return
+              }
+              void doFinalize()
+            }}
           />
         </>
       )}

@@ -143,7 +143,7 @@ export interface FinalizeResult {
 
 export const finalizeCosting = command(
   'finalizeCosting',
-  (costingId: string, inputs?: CostingInputs, expectedUpdatedAt?: string): Op<FinalizeResult> =>
+  (costingId: string, inputs?: CostingInputs, expectedUpdatedAt?: string, acceptMissing = false): Op<FinalizeResult> =>
   (db, ctx) => {
     const denied = requireCapability(ctx, 'costing')
     if (denied) return denied
@@ -180,8 +180,14 @@ export const finalizeCosting = command(
       settings: db.settings,
       inputs: useInputs,
     })
-    if (!result.valid)
-      return fail('Resolve the costing errors before finalizing.', { issues: result.issues.filter((i) => i.level === 'error') })
+    // Details not entered yet count as zero: allowed once someone accepts that the price is not exact.
+    // Wrong values (negative, over 100 %…) must always be corrected.
+    const errors = result.issues.filter((i) => i.level === 'error')
+    const wrong = errors.filter((i) => !i.gap)
+    const missing = errors.filter((i) => i.gap)
+    if (wrong.length) return fail('Correct these values before finalizing.', { issues: wrong })
+    if (missing.length && !acceptMissing)
+      return fail('Some details are missing. Finalize anyway (they count as zero), or add them first.', { issues: missing })
 
     const usedChargeIds = new Set(product.stages.flatMap((s) => s.processes.map((p) => p.chargeId)).filter(Boolean))
     const snapshot: CostingSnapshot = deepClone({
@@ -197,7 +203,9 @@ export const finalizeCosting = command(
         uom: product.uom,
         version: product.version,
         stages: product.stages,
-        materials: product.materials.map((l) => ({ ...l, material: db.materials.find((m) => m.id === l.materialId)! })),
+        materials: product.materials
+          .filter((l) => db.materials.some((m) => m.id === l.materialId))
+          .map((l) => ({ ...l, material: db.materials.find((m) => m.id === l.materialId)! })),
       },
       processCharges: db.settings.processCharges.filter((c) => usedChargeIds.has(c.id)),
       plan: {
@@ -215,6 +223,7 @@ export const finalizeCosting = command(
       },
       inputs: useInputs,
       result,
+      ...(missing.length ? { missingAtFinalize: missing.map((i) => i.message) } : {}),
     })
 
     let next = db
@@ -282,7 +291,7 @@ export const finalizeCosting = command(
       entityId: costing.id,
       entityLabel: `${costing.code} — ${plan.code}`,
       field: 'Customer amount',
-      newValue: `${result.grandTotal.toFixed(2)} (${result.sellingPerPiece.toFixed(2)} / ${product.uom})`,
+      newValue: `${result.grandTotal.toFixed(2)} (${result.sellingPerPiece.toFixed(2)} / ${product.uom})${missing.length ? ` — finalized with ${missing.length} missing detail(s) counted as zero` : ''}`,
     })
     next = audit(next, ctx, {
       action: 'Production order created',
