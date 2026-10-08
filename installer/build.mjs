@@ -29,8 +29,10 @@ const p2 = (n) => String(n).padStart(2, '0')
 const VERSION = `${now.getFullYear()}.${p2(now.getMonth() + 1)}.${p2(now.getDate())}.${p2(now.getHours())}${p2(now.getMinutes())}`
 
 const REL = join(ROOT, 'release')
-const STAGE = join(REL, 'stage')
-const PACK = join(REL, 'pack')
+// Working folders (about 300 MB while building) may live on another drive: --work C:\Temp\vertex-build
+const WORK = arg('--work') ? resolve(arg('--work')) : REL
+const STAGE = join(WORK, 'stage')
+const PACK = join(WORK, 'pack')
 const step = (t) => console.log(`\n== ${t}`)
 const run = (cmd) => execSync(cmd, { cwd: ROOT, stdio: 'inherit', env: { ...process.env, VITE_VERTEX_BUILD: VERSION } })
 
@@ -45,7 +47,7 @@ run('npx tsc -b')
 run(`npx vite build --mode server --outDir "${join(STAGE, 'app', 'client')}" --emptyOutDir`)
 
 step('Build the server (one file, no node_modules)')
-run('npx vite build --config vite.desktop.config.ts')
+execSync('npx vite build --config vite.desktop.config.ts', { cwd: ROOT, stdio: 'inherit', env: { ...process.env, VITE_VERTEX_BUILD: VERSION, VERTEX_STAGE_APP: join(STAGE, 'app') } })
 if (!existsSync(join(STAGE, 'app', 'main.js'))) throw new Error('Server bundle missing.')
 
 step('Node runtime')

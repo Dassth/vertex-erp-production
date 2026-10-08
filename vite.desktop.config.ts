@@ -5,7 +5,8 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   build: {
     ssr: 'server/desktop.ts',
-    outDir: 'release/stage/app',
+    // installer/build.mjs passes its staging folder (it may be on another drive).
+    outDir: process.env.VERTEX_STAGE_APP ?? 'release/stage/app',
     target: 'node22',
     emptyOutDir: false,
     copyPublicDir: false,
