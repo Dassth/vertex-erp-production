@@ -15,20 +15,22 @@ import {
   Trash2,
 } from 'lucide-react'
 import { useStore } from '../../../store/store'
-import type { CostBasis, LengthUnit, Material, MaterialKind, Product, ProductMaterial, ProductProcess, ProductSpec, ProductStage } from '../../../lib/types'
+import type { CostBasis, LengthUnit, Material, Product, ProductMaterial, ProductProcess, ProductSpec, ProductStage } from '../../../lib/types'
 import { draftKey, readDraft, removeDraft, writeDraft } from '../../../lib/drafts'
 import type { StoredDraft } from '../../../lib/drafts'
 import { remote } from '../../../store/remote'
 import { fromWire } from '../../../lib/wire'
-import type { MaterialDraft, ProductDraft } from '../../../domain/master'
-import { blankMaterialDraft, productHasContent, saveMaterial, saveProduct } from '../../../domain/master'
+import type { ProductDraft } from '../../../domain/master'
+import { productHasContent, saveProduct } from '../../../domain/master'
 import { COST_BASIS_LABEL, computeOrderCosting, pricedUnitLabel } from '../../../lib/costing'
 import { calculateYield, fromMm, toMm } from '../../../lib/yield'
-import { cx, uid } from '../../../lib/format'
+import { uid } from '../../../lib/format'
 import { useNewDraftId } from '../../../components/Unfinished'
 import { productIssues } from '../masterSelectors'
+import { AddMaterialDialog } from './AddMaterialDialog'
+import type { UsageInput } from './AddMaterialDialog'
 import { FillFromFileButton } from './FillFromFileButton'
-import { Badge, Button, Card, CardHead, ConfirmDialog, EmptyState, Field, IconButton, Input, Modal, Select, Textarea } from '../../../components/ui'
+import { Badge, Button, Card, CardHead, ConfirmDialog, EmptyState, Field, IconButton, Input, Select, Textarea } from '../../../components/ui'
 import { ConflictNotice, IssueList, LinkButton, NumberInput, PageHeader, focusFirstInvalid, useDocumentTitle, useUnsavedChanges } from '../../../components/page'
 import { NO_PRICING_INPUTS } from '../masterSelectors'
 import type { OpResult } from '../../../domain/common'
@@ -161,7 +163,6 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
   const [stageCount, setStageCount] = useState<number | null>(3)
   const [confirm, setConfirm] = useState<PendingConfirm | null>(null)
   const [newMaterialOpen, setNewMaterialOpen] = useState(false)
-  const [pickMaterial, setPickMaterial] = useState('')
   const [conflict, setConflict] = useState('')
   const saving = useRef(false)
   const [savePhase, setSavePhase] = useState<'idle' | 'saving' | 'saving-product'>('idle')
@@ -192,9 +193,11 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
       const r = await remote.putDraft(recoveryKey, serverRev.current, value)
       if (r.body.ok) serverRev.current = r.body.rev
       else if ('current' in r.body && r.body.current) {
-        const newer = fromWire<ProductDraft>(r.body.current.data)
-        setAutosave({ state: 'newer', newer: { key: recoveryKey, userId: user?.id ?? '', rev: r.body.current.rev, tabId: 'server', savedAt: r.body.current.updatedAt, baseUpdatedAt: null, data: newer } })
+        // The database holds an earlier copy of this same form (from before a reload or from
+        // the copy brought back): what is on screen now is the latest — write it over that copy.
         serverRev.current = r.body.current.rev
+        const again = await remote.putDraft(recoveryKey, serverRev.current, value)
+        if (again.body.ok) serverRev.current = again.body.rev
       }
     } catch {
       setAutosave({ state: 'failed', error: 'The server copy of this draft could not be saved (the copy in this browser was kept).' })
@@ -345,20 +348,20 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
     })
   }
 
-  const addLine = (material: Material) =>
+  const addLine = (material: Material, usage?: UsageInput) =>
     setLines((list) => [
       ...list,
       {
         id: uid('bom'),
         materialId: material.id,
-        stageId: null,
-        processId: null,
-        // Not measured yet: left blank for the user to enter.
-        qtyPerPiece: null,
-        piecesPerProduct: null,
-        cutLengthMm: null,
-        cutWidthMm: null,
-        rotationAllowed: true,
+        stageId: usage?.stageId ?? null,
+        processId: usage?.processId ?? null,
+        // What the add dialog was told; anything not known yet stays blank.
+        qtyPerPiece: material.kind === 'sheet' ? 0 : (usage?.qtyPerPiece ?? null),
+        piecesPerProduct: usage?.piecesPerProduct ?? null,
+        cutLengthMm: usage?.cutLengthMm ?? null,
+        cutWidthMm: usage?.cutWidthMm ?? null,
+        rotationAllowed: usage?.rotationAllowed ?? true,
         upsOverride: null,
         upsOverrideReason: '',
         note: '',
@@ -644,7 +647,7 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
                               {proc.chargeId ? (
                                 <p className="text-sm text-muted sm:col-span-2 lg:col-span-6">
                                   {charge
-                                    ? `${charge.name}: ${charge.rate === null ? 'rate not set' : `₹${charge.rate} ${COST_BASIS_LABEL[charge.basis]}`} · setup ${charge.setupCharge === null ? 'not set' : `₹${charge.setupCharge}`}. Edit in Master → Costing.`
+                                    ? `${charge.name}: ${charge.rate === null ? 'rate not set' : `₹${charge.rate} ${COST_BASIS_LABEL[charge.basis]}`} · setup ${charge.setupCharge === null ? 'not set' : `₹${charge.setupCharge}`}. Edit in Master → Materials (Process rates).`
                                     : 'Charge not found.'}
                                 </p>
                               ) : (
@@ -705,39 +708,15 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
           <Card className="vx-anim-up">
             <CardHead
               title="3 · Materials"
-              subtitle="Choose from the shared material registry. Prices, pack sizes and sheet settings are maintained in Master → Costing."
+              subtitle="The board, paper, glue and other materials this product uses, and how much of each."
               icon={<Boxes className="h-4 w-4" />}
             />
             <div className="space-y-4 p-5">
-              <div className="flex flex-wrap items-end gap-2">
-                <Field label="Add existing material" className="min-w-[240px] flex-1" hint={db.materials.length ? undefined : 'The registry is empty — create the first material.'}>
-                  <Select value={pickMaterial} onChange={(e) => setPickMaterial(e.target.value)}>
-                    <option value="">Select a material…</option>
-                    {db.materials
-                      .filter((m) => m.active)
-                      .map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.name} ({m.code}) · {m.kind === 'sheet' ? 'sheet' : m.uom}
-                        </option>
-                      ))}
-                  </Select>
-                </Field>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="mb-5"
-                  disabled={!pickMaterial}
-                  onClick={() => {
-                    const m = db.materials.find((x) => x.id === pickMaterial)
-                    if (m) addLine(m)
-                    setPickMaterial('')
-                  }}
-                >
-                  Add
+              <div className="flex flex-wrap items-center gap-3">
+                <Button type="button" icon={<Plus className="h-4 w-4" />} onClick={() => setNewMaterialOpen(true)}>
+                  Add material…
                 </Button>
-                <Button type="button" variant="secondary" className="mb-5" icon={<Plus className="h-4 w-4" />} onClick={() => setNewMaterialOpen(true)}>
-                  New material…
-                </Button>
+                <span className="text-xs text-muted">Search an existing material, or create a new one — its setup and how this product uses it are asked together.</span>
               </div>
 
               {draft.materials.length === 0 ? (
@@ -810,29 +789,35 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
             </div>
           </Card>
           <Card className="vx-anim-up p-4">
-            <p className="vx-smallcaps text-ink">Costing readiness</p>
-            <p className="mt-1 text-xs text-muted">Checked live against the shared registry.</p>
+            <p className="vx-smallcaps text-ink">For exact costing</p>
+            <p className="mt-1 text-xs text-muted">Details that can be filled now or later. Nothing here stops saving or planning.</p>
             <div className="mt-3">
               {!draft.stages.length ? (
-                <p className="rounded-md bg-surface-2 px-3 py-2.5 text-sm text-muted">Add stages, processes and materials to check costing readiness.</p>
+                <p className="rounded-md bg-surface-2 px-3 py-2.5 text-sm text-muted">Add stages, processes and materials to see what costing will use.</p>
               ) : liveIssues.length ? (
-                <IssueList issues={liveIssues} title={`${liveIssues.length} setting(s) missing`} />
+                <>
+                  {/* Values that are wrong (negative, too large) stay red; details simply not entered yet are only a reminder. */}
+                  <IssueList issues={liveIssues.filter((i) => i.level === 'error' && !i.gap)} title="Please correct" />
+                  <IssueList
+                    className="mt-2"
+                    issues={liveIssues.filter((i) => i.gap || i.level === 'warning').map((i) => ({ ...i, level: 'warning' as const }))}
+                    warningTitle={`${liveIssues.filter((i) => i.gap || i.level === 'warning').length} to fill when known`}
+                  />
+                </>
               ) : (
-                <p className="rounded-md bg-ok-wash px-3 py-2.5 text-sm text-ok ring-1 ring-inset ring-ok-edge">Prices, rates and yields are complete.</p>
+                <p className="rounded-md bg-ok-wash px-3 py-2.5 text-sm text-ok ring-1 ring-inset ring-ok-edge">Prices, times and sizes are complete — costing will be exact.</p>
               )}
             </div>
-            {liveIssues.length ? <p className="mt-2 text-xs text-muted">These do not stop you saving a draft. The product cannot be finally costed or released until they are resolved.</p> : null}
+            {liveIssues.length ? <p className="mt-2 text-xs text-muted">Not filled yet counts as zero in costing, so the price would be lower than real. Fill them any time.</p> : null}
           </Card>
         </aside>
       </div>
 
-      <NewMaterialModal
+      <AddMaterialDialog
         open={newMaterialOpen}
+        stages={draft.stages}
         onClose={() => setNewMaterialOpen(false)}
-        onUse={(m) => {
-          addLine(m)
-          setNewMaterialOpen(false)
-        }}
+        onAdd={(m, usage) => addLine(m, usage)}
       />
       <ConfirmDialog
         open={!!confirm}
@@ -1037,7 +1022,7 @@ function MaterialLineEditor({
           </p>
         </div>
         <Link to={`/master/costing?material=${material.id}`} className="vx-focus rounded-xs text-sm font-medium text-accent-text hover:underline">
-          Prices & yield settings
+          Material settings
         </Link>
         <IconButton type="button" label={`Remove ${material.name}`} onClick={onRemove} className="hover:text-risk">
           <Trash2 className="h-4 w-4" />
@@ -1089,7 +1074,7 @@ function MaterialLineEditor({
                 </label>
                 <p className="text-sm text-muted" aria-live="polite">
                   {!material.sheetLengthMm || !material.sheetWidthMm
-                    ? 'Sheet size not set in Master → Costing yet.'
+                    ? 'Sheet size not set yet — open the material in Master → Materials.'
                     : !yieldResult
                       ? 'Enter the cut size to see how many pieces fit on one sheet.'
                       : yieldResult.error
@@ -1115,133 +1100,5 @@ function MaterialLineEditor({
         )}
       </div>
     </li>
-  )
-}
-
-/* ------------------------------ New material ------------------------------ */
-
-function NewMaterialModal({ open, onClose, onUse }: { open: boolean; onClose: () => void; onUse: (m: Material) => void }) {
-  const { db, run, pushToast } = useStore()
-  const [draft, setDraft] = useState<MaterialDraft>(() => blankMaterialDraft('sheet'))
-  const [errors, setErrors] = useState<Record<string, string>>({})
-  const set = (patch: Partial<MaterialDraft>) => setDraft((d) => ({ ...d, ...patch }))
-  const term = draft.name.trim().toLowerCase()
-  const matches = term.length >= 2 ? db.materials.filter((m) => m.name.toLowerCase().includes(term) || m.code.toLowerCase().includes(term)).slice(0, 5) : []
-
-  const reset = () => {
-    setDraft(blankMaterialDraft('sheet'))
-    setErrors({})
-  }
-
-  return (
-    <Modal
-      open={open}
-      onClose={() => {
-        reset()
-        onClose()
-      }}
-      title="New material"
-      subtitle="Added to the shared registry and linked to this product"
-      icon={<Boxes className="h-5 w-5" />}
-      footer={
-        <>
-          <Button
-            variant="secondary"
-            onClick={() => {
-              reset()
-              onClose()
-            }}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={async () => {
-              const r = await run(saveMaterial(draft))
-              if (!r.ok) {
-                setErrors(r.fieldErrors ?? {})
-                focusFirstInvalid()
-                return
-              }
-              pushToast({ title: `${r.value.name} added to the registry`, message: r.value.price === null ? 'Its price is still missing — set it in Master → Costing.' : undefined, level: 'success' })
-              reset()
-              onUse(r.value)
-            }}
-          >
-            Create & add
-          </Button>
-        </>
-      }
-    >
-      <div className="grid gap-x-4 sm:grid-cols-2">
-        <Field label="Material name" required error={errors.name} className="sm:col-span-2">
-          <Input value={draft.name} onChange={(e) => set({ name: e.target.value })} aria-invalid={!!errors.name || undefined} autoComplete="off" />
-        </Field>
-        {matches.length ? (
-          <div className="mb-4 rounded-md bg-accent-wash p-3 sm:col-span-2" aria-live="polite">
-            <p className="text-sm font-medium text-accent-text">Already in the registry — reuse instead of creating a duplicate:</p>
-            <ul className="mt-2 space-y-1">
-              {matches.map((m) => (
-                <li key={m.id} className="flex items-center justify-between gap-2 text-sm">
-                  <span className="min-w-0 truncate text-ink-2">
-                    {m.name} <span className="vx-code text-faint">{m.code}</span>
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => {
-                      reset()
-                      onUse(m)
-                    }}
-                  >
-                    Use this
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-        <Field label="Material type" as="div" error={errors.kind} className="sm:col-span-2">
-          <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Material type">
-            {(
-              [
-                ['sheet', 'Sheet material', 'Cut into pieces from a sheet — yield applies'],
-                ['quantity', 'Quantity material', 'Consumed per finished piece'],
-              ] as Array<[MaterialKind, string, string]>
-            ).map(([kind, label, hint]) => (
-              <label key={kind} className={cx('vx-press flex flex-1 cursor-pointer items-start gap-2 rounded-md border px-3 py-2.5', draft.kind === kind ? 'border-accent bg-accent-wash' : 'border-rule-2 hover:bg-surface-2')}>
-                <input type="radio" name="material-kind" className="mt-1 accent-[var(--color-accent)]" checked={draft.kind === kind} onChange={() => setDraft({ ...blankMaterialDraft(kind), name: draft.name, price: draft.price })} />
-                <span>
-                  <span className="block text-sm font-medium text-ink">{label}</span>
-                  <span className="block text-xs text-muted">{hint}</span>
-                </span>
-              </label>
-            ))}
-          </div>
-        </Field>
-        {draft.kind === 'quantity' ? (
-          <Field label="Unit of measure" required error={errors.uom}>
-            <Input value={draft.uom} onChange={(e) => set({ uom: e.target.value })} aria-invalid={!!errors.uom || undefined} placeholder="kg, nos, mtr…" />
-          </Field>
-        ) : (
-          <Field label={`Sheet size L × W (${draft.sizeUnit})`} as="div" error={errors.sheetLengthMm ?? errors.sheetWidthMm} hint="Optional now; required before costing.">
-            <div className="flex gap-2">
-              <NumberInput aria-label="Sheet length" value={fromMm(draft.sheetLengthMm, draft.sizeUnit)} onChange={(v) => set({ sheetLengthMm: v === null ? null : Number.isNaN(v) ? NaN : toMm(v, draft.sizeUnit) })} />
-              <NumberInput aria-label="Sheet width" value={fromMm(draft.sheetWidthMm, draft.sizeUnit)} onChange={(v) => set({ sheetWidthMm: v === null ? null : Number.isNaN(v) ? NaN : toMm(v, draft.sizeUnit) })} />
-              <Select aria-label="Size unit" value={draft.sizeUnit} onChange={(e) => set({ sizeUnit: e.target.value as LengthUnit })} className="w-20">
-                <option value="mm">mm</option>
-                <option value="cm">cm</option>
-                <option value="in">in</option>
-              </Select>
-            </div>
-          </Field>
-        )}
-        <Field label={`Price ₹ per ${draft.kind === 'sheet' ? 'sheet' : draft.uom || 'unit'}`} error={errors.price} hint="Leave blank if not known yet.">
-          <NumberInput value={draft.price} onChange={(v) => set({ price: v })} invalid={!!errors.price} />
-        </Field>
-        <Field label="Wastage %" error={errors.wastagePct}>
-          <NumberInput value={draft.wastagePct} onChange={(v) => set({ wastagePct: v ?? 0 })} invalid={!!errors.wastagePct} />
-        </Field>
-      </div>
-    </Modal>
   )
 }

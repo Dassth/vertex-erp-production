@@ -42,7 +42,7 @@ export function workflowSteps(db: VertexDB): WorkflowStep[] {
     },
     {
       key: 'prices',
-      title: 'Master → Costing',
+      title: 'Master → Materials',
       detail: !db.materials.length
         ? 'Materials appear here after you add them to a product.'
         : materialProblems + usageProblems

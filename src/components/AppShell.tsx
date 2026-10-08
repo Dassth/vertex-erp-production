@@ -61,8 +61,8 @@ import { QuickAccessDialog } from './QuickAccess'
  *
  * Modules follow the operational sequence left to right:
  *   Master → Planning → Costing → Production → Dispatch → Billing
- * Master opens a three-item menu; Master → Costing (shared prices) is labelled
- * distinctly from the main Costing module (one order's costing).
+ * Master opens a three-item menu; Master → Materials (shared prices, sizes and rates) is
+ * kept apart from the main Costing module (one order's costing).
  */
 
 interface NavChild {
@@ -83,7 +83,7 @@ interface NavItem {
 
 export const MASTER_SECTIONS: NavChild[] = [
   { to: '/master/products', label: 'Products', hint: 'Stages, processes and materials' },
-  { to: '/master/costing', label: 'Costing', hint: 'Material prices and costing configuration' },
+  { to: '/master/costing', label: 'Materials', hint: 'Board, paper and other materials — set up once' },
   { to: '/master/customers', label: 'Customers', hint: 'Billing, delivery and GST details' },
 ]
 

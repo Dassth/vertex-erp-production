@@ -308,7 +308,7 @@ function CostingWorkspace({ plan, costing, back }: { plan: Plan; costing: OrderC
               </Card>
 
               <Card className="vx-anim-up">
-                <CardHead title="Profit, discount & tax" subtitle={finalized ? 'Frozen in the snapshot' : 'Order-specific — defaults come from Master → Costing'} />
+                <CardHead title="Profit, discount & tax" subtitle={finalized ? 'Frozen in the snapshot' : 'Order-specific — defaults come from Master → Materials'} />
                 <fieldset disabled={finalized} className="grid gap-x-3 p-5 sm:grid-cols-2">
                   <Field label="Profit method" as="div" className="sm:col-span-2">
                     <div className="grid gap-2" role="radiogroup" aria-label="Profit method">

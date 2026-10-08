@@ -18,7 +18,7 @@ type Sort = 'priority' | 'name' | 'price' | 'updated'
 const PAGE_SIZE = 25
 
 export function MasterCostingPage() {
-  useDocumentTitle('Master · Costing configuration')
+  useDocumentTitle('Master · Materials')
   const { db } = useStore()
   const [params, setParams] = useSearchParams()
   const tab = (params.get('tab') ?? 'materials') as Tab
@@ -82,14 +82,14 @@ export function MasterCostingPage() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Master"
-        title="Costing configuration"
+        title="Materials"
         subtitle={
           <>
-            Shared material prices, sheet yield settings, reusable process charges and costing defaults. Every order costing reads these values; to cost a specific planned order use the main{' '}
+            Every board, paper and other material, set up once: price, sheet size, wastage. Materials still missing a price or size are listed first — click one to finish it. Products add materials themselves; to price an order use{' '}
             <Link to="/costing" className="vx-focus rounded-xs font-medium text-accent-text hover:underline">
               Costing
-            </Link>{' '}
-            module.
+            </Link>
+            .
           </>
         }
         icon={<BadgeIndianRupee className="h-4 w-4" />}
@@ -106,9 +106,9 @@ export function MasterCostingPage() {
         value={tab}
         onChange={(v) => update({ tab: v, page: null })}
         options={[
-          { value: 'materials', label: 'Materials & yield', count: rows.length },
-          { value: 'charges', label: 'Process charges', count: db.settings.processCharges.length },
-          { value: 'defaults', label: 'Defaults & order charges' },
+          { value: 'materials', label: 'Materials', count: rows.length },
+          { value: 'charges', label: 'Process rates', count: db.settings.processCharges.length },
+          { value: 'defaults', label: 'Tax, profit & extra charges' },
         ]}
       />
 

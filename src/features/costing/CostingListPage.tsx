@@ -57,7 +57,7 @@ export function CostingListPage() {
           <>
             Calculate and finalize the costing of one planned order. Shared material prices and charges are maintained in{' '}
             <Link to="/master/costing" className="vx-focus rounded-xs font-medium text-accent-text hover:underline">
-              Master → Costing
+              Master → Materials
             </Link>
             ; finalizing freezes a snapshot and releases the order to production.
           </>

@@ -114,10 +114,12 @@ export function IssueList({
   issues,
   className,
   title,
+  warningTitle,
 }: {
   issues: CostingIssue[]
   className?: string
   title?: string
+  warningTitle?: string
 }) {
   if (!issues.length) return null
   const errors = issues.filter((i) => i.level === 'error')
@@ -126,7 +128,7 @@ export function IssueList({
     <div className={cx('space-y-3', className)} role="status" aria-live="polite">
       {[
         { list: errors, tone: 'risk', label: title ?? `${errors.length} item${errors.length === 1 ? '' : 's'} must be fixed` },
-        { list: warnings, tone: 'warn', label: `${warnings.length} warning${warnings.length === 1 ? '' : 's'}` },
+        { list: warnings, tone: 'warn', label: warningTitle ?? `${warnings.length} warning${warnings.length === 1 ? '' : 's'}` },
       ]
         .filter((g) => g.list.length)
         .map((g) => (
