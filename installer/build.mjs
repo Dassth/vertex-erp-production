@@ -9,7 +9,7 @@
  * ------------------------------------------------------------------------- */
 
 import { execFileSync, execSync } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
@@ -125,7 +125,22 @@ const sed = [
 ].join('\r\n')
 const sedPath = join(PACK, 'setup.sed')
 writeFileSync(sedPath, sed)
-execFileSync(join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'iexpress.exe'), ['/N', '/Q', sedPath], { stdio: 'inherit' })
+// IExpress now and then fails on its last step (the new file briefly held by antivirus);
+// the leftovers are removed and it is run once more before giving up.
+const iexpress = () => execFileSync(join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'iexpress.exe'), ['/N', '/Q', sedPath], { stdio: 'inherit' })
+const leftovers = () => {
+  for (const f of readdirSync(REL)) if (/^~.*\.(CAB|DDF)$/i.test(f)) rmSync(join(REL, f), { force: true })
+}
+try {
+  iexpress()
+} catch {
+  console.log('IExpress failed — trying once more…')
+  leftovers()
+  rmSync(exe, { force: true })
+  execSync('powershell -NoProfile -Command Start-Sleep -Seconds 5')
+  iexpress()
+}
+leftovers()
 if (!existsSync(exe)) throw new Error('IExpress did not produce the setup EXE.')
 console.log(`\nDone: ${exe} (${(statSync(exe).size / 1048576).toFixed(1)} MB) — licence ${LICENCE}, version ${VERSION}`)
 
