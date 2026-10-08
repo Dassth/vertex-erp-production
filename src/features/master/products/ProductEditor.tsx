@@ -26,6 +26,7 @@ import { calculateYield, fromMm, toMm } from '../../../lib/yield'
 import { cx, uid } from '../../../lib/format'
 import { useNewDraftId } from '../../../components/Unfinished'
 import { productIssues } from '../masterSelectors'
+import { FillFromFileButton } from './FillFromFileButton'
 import { Badge, Button, Card, CardHead, ConfirmDialog, EmptyState, Field, IconButton, Input, Modal, Select, Textarea } from '../../../components/ui'
 import { ConflictNotice, IssueList, LinkButton, NumberInput, PageHeader, focusFirstInvalid, useDocumentTitle, useUnsavedChanges } from '../../../components/page'
 import { NO_PRICING_INPUTS } from '../masterSelectors'
@@ -441,9 +442,12 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
         }
         icon={<Package className="h-4 w-4" />}
         actions={
-          <LinkButton to="/master/products" variant="secondary" icon={<ArrowLeft className="h-4 w-4" />}>
-            Products
-          </LinkButton>
+          <>
+            {product ? <FillFromFileButton product={product} dirty={dirty} /> : null}
+            <LinkButton to="/master/products" variant="secondary" icon={<ArrowLeft className="h-4 w-4" />}>
+              Products
+            </LinkButton>
+          </>
         }
       />
 

@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { parseDelimited, readFileTable } from './fileTable'
 import { buildXlsx } from './xlsx'
 import { TEMPLATE_EXAMPLE, TEMPLATE_HEADERS } from './productSheet'
-import { readProductSheet, size, templateCsv } from './productSheet'
-import { importProductsFromFile } from '../domain/imports'
+import { productSheetRows, readProductSheet, size, templateCsv } from './productSheet'
+import { fillProductFromFile, importProductsFromFile } from '../domain/imports'
 import { buildEmptyDB } from './defaults'
 import { computeOrderCosting } from './costing'
 import { defaultCostingInputs } from '../domain/orderCosting'
@@ -72,7 +72,68 @@ describe('products from a file', () => {
     expect(errors.every((i) => i.gap)).toBe(true)
 
     // Adding the same file again changes nothing that exists.
-    const again = importProductsFromFile(r.products, 'list.csv')(done.db, ctxFor(ADMIN[0]))
-    expect(again.ok).toBe(false)
+    const again = must(importProductsFromFile(r.products, 'list.csv')(done.db, ctxFor(ADMIN[0])))
+    expect(again.value).toMatchObject({ created: [], updated: [] })
+    expect(again.db).toBe(done.db)
+  })
+
+  it('fills only the empty details of products already in Master — export, fill in Excel, add again', () => {
+    // 1. Two products come in with gaps.
+    const first = readProductSheet(
+      parseDelimited(['Item Name,Operation,Rate,Board,Price', 'Medicine carton,Printing,450,Art board 300 GSM,', 'Medicine carton,Die cutting,,,', 'Gift box,,,,'].join('\n')),
+      'list.csv',
+    )
+    const added = must(importProductsFromFile(first.products, 'list.csv')(buildEmptyDB(NOW), ctxFor(ADMIN[0])))
+    const before = added.db.products.find((p) => p.name === 'Medicine carton')!
+
+    // 2. Exported as the Vertex sheet: what is saved, blanks where missing.
+    const rows = productSheetRows(added.db.products, added.db.materials).map((r) => r.map((c) => (c === null ? '' : String(c))))
+    const printing = rows.find((r) => r[0] === 'Medicine carton' && r[7] === 'Printing')!
+    expect(printing[11]).toBe('450')
+    expect(printing[16]).toBe('')
+
+    // 3. Blanks filled in Excel — and one saved value typed differently, which must NOT replace it.
+    const COL = Object.fromEntries(TEMPLATE_HEADERS.map((h, i) => [h, i]))
+    for (const r of rows) {
+      if (r[0] === 'Medicine carton' && r[7] === 'Printing') Object.assign(r, { [COL['Process rate']]: '999', [COL['Material price']]: '14', [COL['Setup hours']]: '1', [COL['Run hours per 1000']]: '2', [COL['Setup charge']]: '0', [COL['Cut size (mm)']]: '180 x 120' })
+      if (r[0] === 'Medicine carton' && r[7] === 'Die cutting') Object.assign(r, { [COL['Process rate']]: '320' })
+      if (r[0] === 'Gift box') Object.assign(r, { [COL['HSN']]: '4819', [COL.Stage]: 'Printing', [COL.Process]: 'Offset print', [COL['Process rate']]: '500' })
+    }
+    const back = readProductSheet([TEMPLATE_HEADERS, ...rows], 'filled.xlsx')
+    const done = must(importProductsFromFile(back.products, 'filled.xlsx')(added.db, ctxFor(ADMIN[0])))
+    expect(done.value.created).toEqual([])
+    expect(done.value.updated.map((u) => u.name).sort()).toEqual(['Gift box', 'Medicine carton'])
+    expect(done.db.products).toHaveLength(2)
+
+    const carton = done.db.products.find((p) => p.id === before.id)!
+    expect(carton.name).toBe('Medicine carton')
+    const [print, die] = carton.stages.flatMap((st) => st.processes)
+    expect(print).toMatchObject({ rate: 450, setupHours: 1, runHoursPer1000: 2, setupCharge: 0 })
+    expect(die.rate).toBe(320)
+    expect(done.value.updated.find((u) => u.name === 'Medicine carton')!.kept).toBeGreaterThanOrEqual(1)
+    expect(done.db.materials.find((m) => m.name === 'Art board 300 GSM')!.price).toBe(14)
+    expect(carton.materials[0]).toMatchObject({ cutLengthMm: 180, cutWidthMm: 120 })
+
+    // The stand-in "Production" step of the gift box gives way to the real process.
+    const gift = done.db.products.find((p) => p.name === 'Gift box')!
+    expect(gift.hsn).toBe('4819')
+    expect(gift.stages.flatMap((st) => st.processes).map((x) => `${x.name} ${x.rate}`)).toEqual(['Offset print 500'])
+
+    // Adding the same file again finds nothing left to fill.
+    const again = must(importProductsFromFile(back.products, 'filled.xlsx')(done.db, ctxFor(ADMIN[0])))
+    expect(again.value.updated).toEqual([])
+    expect(again.value.unchanged.sort()).toEqual(['Gift box', 'Medicine carton'])
+  })
+
+  it('fills one product from a file without touching what it already has', () => {
+    const r = readProductSheet(parseDelimited('Item Name,Operation\nTray,Printing\n'), 'a.csv')
+    const added = must(importProductsFromFile(r.products, 'a.csv')(buildEmptyDB(NOW), ctxFor(ADMIN[0])))
+    const tray = added.db.products[0]
+    const sheet = readProductSheet(parseDelimited('Product,Process,Process rate,Setup hours\nSomething else,Printing,120,0.5\n'), 'b.csv').products[0]
+    const filled = must(fillProductFromFile(tray.id, sheet, 'b.csv')(added.db, ctxFor(ADMIN[0])))
+    expect(filled.value).toMatchObject({ filled: 2, added: 0 })
+    const after = filled.db.products[0]
+    expect(after.name).toBe('Tray')
+    expect(after.stages[0].processes[0]).toMatchObject({ rate: 120, setupHours: 0.5 })
   })
 })

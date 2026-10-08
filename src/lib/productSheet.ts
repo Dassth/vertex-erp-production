@@ -10,7 +10,7 @@
  * each row (or only on its first row).
  * ------------------------------------------------------------------------- */
 
-import type { CostBasis, MaterialKind } from './types'
+import type { CostBasis, Material, MaterialKind, Product } from './types'
 
 export interface SheetProcess {
   stage: string
@@ -312,4 +312,57 @@ export const TEMPLATE_EXAMPLE: string[][] = [
 export function templateCsv(): string {
   const esc = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)
   return [TEMPLATE_HEADERS, ...TEMPLATE_EXAMPLE].map((r) => r.map(esc).join(',')).join('\r\n') + '\r\n'
+}
+
+/* ---------------------------- products → sheet ---------------------------- */
+
+const BASIS_TEXT: Record<CostBasis, string> = { per_1000: 'per 1000', per_piece: 'per piece', per_hour: 'per hour', fixed: 'fixed' }
+const sizeText = (l: number | null, w: number | null) => (l !== null && w !== null ? `${l} x ${w}` : '')
+
+/**
+ * Products as rows of the Vertex product sheet, with what is saved and blanks
+ * where details are missing: fill the blanks in Excel and add the file again —
+ * only the blanks are taken (see importProductsFromFile).
+ */
+export function productSheetRows(products: Product[], materials: Material[]): Array<Array<string | number | null>> {
+  const rows: Array<Array<string | number | null>> = []
+  const n = (v: number | null | undefined) => (v === null || v === undefined ? null : v)
+  for (const p of products) {
+    const head = [p.name, p.code, p.category, p.hsn, p.uom, n(p.taxPct)]
+    const blankHead = [p.name, '', '', '', '', null]
+    const used = new Set<string>()
+    let first = true
+    const emit = (cells: Array<string | number | null>) => {
+      rows.push([...(first ? head : blankHead), ...cells])
+      first = false
+    }
+    const materialCells = (lineId: string) => {
+      const line = p.materials.find((l) => l.id === lineId)!
+      const m = materials.find((x) => x.id === line.materialId)
+      if (!m) return ['', '', '', null, null, '', '', null, null, null]
+      used.add(line.id)
+      return [
+        m.name,
+        m.kind,
+        m.uom,
+        n(m.price),
+        n(m.gsm),
+        m.kind === 'sheet' ? sizeText(m.sheetLengthMm, m.sheetWidthMm) : '',
+        m.kind === 'sheet' ? sizeText(line.cutLengthMm, line.cutWidthMm) : '',
+        m.kind === 'sheet' ? n(line.piecesPerProduct) : null,
+        m.kind === 'quantity' ? n(line.qtyPerPiece) : null,
+        n(m.wastagePct),
+      ]
+    }
+    const noMaterial = ['', '', '', null, null, '', '', null, null, null]
+    for (const st of p.stages)
+      for (const pr of st.processes) {
+        const line = p.materials.find((l) => l.processId === pr.id && !used.has(l.id))
+        emit([st.name, pr.name, n(pr.setupHours), n(pr.runHoursPer1000), BASIS_TEXT[pr.costBasis] ?? '', pr.chargeId ? null : n(pr.rate), pr.chargeId ? null : n(pr.setupCharge), ...(line ? materialCells(line.id) : noMaterial)])
+      }
+    // Materials not tied to a process get rows of their own.
+    for (const line of p.materials) if (!used.has(line.id)) emit(['', '', null, null, '', null, null, ...materialCells(line.id)])
+    if (first) emit(['', '', null, null, '', null, null, ...noMaterial])
+  }
+  return rows
 }

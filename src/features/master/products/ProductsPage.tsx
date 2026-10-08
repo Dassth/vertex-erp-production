@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Boxes, CheckCircle2, FileInput, FileUp, Layers, Package, Pencil, Plus, Search, TriangleAlert } from 'lucide-react'
+import { Boxes, CheckCircle2, FileDown, FileInput, FileUp, Layers, Package, Pencil, Plus, Search, TriangleAlert } from 'lucide-react'
 import { useStore } from '../../../store/store'
 import type { Product } from '../../../lib/types'
 import { deleteProduct, productHasContent, setProductActive } from '../../../domain/master'
@@ -13,6 +13,8 @@ import { LinkButton, PageHeader, StatStrip, StatTile, useDocumentTitle } from '.
 import { ActiveBadge } from '../../../components/status'
 import { productIssues } from '../masterSelectors'
 import { AddFromFileDialog } from './AddFromFileDialog'
+import { downloadProductSheet } from '../../../lib/productSheetFile'
+import { productSheetRows } from '../../../lib/productSheet'
 import { UnfinishedCard } from '../../../components/Unfinished'
 import type { ProductDraft } from '../../../domain/master'
 
@@ -23,6 +25,7 @@ export function ProductsPage() {
   const { db, run, pushToast, can } = useStore()
   const [importOpen, setImportOpen] = useState(false)
   const [fileOpen, setFileOpen] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
   const [params, setParams] = useSearchParams()
   const q = params.get('q') ?? ''
   const status = (params.get('status') ?? 'all') as StatusFilter
@@ -73,9 +76,14 @@ export function ProductsPage() {
                 Templates…
               </Button>
             ) : null}
+            {can('master') && db.products.length ? (
+              <Button variant="secondary" icon={<FileDown className="h-4 w-4" />} onClick={() => setExportOpen(true)}>
+                Export to Excel…
+              </Button>
+            ) : null}
             {can('master') ? (
               <Button variant="secondary" icon={<FileUp className="h-4 w-4" />} onClick={() => setFileOpen(true)}>
-                Add from file…
+                Add or fill from file…
               </Button>
             ) : null}
             <LinkButton to="/master/products/new" icon={<Plus className="h-4 w-4" />}>
@@ -239,6 +247,40 @@ export function ProductsPage() {
 
       {importOpen ? <ImportTemplatesDialog onClose={() => setImportOpen(false)} /> : null}
       {fileOpen ? <AddFromFileDialog onClose={() => setFileOpen(false)} /> : null}
+      <Modal
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        size="sm"
+        title="Export products to Excel"
+        subtitle="Fill the empty cells in Excel, then add the same file with “Add or fill from file” — only the empty details are taken; nothing entered is changed."
+        icon={<FileDown className="h-5 w-5" />}
+        footer={
+          <Button variant="secondary" onClick={() => setExportOpen(false)}>
+            Close
+          </Button>
+        }
+      >
+        <div className="grid gap-2">
+          {[
+            { label: `Drafts only — details missing (${withIssues})`, list: rows.filter((r) => r.issues.length).map((r) => r.product), name: 'drafts' },
+            { label: `All products (${db.products.length})`, list: db.products, name: 'all' },
+          ].map((o) => (
+            <Button
+              key={o.name}
+              variant={o.name === 'drafts' ? 'primary' : 'secondary'}
+              icon={<FileDown className="h-4 w-4" />}
+              disabled={!o.list.length}
+              onClick={() => {
+                downloadProductSheet(`Vertex-products-${o.name}-${new Date().toISOString().slice(0, 10)}.xlsx`, productSheetRows(o.list, db.materials))
+                setExportOpen(false)
+                pushToast({ title: `${o.list.length} product(s) exported`, message: 'Fill the empty cells, then use “Add or fill from file”.', level: 'success' })
+              }}
+            >
+              {o.label}
+            </Button>
+          ))}
+        </div>
+      </Modal>
 
       <ConfirmDialog
         open={!!pendingDelete}

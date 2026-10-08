@@ -20,9 +20,9 @@ import {
 } from '../lib/templates/jewelleryBoxes'
 import type { MaterialTemplate, ProductTemplate } from '../lib/templates/jewelleryBoxes'
 import type { SheetProduct } from '../lib/productSheet'
-import { blankMaterialDraft, saveMaterial, saveProduct } from './master'
+import { blankMaterialDraft, materialToDraft, saveMaterial, saveProduct } from './master'
 import { audit, docCode, fail, nextSeq, ok, requireCapability, sameText, stampNew, command } from './common'
-import type { Op } from './common'
+import type { Ctx, Op } from './common'
 
 export interface TemplateBatch {
   id: string
@@ -246,12 +246,232 @@ export const importProductTemplates = command(
 
 export interface FileImportResult {
   created: Array<{ id: string; code: string; name: string }>
+  /** Products already in Master: only their empty details were filled from the file. */
+  updated: Array<{ id: string; code: string; name: string } & FillCount>
+  /** Already complete for everything the file gives — nothing to fill. */
+  unchanged: string[]
   skipped: Array<{ name: string; reason: string }>
   materialsCreated: string[]
 }
 
+export interface FillCount {
+  /** Empty details filled from the file. */
+  filled: number
+  /** Processes or materials the product did not have, added. */
+  added: number
+  /** Values the file gives differently from what is saved — the saved ones were kept. */
+  kept: number
+}
+
 const positive = (n: number | null) => (n !== null && Number.isFinite(n) && n > 0 ? n : null)
 const zeroOrMore = (n: number | null) => (n !== null && Number.isFinite(n) && n >= 0 ? n : null)
+
+/**
+ * Fill an existing product from the file's rows for it. Only EMPTY details are
+ * filled (times, rates, prices, sizes, HSN…) and missing processes / materials
+ * are added; anything already entered — the name included — stays as it is.
+ */
+function fillFromSheet(
+  db: VertexDB,
+  product: Product,
+  p: SheetProduct,
+  fileName: string,
+  ctx: Ctx,
+): { ok: true; db: VertexDB; count: FillCount; newMaterials: string[] } | { ok: false; reason: string } {
+  const count: FillCount = { filled: 0, added: 0, kept: 0 }
+  const newMaterials: string[] = []
+  let attempt = db
+  const num = (current: number | null, incoming: number | null): number | null => {
+    if (incoming === null) return current
+    if (current === null) {
+      count.filled++
+      return incoming
+    }
+    if (current !== incoming) count.kept++
+    return current
+  }
+  const text = (current: string, incoming: string | undefined): string => {
+    const t = String(incoming ?? '').trim()
+    if (!t) return current
+    if (!current.trim()) {
+      count.filled++
+      return t
+    }
+    if (!sameText(current, t)) count.kept++
+    return current
+  }
+
+  let stages: ProductStage[] = structuredClone(product.stages)
+  // The stand-in step added when an earlier file had no processes gives way to the real ones.
+  const only = stages.length === 1 && stages[0].processes.length === 1 ? stages[0].processes[0] : null
+  const standIn =
+    !!only &&
+    stages[0].name === 'Production' &&
+    only.name === 'Production' &&
+    only.setupHours === null &&
+    only.runHoursPer1000 === null &&
+    only.rate === null &&
+    only.setupCharge === null &&
+    !product.materials.some((l) => l.processId === only.id)
+  if (standIn && (p.processes ?? []).length) stages = []
+
+  for (const pr of p.processes ?? []) {
+    const hit = stages.flatMap((st) => st.processes).find((x) => sameText(x.name, pr.name))
+    if (hit) {
+      hit.setupHours = num(hit.setupHours, zeroOrMore(pr.setupHours))
+      hit.runHoursPer1000 = num(hit.runHoursPer1000, zeroOrMore(pr.runHoursPer1000))
+      if (!hit.chargeId) {
+        const rateWasEmpty = hit.rate === null
+        hit.rate = num(hit.rate, zeroOrMore(pr.rate))
+        if (rateWasEmpty && hit.rate !== null && pr.costBasis) hit.costBasis = pr.costBasis
+        hit.setupCharge = num(hit.setupCharge, zeroOrMore(pr.setupCharge))
+      }
+      continue
+    }
+    const stageName = String(pr.stage || 'Production').trim()
+    let stage = stages.find((st) => sameText(st.name, stageName))
+    if (!stage) {
+      stage = { id: ctx.newId('STG'), name: stageName, description: '', processes: [] }
+      stages.push(stage)
+    }
+    stage.processes.push({
+      id: ctx.newId('PRC'),
+      name: String(pr.name).trim(),
+      description: '',
+      setupHours: zeroOrMore(pr.setupHours),
+      runHoursPer1000: zeroOrMore(pr.runHoursPer1000),
+      chargeId: null,
+      costBasis: pr.costBasis ?? 'per_1000',
+      rate: zeroOrMore(pr.rate),
+      setupCharge: zeroOrMore(pr.setupCharge),
+      requiresMachine: false,
+    })
+    count.added++
+  }
+
+  const lines: ProductMaterial[] = structuredClone(product.materials)
+  for (const m of p.materials ?? []) {
+    const mName = String(m.name ?? '').trim()
+    if (!mName) continue
+    let material = attempt.materials.find((x) => sameText(x.name, mName))
+    if (material) {
+      // The shared material: only its empty price / sizes are filled.
+      const before = count.filled
+      const draft = materialToDraft(material)
+      draft.price = num(draft.price, zeroOrMore(m.price))
+      draft.gsm = num(draft.gsm, positive(m.gsm))
+      if (material.kind === 'sheet') {
+        draft.sheetLengthMm = num(draft.sheetLengthMm, positive(m.sheetLengthMm))
+        draft.sheetWidthMm = num(draft.sheetWidthMm, positive(m.sheetWidthMm))
+      }
+      if (count.filled > before) {
+        const saved = saveMaterial(draft)(attempt, ctx)
+        if (!saved.ok) return { ok: false, reason: `Material “${mName}”: ${Object.values(saved.fieldErrors ?? {})[0] ?? saved.error}` }
+        attempt = saved.db
+        material = saved.value
+      }
+    } else {
+      const draft = {
+        ...blankMaterialDraft(m.kind === 'sheet' ? 'sheet' : 'quantity'),
+        name: mName,
+        price: zeroOrMore(m.price),
+        gsm: positive(m.gsm),
+        sheetLengthMm: m.kind === 'sheet' ? positive(m.sheetLengthMm) : null,
+        sheetWidthMm: m.kind === 'sheet' ? positive(m.sheetWidthMm) : null,
+        wastagePct: m.wastagePct !== null && m.wastagePct >= 0 && m.wastagePct < 100 ? m.wastagePct : 0,
+        notes: `Added from ${fileName}`,
+      }
+      if (m.uom?.trim() && m.kind !== 'sheet') draft.uom = m.uom.trim()
+      const saved = saveMaterial(draft)(attempt, ctx)
+      if (!saved.ok) return { ok: false, reason: `Material “${mName}”: ${Object.values(saved.fieldErrors ?? {})[0] ?? saved.error}` }
+      attempt = saved.db
+      material = saved.value
+      newMaterials.push(mName)
+    }
+    const found = material
+    const at = m.process ? stages.flatMap((st) => st.processes.map((x) => ({ stageId: st.id, x }))).find((y) => sameText(y.x.name, m.process)) : undefined
+    const line = lines.find((l) => l.materialId === found.id)
+    if (line) {
+      if (found.kind === 'sheet') {
+        line.cutLengthMm = num(line.cutLengthMm, positive(m.cutLengthMm))
+        line.cutWidthMm = num(line.cutWidthMm, positive(m.cutWidthMm))
+        const pieces = positive(m.piecesPerProduct)
+        if (line.piecesPerProduct === null && pieces !== null) {
+          line.piecesPerProduct = Math.max(1, Math.round(pieces))
+          count.filled++
+        }
+      } else line.qtyPerPiece = num(line.qtyPerPiece, positive(m.qtyPerPiece))
+      if (!line.processId && at) {
+        line.stageId = at.stageId
+        line.processId = at.x.id
+        count.filled++
+      }
+      continue
+    }
+    const pieces = positive(m.piecesPerProduct)
+    lines.push({
+      id: ctx.newId('BOM'),
+      materialId: found.id,
+      stageId: at?.stageId ?? null,
+      processId: at?.x.id ?? null,
+      qtyPerPiece: found.kind === 'sheet' ? 0 : positive(m.qtyPerPiece),
+      piecesPerProduct: found.kind === 'sheet' ? (pieces !== null ? Math.max(1, Math.round(pieces)) : 1) : 1,
+      cutLengthMm: found.kind === 'sheet' ? positive(m.cutLengthMm) : null,
+      cutWidthMm: found.kind === 'sheet' ? positive(m.cutWidthMm) : null,
+      rotationAllowed: true,
+      upsOverride: null,
+      upsOverrideReason: '',
+      note: '',
+    })
+    count.added++
+  }
+
+  const category = text(product.category, p.category)
+  const hsn = text(product.hsn, p.hsn)
+  const uom = text(product.uom, p.uom)
+  const tax = num(product.taxPct, p.taxPct !== null && p.taxPct >= 0 && p.taxPct <= 100 ? p.taxPct : null)
+  if (!count.filled && !count.added) return { ok: true, db, count, newMaterials: [] }
+
+  const saved = saveProduct({
+    id: product.id,
+    code: product.code,
+    name: product.name,
+    category,
+    description: product.description,
+    hsn,
+    uom,
+    taxPct: tax,
+    stages: standIn && !stages.length ? product.stages : stages,
+    materials: lines,
+    expectedUpdatedAt: product.updatedAt,
+  })(attempt, ctx)
+  if (!saved.ok) return { ok: false, reason: Object.values(saved.fieldErrors ?? {})[0] ?? saved.error }
+  return { ok: true, db: saved.db, count, newMaterials }
+}
+
+/** Master → Products → a product → Fill missing from file: the same filling for one product. */
+export const fillProductFromFile = command(
+  'fillProductFromFile',
+  (productId: string, sheet: SheetProduct, fileName: string): Op<FillCount> =>
+  (db, ctx) => {
+    const denied = requireCapability(ctx, 'master')
+    if (denied) return denied
+    const product = db.products.find((x) => x.id === productId)
+    if (!product) return fail('The product no longer exists.')
+    const r = fillFromSheet(db, product, sheet, fileName, ctx)
+    if (!r.ok) return fail(r.reason)
+    if (!r.count.filled && !r.count.added) return ok(db, r.count)
+    const next = audit(r.db, ctx, {
+      action: 'Missing details filled from file',
+      entity: 'Product',
+      entityId: product.id,
+      entityLabel: `${product.code} — ${product.name}`,
+      field: fileName,
+      newValue: `${r.count.filled} filled, ${r.count.added} added${r.count.kept ? `, ${r.count.kept} different value(s) in the file ignored` : ''}`,
+    })
+    return ok(next, r.count)
+  },
+)
 
 export const importProductsFromFile = command(
   'importProductsFromFile',
@@ -261,7 +481,7 @@ export const importProductsFromFile = command(
     if (denied) return denied
     if (!Array.isArray(products) || !products.length) return fail('The file has no products to add.')
     let next = db
-    const result: FileImportResult = { created: [], skipped: [], materialsCreated: [] }
+    const result: FileImportResult = { created: [], updated: [], unchanged: [], skipped: [], materialsCreated: [] }
 
     for (const p of products) {
       const name = String(p.name ?? '').trim()
@@ -269,8 +489,17 @@ export const importProductsFromFile = command(
         result.skipped.push({ name: '(no name)', reason: 'The product has no name.' })
         continue
       }
-      if (next.products.some((x) => sameText(x.name, name))) {
-        result.skipped.push({ name, reason: 'A product with this name already exists — it was left as it is.' })
+      const existing = next.products.find((x) => sameText(x.name, name))
+      if (existing) {
+        // Already in Master: fill only what is still empty; keep everything entered.
+        const filled = fillFromSheet(next, existing, p, fileName, ctx)
+        if (!filled.ok) result.skipped.push({ name, reason: filled.reason })
+        else if (!filled.count.filled && !filled.count.added) result.unchanged.push(existing.name)
+        else {
+          next = filled.db
+          result.updated.push({ id: existing.id, code: existing.code, name: existing.name, ...filled.count })
+          result.materialsCreated.push(...filled.newMaterials)
+        }
         continue
       }
       let attempt = next
@@ -376,14 +605,15 @@ export const importProductsFromFile = command(
       result.materialsCreated.push(...newMaterials)
     }
 
-    if (!result.created.length) return fail(result.skipped.map((s) => `${s.name}: ${s.reason}`).join(' '))
+    if (!result.created.length && !result.updated.length && result.skipped.length) return fail(result.skipped.map((s) => `${s.name}: ${s.reason}`).join(' '))
+    if (!result.created.length && !result.updated.length) return ok(db, result)
     next = audit(next, ctx, {
       action: 'Products added from file',
       entity: 'Product',
-      entityId: result.created.map((c) => c.id).join(','),
+      entityId: [...result.created, ...result.updated].map((c) => c.id).join(','),
       entityLabel: fileName,
       field: 'Products',
-      newValue: `${result.created.length} added${result.skipped.length ? `, ${result.skipped.length} skipped` : ''}${result.materialsCreated.length ? `, ${result.materialsCreated.length} new material(s)` : ''}`,
+      newValue: `${result.created.length} added, ${result.updated.length} filled in${result.skipped.length ? `, ${result.skipped.length} skipped` : ''}${result.materialsCreated.length ? `, ${result.materialsCreated.length} new material(s)` : ''}`,
     })
     return ok(next, result)
   },

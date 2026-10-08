@@ -5,9 +5,9 @@ import { useStore } from '../../../store/store'
 import { importProductsFromFile } from '../../../domain/imports'
 import type { FileImportResult } from '../../../domain/imports'
 import { readFileTable } from '../../../lib/fileTable'
-import { isProductHeading, readProductSheet, TEMPLATE_EXAMPLE, TEMPLATE_HEADERS } from '../../../lib/productSheet'
+import { isProductHeading, readProductSheet, TEMPLATE_EXAMPLE } from '../../../lib/productSheet'
 import type { SheetReading } from '../../../lib/productSheet'
-import { buildXlsx } from '../../../lib/xlsx'
+import { downloadProductSheet } from '../../../lib/productSheetFile'
 import { Button, Modal } from '../../../components/ui'
 
 /* ---------------------------------------------------------------------------
@@ -17,23 +17,11 @@ import { Button, Modal } from '../../../components/ui'
  * ------------------------------------------------------------------------- */
 
 function downloadTemplate() {
-  const bytes = buildXlsx([
-    {
-      name: 'Products',
-      widths: TEMPLATE_HEADERS.map((h) => Math.max(12, h.length + 2)),
-      rows: [{ cells: TEMPLATE_HEADERS, bold: true }, ...TEMPLATE_EXAMPLE.map((r) => ({ cells: r.map((c) => (c !== '' && /^-?\d+(\.\d+)?$/.test(c) ? Number(c) : c)) }))],
-    },
-  ])
-  const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
-  const a = document.createElement('a')
-  a.href = url
-  a.download = 'Vertex-product-sheet.xlsx'
-  a.click()
-  window.setTimeout(() => URL.revokeObjectURL(url), 5000)
+  downloadProductSheet('Vertex-product-sheet.xlsx', TEMPLATE_EXAMPLE.map((r) => r.map((c) => (c !== '' && /^-?\d+(\.\d+)?$/.test(c) ? Number(c) : c))))
 }
 
 export function AddFromFileDialog({ onClose }: { onClose: () => void }) {
-  const { run, pushToast } = useStore()
+  const { db, run, pushToast } = useStore()
   const input = useRef<HTMLInputElement>(null)
   const [fileName, setFileName] = useState('')
   const [reading, setReading] = useState(false)
@@ -65,6 +53,11 @@ export function AddFromFileDialog({ onClose }: { onClose: () => void }) {
   }
 
   const chosen = sheet ? sheet.products.map((p, i) => ({ ...p, name: names[i].trim() })).filter((_, i) => include[i]) : []
+  // Products already in Master are not added again: only their empty details are filled.
+  const existingOf = (name: string) => db.products.find((x) => x.name.trim().toLowerCase() === name.trim().toLowerCase())
+  const toFill = chosen.filter((p) => existingOf(p.name)).length
+  const toAdd = chosen.length - toFill
+  const actionLabel = [toAdd ? `Add ${toAdd} new` : '', toFill ? `Fill ${toFill} existing` : ''].filter(Boolean).join(' · ')
 
   const add = async () => {
     if (busy || !chosen.length) return
@@ -77,7 +70,11 @@ export function AddFromFileDialog({ onClose }: { onClose: () => void }) {
         return
       }
       setResult(r.value)
-      pushToast({ title: `${r.value.created.length} product(s) added`, message: 'Missing details show in costing with a link to fill them.', level: 'success' })
+      pushToast({
+        title: [r.value.created.length ? `${r.value.created.length} added` : '', r.value.updated.length ? `${r.value.updated.length} filled in` : ''].filter(Boolean).join(', ') || 'Nothing to fill',
+        message: r.value.created.length || r.value.updated.length ? 'Anything still missing shows in costing with a link to fill it.' : 'Every product in the file already has these details.',
+        level: r.value.created.length || r.value.updated.length ? 'success' : 'info',
+      })
     } finally {
       setBusy(false)
     }
@@ -89,8 +86,8 @@ export function AddFromFileDialog({ onClose }: { onClose: () => void }) {
       onClose={onClose}
       pinnedFooter
       size="lg"
-      title="Add products from a file"
-      subtitle="Excel, CSV or PDF — whatever the file has is added; the rest can be filled in later."
+      title="Add or fill products from a file"
+      subtitle="Excel, CSV or PDF. New products are added; for products already in Master only the empty details are filled — nothing entered is changed."
       icon={<FileUp className="h-5 w-5" />}
       footer={
         result ? (
@@ -101,7 +98,7 @@ export function AddFromFileDialog({ onClose }: { onClose: () => void }) {
               Cancel
             </Button>
             <Button icon={<CheckCircle2 className="h-4 w-4" />} loading={busy} onClick={() => (chosen.length ? void add() : input.current?.click())}>
-              {chosen.length ? `Add ${chosen.length} product${chosen.length === 1 ? '' : 's'}` : 'Choose a file…'}
+              {chosen.length ? actionLabel : 'Choose a file…'}
             </Button>
           </>
         )
@@ -177,6 +174,11 @@ export function AddFromFileDialog({ onClose }: { onClose: () => void }) {
                       {p.processes.length} process{p.processes.length === 1 ? '' : 'es'} · {p.materials.length} material{p.materials.length === 1 ? '' : 's'}
                     </span>
                   </div>
+                  {existingOf(names[i]) ? (
+                    <p className="mt-2 rounded-xs bg-accent-wash px-2 py-1 text-xs text-accent-text">
+                      Already in Master ({existingOf(names[i])!.code}) — only its empty details are filled from this file. Its name and everything already entered stay as they are.
+                    </p>
+                  ) : null}
                   {p.processes.length || p.materials.length ? (
                     <p className="mt-2 flex gap-1.5 text-xs text-ok">
                       <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -186,8 +188,8 @@ export function AddFromFileDialog({ onClose }: { onClose: () => void }) {
                       </span>
                     </p>
                   ) : null}
-                  {p.missing.length ? (
-                    <ul className="mt-2 space-y-0.5 text-xs text-warn">
+                  {existingOf(names[i]) ? null : p.missing.length ? (
+                    <ul className="mt-2 space-y-0.5 text-xs text-warn" aria-label="Not in the file">
                       {p.missing.map((m) => (
                         <li key={m} className="flex gap-1.5">
                           <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -208,7 +210,8 @@ export function AddFromFileDialog({ onClose }: { onClose: () => void }) {
         {result ? (
           <div className="space-y-3">
             <p className="rounded-md bg-ok-wash px-3 py-2 text-ok ring-1 ring-inset ring-ok-edge" role="status">
-              {result.created.length} product(s) added{result.materialsCreated.length ? `, with ${result.materialsCreated.length} new material(s)` : ''}.
+              {result.created.length} product(s) added, {result.updated.length} filled in{result.materialsCreated.length ? `, ${result.materialsCreated.length} new material(s)` : ''}.
+              {result.unchanged.length ? ` ${result.unchanged.length} already had everything the file gives.` : ''}
             </p>
             <ul className="space-y-1">
               {result.created.map((c) => (
@@ -219,6 +222,22 @@ export function AddFromFileDialog({ onClose }: { onClose: () => void }) {
                 </li>
               ))}
             </ul>
+            {result.updated.length ? (
+              <ul className="space-y-1">
+                {result.updated.map((c) => (
+                  <li key={c.id}>
+                    <Link className="vx-focus rounded-xs font-medium text-accent-text hover:underline" to={`/master/products/${c.id}`} onClick={onClose}>
+                      {c.code} — {c.name}
+                    </Link>
+                    <span className="text-xs text-muted">
+                      {' '}
+                      · {c.filled} detail(s) filled{c.added ? `, ${c.added} added` : ''}
+                      {c.kept ? ` · ${c.kept} different value(s) in the file ignored — the saved ones were kept` : ''}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
             {result.skipped.length ? (
               <ul className="space-y-1 text-warn">
                 {result.skipped.map((s) => (
