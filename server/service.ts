@@ -296,6 +296,15 @@ export class VertexService {
     })
   }
 
+  /** This account's drafts whose key starts with `prefix` (e.g. every unfinished new product), newest first. */
+  async listDrafts(userId: string, prefix: string): Promise<Array<{ key: string; rev: number; data: string; updatedAt: string }>> {
+    const { rows } = await this.db.query<{ draft_key: string; rev: string; data: string; updated_at: string | Date }>(
+      "select draft_key, rev, data, updated_at from vertex_drafts where user_id = $1 and left(draft_key, length($2)) = $2 order by updated_at desc limit 50",
+      [userId, prefix],
+    )
+    return rows.map((r) => ({ key: r.draft_key, rev: Number(r.rev), data: r.data, updatedAt: new Date(r.updated_at).toISOString() }))
+  }
+
   async deleteDraft(userId: string, key: string): Promise<void> {
     await this.db.query('delete from vertex_drafts where user_id = $1 and draft_key = $2', [userId, key])
   }

@@ -1,30 +1,36 @@
-import { useMemo, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { addDays, format } from 'date-fns'
 import { Activity, ArrowLeft, ArrowRight, CalendarRange, ClipboardList, Eye, Lock, Pin, Save, Undo2, XCircle } from 'lucide-react'
 import { useStore } from '../../store/store'
 import type { Plan, Priority } from '../../lib/types'
 import type { PlanDraft } from '../../domain/planning'
-import { cancelPlan, planReadiness, returnPlanToDraft, savePlan, setPlanPinned, submitPlan } from '../../domain/planning'
+import { cancelPlan, planHasContent, planReadiness, returnPlanToDraft, savePlan, setPlanPinned, submitPlan } from '../../domain/planning'
 import { PRIORITIES, processHours, stageHours } from '../../lib/schedule'
 import { cx, fmtDateTime, qty } from '../../lib/format'
-import { Badge, Button, Card, CardHead, EmptyState, Field, Input, Modal, Select, Textarea } from '../../components/ui'
+import { Badge, Button, Card, CardHead, ConfirmDialog, EmptyState, Field, Input, Modal, Select, Textarea } from '../../components/ui'
 import { ConflictNotice, Detail, IssueList, LinkButton, NumberInput, PageHeader, focusFirstInvalid, useDocumentTitle, useUnsavedChanges } from '../../components/page'
 import { PlanStatusBadge } from '../../components/status'
 import { DocumentPreview, DownloadButton, ExcelButton, jobCardDoc, useLatestDb } from '../../components/DocumentPreview'
 import type { PreviewDoc } from '../../components/DocumentPreview'
+import { ResumedNotice, useNewDraftId } from '../../components/Unfinished'
+import { useFormDraft } from '../../lib/useFormDraft'
 
 export function PlanEditorPage() {
   const { planId } = useParams()
   const { db } = useStore()
   const plan = planId === 'new' ? undefined : db.plans.find((p) => p.id === planId)
+  // A new plan reopens the latest unfinished one where it was left.
+  const newDraftId = useNewDraftId<PlanDraft>('plan', planId === 'new', planHasContent)
   if (planId !== 'new' && !plan)
     return (
       <Card>
         <EmptyState icon={<CalendarRange className="h-6 w-6" />} title="Plan not found" message="Return to the plan list." action={<LinkButton to="/planning">Planning</LinkButton>} />
       </Card>
     )
-  return <PlanEditor key={planId} plan={plan} />
+  if (planId === 'new' && !newDraftId) return null
+  const scopeId = plan ? plan.id : `new:${newDraftId}`
+  return <PlanEditor key={scopeId} plan={plan} scopeId={scopeId} />
 }
 
 const today = () => format(new Date(), 'yyyy-MM-dd')
@@ -61,21 +67,35 @@ function toDraft(p?: Plan): PlanDraft {
   }
 }
 
-function PlanEditor({ plan }: { plan?: Plan }) {
+function PlanEditor({ plan, scopeId }: { plan?: Plan; scopeId: string }) {
   useDocumentTitle(plan ? `Planning · ${plan.code}` : 'Planning · New plan')
   const { db, run, pushToast } = useStore()
   const navigate = useNavigate()
-  const [draft, setDraft] = useState<PlanDraft>(() => toDraft(plan))
-  const [baseline, setBaseline] = useState(() => JSON.stringify(toDraft(plan)))
+  const [params] = useSearchParams()
+  const editable = !plan || plan.status === 'Draft'
+  // The form is kept as a draft while it is filled, so leaving this screen never loses it.
+  const form = useFormDraft<PlanDraft>('plan', scopeId, toDraft(plan), { enabled: editable, baseUpdatedAt: plan?.updatedAt ?? null })
+  const { draft, setDraft } = form
+  const [discardOpen, setDiscardOpen] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [bulkUnit, setBulkUnit] = useState('')
   const [cancelOpen, setCancelOpen] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
   const [conflict, setConflict] = useState('')
   const saving = useRef(false)
-  const readOnly = !!plan && plan.status !== 'Draft'
-  const dirty = !readOnly && JSON.stringify(draft) !== baseline
-  const guard = useUnsavedChanges(dirty)
+  const readOnly = !editable
+  const dirty = form.dirty
+  const guard = useUnsavedChanges(dirty, true)
+  // Leaving with unsaved entries: they wait as a draft.
+  const dirtyRef = useRef(dirty)
+  dirtyRef.current = dirty
+  useEffect(
+    () => () => {
+      if (dirtyRef.current) pushToast({ title: 'Plan kept as draft', message: plan ? `${plan.code}: your changes are kept — open it again to continue.` : 'Open Planning → New plan to continue where you left off.', level: 'info' })
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  )
 
   const customer = db.customers.find((c) => c.id === draft.customerId)
   const product = db.products.find((p) => p.id === draft.productId)
@@ -102,9 +122,8 @@ function PlanEditor({ plan }: { plan?: Plan }) {
 
   const loadLatest = () => {
     const latest = db.plans.find((p) => p.id === plan?.id)
-    const next = toDraft(latest)
-    setDraft(next)
-    setBaseline(JSON.stringify(next))
+    form.saved(toDraft(latest))
+    dirtyRef.current = false
     setConflict('')
     setErrors({})
   }
@@ -119,9 +138,8 @@ function PlanEditor({ plan }: { plan?: Plan }) {
       return
     }
     setErrors({})
-    const saved = toDraft(r.value)
-    setDraft(saved)
-    setBaseline(JSON.stringify(saved))
+    form.saved(toDraft(r.value))
+    dirtyRef.current = false
     if (thenSubmit) {
       const s = await run(submitPlan(r.value.id))
       guard.bypass()
@@ -165,6 +183,26 @@ function PlanEditor({ plan }: { plan?: Plan }) {
       />
 
       {conflict && !readOnly ? <ConflictNotice message={conflict} onReload={loadLatest} /> : null}
+      {!readOnly && form.restoredAt ? (
+        <ResumedNotice savedAt={form.restoredAt} newHref="/planning/new?fresh=1" onDiscard={() => setDiscardOpen(true)} />
+      ) : null}
+      {!readOnly && !form.restoredAt && params.get('resumed') === '1' ? (
+        <ResumedNotice savedAt={form.keptAt} newHref="/planning/new?fresh=1" onDiscard={() => setDiscardOpen(true)} />
+      ) : null}
+      <ConfirmDialog
+        open={discardOpen}
+        tone="danger"
+        title="Discard this draft?"
+        body={plan ? 'Your unsaved changes to this plan are removed; the saved plan stays as it is.' : 'What was typed for this new plan is removed. It cannot be brought back.'}
+        confirmLabel="Discard draft"
+        onCancel={() => setDiscardOpen(false)}
+        onConfirm={() => {
+          setDiscardOpen(false)
+          form.discard(toDraft(plan))
+          dirtyRef.current = false
+          if (!plan) navigate('/planning/new?fresh=1', { replace: true })
+        }}
+      />
 
       {readOnly ? (
         <div className="vx-anim-up flex flex-wrap items-center gap-3 rounded-md bg-accent-wash px-4 py-3 text-sm text-accent-text ring-1 ring-inset ring-accent-edge">

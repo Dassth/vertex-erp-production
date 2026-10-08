@@ -256,6 +256,11 @@ export function createApiHandler(service: VertexService, options: ApiOptions = {
       }
     }
 
+    if (path === '/api/drafts' && method === 'GET') {
+      const prefix = new URL(req.url).searchParams.get('prefix') ?? ''
+      if (!prefix) throw new HttpError(400, 'Missing prefix.')
+      return json(200, { ok: true, drafts: await service.listDrafts(user.id, prefix) })
+    }
     const draft = /^\/api\/drafts\/(.+)$/.exec(path)
     if (draft) {
       const key = decodeURIComponent(draft[1])

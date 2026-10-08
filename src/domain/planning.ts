@@ -49,6 +49,9 @@ export interface PlanDraft {
   expectedUpdatedAt?: string
 }
 
+/** A new plan counts as started once a customer, product, quantity or note is given. */
+export const planHasContent = (d: PlanDraft) => !!(d.customerId || d.productId || (Number.isFinite(d.quantity) && d.quantity > 0) || d.customerRef?.trim() || d.instructions?.trim())
+
 export function validatePlanDraft(db: VertexDB, d: PlanDraft, existing?: Plan): Record<string, string> {
   const e: Record<string, string> = {}
   const customer = db.customers.find((c) => c.id === d.customerId)

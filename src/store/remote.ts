@@ -94,6 +94,7 @@ export const remote = {
       method: 'PUT',
       body: { knownRev, data },
     }),
+  listDrafts: (prefix: string) => api<{ ok: true; drafts: Array<{ key: string; rev: number; data: string; updatedAt: string }> } | Failure>(`/api/drafts?prefix=${encodeURIComponent(prefix)}`),
   deleteDraft: (key: string) => api<{ ok: true }>(`/api/drafts/${encodeURIComponent(key)}`, { method: 'DELETE' }),
   exportData: () => api<({ ok: true; revision: number; db: VertexDB }) | Failure>('/api/export'),
   backupStatus: () => api<BackupStatusResponse | Failure>('/api/backup/status'),

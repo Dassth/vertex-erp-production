@@ -10,6 +10,9 @@ import { PlanStatusBadge, PriorityBadge } from '../../components/status'
 import { DocumentPreview, DownloadButton, ExcelButton, jobCardDoc, useLatestDb } from '../../components/DocumentPreview'
 import type { PreviewDoc } from '../../components/DocumentPreview'
 import { cx } from '../../lib/format'
+import { UnfinishedCard } from '../../components/Unfinished'
+import type { PlanDraft } from '../../domain/planning'
+import { planHasContent } from '../../domain/planning'
 import { sortPlans } from '../../lib/planList'
 import type { PlanSort } from '../../lib/planList'
 import { setPlanPinned } from '../../domain/planning'
@@ -71,6 +74,18 @@ export function PlanningPage() {
           ) : null
         }
       />
+
+      {/* Unfinished work is always shown, even before customers or products exist. */}
+      <UnfinishedCard<PlanDraft>
+          scope="plan"
+          title="Unfinished new plans"
+          hasContent={planHasContent}
+          describe={(d) => ({
+            name: [db.customers.find((c) => c.id === d.customerId)?.company, db.products.find((p) => p.id === d.productId)?.name, d.customerRef?.trim() ? `Ref ${d.customerRef.trim()}` : ''].filter(Boolean).join(' — '),
+            detail: Number.isFinite(d.quantity) && d.quantity > 0 ? pieces(d.quantity) : undefined,
+          })}
+          hrefFor={(id) => `/planning/new?draft=${encodeURIComponent(id)}`}
+        />
 
       <StatStrip className="grid-cols-2 lg:grid-cols-4">
         <StatTile label="Draft" value={String(count('Draft'))} icon={<CircleDashed className="h-4 w-4" />} tone="slate" hint="Being prepared" onClick={() => set('status', 'Draft')} active={status === 'Draft'} />

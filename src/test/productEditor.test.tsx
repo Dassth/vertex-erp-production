@@ -55,7 +55,7 @@ describe('product editor drafts', () => {
     await user.type(stageNames[0], 'Printing')
     // Autosave writes a recovery copy.
     await waitFor(() => expect(draftKeys()).toHaveLength(1), { timeout: 3000 })
-    await screen.findByText(/Draft copy saved in this browser/)
+    await screen.findByText(/Draft kept at/)
 
     // "Refresh": unmount and open the same URL again — the entries come back.
     first.view.unmount()
@@ -64,23 +64,14 @@ describe('product editor drafts', () => {
     expect((screen.getByLabelText(/Product name/) as HTMLInputElement).value).toBe('Draft jewel box')
     expect((screen.getAllByPlaceholderText('e.g. Printing…')[0] as HTMLInputElement).value).toBe('Printing')
 
-    // A failed save (stages 2 and 3 have no names) keeps everything, including the recovery copy.
-    await user.click(screen.getByRole('button', { name: /Save draft|Create product/ }))
-    expect(await screen.findByText('Product not saved')).toBeTruthy()
-    expect(draftKeys()).toHaveLength(1)
-    expect(stored().products.some((p) => p.name === 'Draft jewel box')).toBe(false)
-
-    // Complete only the required names — process rates and times stay blank.
-    const names = screen.getAllByPlaceholderText('e.g. Printing…')
-    await user.type(names[1], 'Box making')
-    await user.type(names[2], 'Packing')
-    const processNames = screen.getAllByLabelText(/Process name/)
-    for (const [i, input] of processNames.entries()) await user.type(input, `Step ${i + 1}`)
-
+    // Saving a half-filled product as a draft works: stages and processes left unnamed are numbered,
+    // rates and times stay blank — nothing typed is refused or lost.
     await user.click(screen.getByRole('button', { name: 'Save draft' }))
     expect((await screen.findAllByText('Saved as draft — costing details need attention', {}, { timeout: 5000 })).length).toBeGreaterThanOrEqual(2)
     await waitFor(() => expect(stored().products.filter((p) => p.name === 'Draft jewel box')).toHaveLength(1))
     const saved = stored().products.find((p) => p.name === 'Draft jewel box')!
+    expect(saved.stages.map((st) => st.name)).toEqual(['Printing', 'Stage 2', 'Stage 3'])
+    expect(saved.stages[1].processes[0].name).toBe('Process 1')
     expect(saved.stages[0].processes[0]).toMatchObject({ rate: null, setupCharge: null, setupHours: null, runHoursPer1000: null })
     // The recovery copy is removed once the save call has returned.
     await waitFor(() => expect(draftKeys()).toHaveLength(0), { timeout: 5000 })
@@ -101,15 +92,14 @@ describe('product editor drafts', () => {
     await waitFor(() => expect(draftKeys().some((k) => k.endsWith('new:alpha'))).toBe(true), { timeout: 3000 })
 
     await first.router.navigate('/master/products/new?draft=beta')
-    // Leaving with unsaved edits asks first; stay on the new route by confirming the leave.
-    const leave = await screen.findByRole('dialog', {}, { timeout: 3000 }).catch(() => null)
-    if (leave) await user.click(within(leave).getByRole('button', { name: /Discard changes|Leave/ }))
-    await user.type(await screen.findByLabelText(/Product name/, {}, { timeout: 5000 }), 'Beta box')
+    // Leaving with unsaved edits asks nothing: they are kept as a draft.
+    expect(screen.queryByRole('dialog', { name: /Leave without saving/ })).toBeNull()
+    // The new, empty form for "beta" (not the alpha form still on screen a moment ago).
+    await waitFor(() => expect((screen.getByLabelText(/Product name/) as HTMLInputElement).value).toBe(''), { timeout: 5000 })
+    await user.type(screen.getByLabelText(/Product name/), 'Beta box')
     await waitFor(() => expect(draftKeys()).toHaveLength(2), { timeout: 3000 })
 
     await first.router.navigate('/master/products/new?draft=alpha')
-    const leave2 = await screen.findByRole('dialog', {}, { timeout: 3000 }).catch(() => null)
-    if (leave2) await user.click(within(leave2).getByRole('button', { name: /Discard changes|Leave/ }))
     await waitFor(() => expect((screen.getByLabelText(/Product name/) as HTMLInputElement).value).toBe('Alpha box'), { timeout: 5000 })
 
     await user.click(screen.getAllByRole('button', { name: /Discard (unsaved )?draft…/ })[0])

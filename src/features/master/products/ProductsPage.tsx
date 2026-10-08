@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { Boxes, CheckCircle2, FileInput, FileUp, Layers, Package, Pencil, Plus, Search, TriangleAlert } from 'lucide-react'
 import { useStore } from '../../../store/store'
 import type { Product } from '../../../lib/types'
-import { deleteProduct, setProductActive } from '../../../domain/master'
+import { deleteProduct, productHasContent, setProductActive } from '../../../domain/master'
 import { fmtDate } from '../../../lib/format'
 import { Badge, Button, Card, CardHead, ConfirmDialog, EmptyState, Modal, SearchInput, Select } from '../../../components/ui'
 import { importProductTemplates, planTemplateImport, TEMPLATE_BATCHES } from '../../../domain/imports'
@@ -13,6 +13,8 @@ import { LinkButton, PageHeader, StatStrip, StatTile, useDocumentTitle } from '.
 import { ActiveBadge } from '../../../components/status'
 import { productIssues } from '../masterSelectors'
 import { AddFromFileDialog } from './AddFromFileDialog'
+import { UnfinishedCard } from '../../../components/Unfinished'
+import type { ProductDraft } from '../../../domain/master'
 
 type StatusFilter = 'all' | 'active' | 'inactive' | 'issues'
 
@@ -85,10 +87,20 @@ export function ProductsPage() {
 
       <StatStrip className="grid-cols-2 lg:grid-cols-4">
         <StatTile label="Products" value={String(db.products.length)} icon={<Package className="h-4 w-4" />} tone="indigo" hint={`${db.products.filter((p) => p.active).length} active`} onClick={() => setParam('status', 'all')} active={status === 'all'} />
-        <StatTile label="Needs setup" value={String(withIssues)} icon={<TriangleAlert className="h-4 w-4" />} tone="amber" hint="Missing prices, rates or yields" onClick={() => setParam('status', 'issues')} active={status === 'issues'} />
+        <StatTile label="Drafts" value={String(withIssues)} icon={<TriangleAlert className="h-4 w-4" />} tone="amber" hint="Saved as draft — details still missing" onClick={() => setParam('status', 'issues')} active={status === 'issues'} />
         <StatTile label="Materials" value={String(db.materials.length)} icon={<Boxes className="h-4 w-4" />} tone="violet" hint="In the shared registry" />
         <StatTile label="Stages defined" value={String(db.products.reduce((n, p) => n + p.stages.length, 0))} icon={<Layers className="h-4 w-4" />} tone="slate" hint="Across all products" />
       </StatStrip>
+
+      {can('master') ? (
+        <UnfinishedCard<ProductDraft>
+          scope="product"
+          title="Unfinished new products"
+          hasContent={productHasContent}
+          describe={(d) => ({ name: d.name?.trim() ?? '', detail: `${d.stages?.length ?? 0} stage(s) · ${d.materials?.length ?? 0} material(s)` })}
+          hrefFor={(id) => `/master/products/new?draft=${encodeURIComponent(id)}`}
+        />
+      ) : null}
 
       <Card className="vx-anim-up overflow-hidden">
         <CardHead
@@ -101,7 +113,7 @@ export function ProductsPage() {
                 <option value="all">All products</option>
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
-                <option value="issues">Needs setup</option>
+                <option value="issues">Drafts (details missing)</option>
               </Select>
             </div>
           }
@@ -176,7 +188,7 @@ export function ProductsPage() {
                       {issues.length ? (
                         <Badge tone="amber">
                           <TriangleAlert className="h-3 w-3" aria-hidden="true" />
-                          {issues.length} to fix
+                          Draft · {issues.length} to fill
                         </Badge>
                       ) : (
                         <Badge tone="green">

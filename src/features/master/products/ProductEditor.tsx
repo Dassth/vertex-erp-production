@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowDown,
   ArrowLeft,
@@ -20,10 +20,12 @@ import type { StoredDraft } from '../../../lib/drafts'
 import { remote } from '../../../store/remote'
 import { fromWire } from '../../../lib/wire'
 import type { MaterialDraft, ProductDraft } from '../../../domain/master'
-import { blankMaterialDraft, saveMaterial, saveProduct } from '../../../domain/master'
+import { blankMaterialDraft, productHasContent, saveMaterial, saveProduct } from '../../../domain/master'
 import { COST_BASIS_LABEL, computeOrderCosting, pricedUnitLabel } from '../../../lib/costing'
 import { calculateYield, fromMm, toMm } from '../../../lib/yield'
 import { cx, uid } from '../../../lib/format'
+import { useNewDraftId } from '../../../components/Unfinished'
+import { productIssues } from '../masterSelectors'
 import { Badge, Button, Card, CardHead, ConfirmDialog, EmptyState, Field, IconButton, Input, Modal, Select, Textarea } from '../../../components/ui'
 import { ConflictNotice, IssueList, LinkButton, NumberInput, PageHeader, focusFirstInvalid, useDocumentTitle, useUnsavedChanges } from '../../../components/page'
 import { NO_PRICING_INPUTS } from '../masterSelectors'
@@ -32,20 +34,8 @@ import type { OpResult } from '../../../domain/common'
 export function ProductEditorPage() {
   const { productId } = useParams()
   const { db } = useStore()
-  const [params, setParams] = useSearchParams()
-  const newDraftId = params.get('draft')
-  // Each unsaved new product has its own recovery key, kept in the URL so a refresh finds it again.
-  useEffect(() => {
-    if (productId !== 'new' || newDraftId) return
-    setParams(
-      (prev) => {
-        const next = new URLSearchParams(prev)
-        next.set('draft', uid('new'))
-        return next
-      },
-      { replace: true },
-    )
-  }, [productId, newDraftId, setParams])
+  // Each unsaved new product has its own draft id in the URL; "New product" reopens the latest unfinished one.
+  const newDraftId = useNewDraftId<ProductDraft>('product', productId === 'new', productHasContent)
   const product = productId === 'new' ? undefined : db.products.find((p) => p.id === productId)
   if (productId !== 'new' && !product)
     return (
@@ -174,7 +164,7 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
   const saving = useRef(false)
   const [savePhase, setSavePhase] = useState<'idle' | 'saving'>('idle')
   const dirty = JSON.stringify(draft) !== baseline
-  const guard = useUnsavedChanges(dirty)
+  const guard = useUnsavedChanges(dirty, true)
 
   /** Write the recovery copy now. Returns false when it could not be kept. */
   const persistRecovery = (value: ProductDraft): boolean => {
@@ -259,6 +249,11 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
     document.addEventListener('visibilitychange', onHide)
     window.addEventListener('storage', onStorage)
     return () => {
+      // Leaving this screen: whatever was typed waits as a draft.
+      if (dirtyRef.current) {
+        flush()
+        pushToast({ title: 'Product kept as draft', message: product ? `${product.name}: your changes are kept — open it again to continue.` : 'Master → Products → Add manually continues where you left off.', level: 'info' })
+      }
       window.removeEventListener('pagehide', flush)
       document.removeEventListener('visibilitychange', onHide)
       window.removeEventListener('storage', onStorage)
@@ -287,6 +282,8 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
     setRestoredNotice(null)
     setAutosave({ state: 'idle' })
     setDiscardOpen(false)
+    dirtyRef.current = false
+    if (!product) navigate('/master/products/new?fresh=1', { replace: true })
   }
 
   const set = (patch: Partial<ProductDraft>) => setDraft((d) => ({ ...d, ...patch }))
@@ -400,7 +397,7 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
     if (!r.ok) {
       if (r.conflict) setConflict(r.error)
       setErrors(r.fieldErrors ?? {})
-      pushToast({ title: 'Product not saved', message: `${r.error} Your entries are kept as a recovery draft in this browser.`, level: 'danger' })
+      pushToast({ title: 'Product not saved', message: `${r.error} Nothing you typed is lost — it is kept as a draft.`, level: 'danger' })
       focusFirstInvalid()
       return
     }
@@ -409,6 +406,7 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
     if (storage) removeDraft(storage, recoveryKey)
     if (storageMode === 'server') void remote.deleteDraft(recoveryKey).catch(() => {})
     knownRev.current = 0
+    dirtyRef.current = false
     setRestoredNotice(null)
     setAutosave({ state: 'idle' })
     const saved = toDraft(r.value)
@@ -427,6 +425,8 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
   }
 
   const err = (key: string) => errors[key]
+  // Typing the name of a product that already exists (often one saved earlier as a draft): offer to open it.
+  const sameName = draft.name.trim() ? db.products.find((p) => p.id !== product?.id && p.name.trim().toLowerCase() === draft.name.trim().toLowerCase()) : undefined
   const activeCharges = db.settings.processCharges
 
   return (
@@ -465,6 +465,15 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
               <Field label="Product name" required error={err('name')} className="sm:col-span-2">
                 <Input name="product-name" value={draft.name} onChange={(e) => set({ name: e.target.value })} aria-invalid={!!err('name') || undefined} placeholder="e.g. Rigid box with lid…" />
               </Field>
+              {sameName ? (
+                <p className="-mt-2 mb-3 rounded-md bg-warn-wash px-3 py-2 text-sm text-warn ring-1 ring-inset ring-warn-edge sm:col-span-2 lg:col-span-3" role="status" aria-live="polite">
+                  “{sameName.name}” is already in Master ({sameName.code}){productIssues(db, { productId: sameName.id, stages: sameName.stages, materials: sameName.materials, spec: sameName.spec }).length ? ', saved earlier as a draft' : ''}.{' '}
+                  <Link className="vx-focus rounded-xs font-medium underline" to={`/master/products/${sameName.id}`}>
+                    Open it and continue there
+                  </Link>{' '}
+                  — or give this one a different name.
+                </p>
+              ) : null}
               <Field label="Code" error={err('code')} hint="Leave blank to number automatically.">
                 <Input name="product-code" spellCheck={false} value={draft.code} onChange={(e) => set({ code: e.target.value })} aria-invalid={!!err('code') || undefined} />
               </Field>
@@ -495,6 +504,11 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
               <Button type="button" size="sm" variant="secondary" onClick={() => setRestoredNotice(null)}>
                 Keep editing
               </Button>
+              {!product ? (
+                <LinkButton to="/master/products/new?fresh=1" size="sm" variant="ghost">
+                  Start a new product instead
+                </LinkButton>
+              ) : null}
               <Button type="button" size="sm" variant="danger-outline" onClick={() => setDiscardOpen(true)}>
                 Discard draft…
               </Button>
@@ -867,7 +881,7 @@ function AutosaveLine({
   if (!dirty && status.state === 'idle') return null
   return (
     <p className="text-center text-xs text-muted" role="status">
-      {status.state === 'saving' ? 'Saving draft copy…' : status.state === 'saved' ? `Draft copy saved in this browser at ${new Date(status.at).toLocaleTimeString('en-IN')}` : ''}
+      {status.state === 'saving' ? 'Saving draft copy…' : status.state === 'saved' ? `Draft kept at ${new Date(status.at).toLocaleTimeString('en-IN')}` : ''}
     </p>
   )
 }

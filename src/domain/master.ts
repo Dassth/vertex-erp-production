@@ -336,6 +336,9 @@ export interface ProductDraft {
   expectedUpdatedAt?: string
 }
 
+/** A new product counts as started once it has a name, a stage name or a material. */
+export const productHasContent = (d: ProductDraft) => !!(d.name?.trim() || d.materials?.length || d.stages?.some((s) => s.name.trim() || s.processes.some((p) => p.name.trim())))
+
 /** A specification can be marked confirmed only once its measurements are known. */
 export function validateSpec(spec: ProductSpec | null | undefined): Record<string, string> {
   const e: Record<string, string> = {}
@@ -401,16 +404,14 @@ export function validateProductDraft(
   if (d.code.trim() && products.some((p) => p.id !== d.id && sameText(p.code, d.code))) e.code = 'This code is already used by another product.'
   if (!d.uom.trim()) e.uom = 'Enter the finished-goods unit (e.g. pcs).'
   if (d.taxPct !== null && !(isFiniteNumber(d.taxPct) && d.taxPct >= 0 && d.taxPct <= 100)) e.taxPct = 'Tax must be between 0 and 100%.'
-  if (!d.stages.length) e.stages = 'Add at least one stage.'
+  // Stages and processes may come later: a product saved as a draft keeps what is there,
+  // and planning lists what is still missing with a link back here.
   Object.assign(e, validateSpec(d.spec))
 
-  d.stages.forEach((s, i) => {
-    if (!s.name.trim()) e[`stage.${s.id}.name`] = `Name stage ${i + 1}.`
-    else if (d.stages.some((o) => o.id !== s.id && sameText(o.name, s.name))) e[`stage.${s.id}.name`] = 'Stage names must be unique within the product.'
-    if (!s.processes.length) e[`stage.${s.id}.processes`] = `Add at least one process to stage ${i + 1}.`
-    s.processes.forEach((p, j) => {
+  d.stages.forEach((s) => {
+    if (s.name.trim() && d.stages.some((o) => o.id !== s.id && sameText(o.name, s.name))) e[`stage.${s.id}.name`] = 'Stage names must be unique within the product.'
+    s.processes.forEach((p) => {
       const k = (f: string) => `process.${p.id}.${f}`
-      if (!p.name.trim()) e[k('name')] = `Name process ${j + 1} of stage ${i + 1}.`
       if (!nonNeg(p.setupHours)) e[k('setupHours')] = 'Setup hours cannot be negative — or leave blank until measured.'
       if (!nonNeg(p.runHoursPer1000)) e[k('runHoursPer1000')] = 'Run hours cannot be negative — or leave blank until measured.'
       if (p.chargeId) {
@@ -433,6 +434,12 @@ export function validateProductDraft(
   return e
 }
 
+function uniqueStageName(stages: ProductDraft['stages'], i: number): string {
+  let n = i + 1
+  while (stages.some((s) => sameText(s.name, `Stage ${n}`))) n++
+  return `Stage ${n}`
+}
+
 function normaliseProduct(d: ProductDraft) {
   return {
     name: d.name.trim(),
@@ -441,13 +448,14 @@ function normaliseProduct(d: ProductDraft) {
     hsn: d.hsn.trim(),
     uom: d.uom.trim(),
     taxPct: d.taxPct,
-    stages: d.stages.map((s) => ({
+    stages: d.stages.map((s, i) => ({
       ...s,
-      name: s.name.trim(),
+      // Unnamed in a draft: numbered, so it can be found and renamed later.
+      name: s.name.trim() || uniqueStageName(d.stages, i),
       description: s.description.trim(),
-      processes: s.processes.map((p) => ({
+      processes: s.processes.map((p, j) => ({
         ...p,
-        name: p.name.trim(),
+        name: p.name.trim() || `Process ${j + 1}`,
         description: p.description.trim(),
         rate: p.chargeId ? null : p.rate,
         setupCharge: p.chargeId ? null : p.setupCharge,

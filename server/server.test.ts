@@ -140,6 +140,17 @@ describe('server state and permissions', () => {
     expect(Number.isNaN(fromWire<{ cut: number }>((await service.getDraft('USR-ADM1', 'raw'))!.data).cut)).toBe(true)
   })
 
+  it('lists one account’s unfinished drafts of one kind, so they can be resumed', async () => {
+    await service.putDraft('USR-ADM1', 'p:USR-ADM1:product:new:a', 0, toWire({ name: 'Box A' }))
+    await service.putDraft('USR-ADM1', 'p:USR-ADM1:product:new:b', 0, toWire({ name: 'Box B' }))
+    await service.putDraft('USR-ADM1', 'p:USR-ADM1:plan:new:c', 0, toWire({ customerId: 'x' }))
+    await service.putDraft('USR-ADM2', 'p:USR-ADM1:product:new:z', 0, toWire({ name: 'not mine' }))
+    const list = await service.listDrafts('USR-ADM1', 'p:USR-ADM1:product:new:')
+    expect(list.map((d) => fromWire<{ name: string }>(d.data).name).sort()).toEqual(['Box A', 'Box B'])
+    await service.deleteDraft('USR-ADM1', 'p:USR-ADM1:product:new:a')
+    expect(await service.listDrafts('USR-ADM1', 'p:USR-ADM1:product:new:')).toHaveLength(1)
+  })
+
   it('imports an exported browser dataset only into an empty server, keeping IDs, accounts and counters', async () => {
     const browser = seedMaster().db
     const r = await service.importBrowserDataset(browser, 'test')

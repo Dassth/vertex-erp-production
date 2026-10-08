@@ -217,25 +217,28 @@ export function NumberInput({
  * Guards in-app navigation and tab close while `dirty`. Call `bypass()` right
  * before navigating away after a successful save — the blocker otherwise still
  * sees the dirty flag from the last render.
+ *
+ * `keptAsDraft`: the screen keeps its form as a draft, so leaving loses
+ * nothing — nobody is asked to discard anything; the draft waits to be resumed.
  */
-export function useUnsavedChanges(dirty: boolean): { dialog: ReactNode; bypass: () => void } {
+export function useUnsavedChanges(dirty: boolean, keptAsDraft = false): { dialog: ReactNode; bypass: () => void } {
   const skip = useRef(false)
   const blocker = useBlocker(({ currentLocation, nextLocation }) => {
     if (skip.current) {
       skip.current = false
       return false
     }
-    return dirty && currentLocation.pathname !== nextLocation.pathname
+    return !keptAsDraft && dirty && currentLocation.pathname !== nextLocation.pathname
   })
 
   useEffect(() => {
-    if (!dirty) return
+    if (!dirty || keptAsDraft) return
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       e.preventDefault()
     }
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
-  }, [dirty])
+  }, [dirty, keptAsDraft])
 
   return {
     bypass: () => {
