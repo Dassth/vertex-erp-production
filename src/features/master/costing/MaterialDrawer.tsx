@@ -1,16 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Calculator, Info, Save } from 'lucide-react'
+import { Info, Save } from 'lucide-react'
 import { useStore } from '../../../store/store'
 import type { LengthUnit, Material, PricingBasis, Product, ProductMaterial } from '../../../lib/types'
 import type { MaterialDraft } from '../../../domain/master'
-import { deleteMaterial, materialToDraft, saveMaterial, saveMaterialUsage, setMaterialActive } from '../../../domain/master'
-import { PRICING_BASIS_LABEL, computeOrderCosting, pricedUnitLabel } from '../../../lib/costing'
+import { deleteMaterial, materialToDraft, saveMaterial, setMaterialActive } from '../../../domain/master'
+import { PRICING_BASIS_LABEL, pricedUnitLabel } from '../../../lib/costing'
 import { calculateYield, fromMm, toMm } from '../../../lib/yield'
-import { cx, fmtDateTime, moneyPaise, qty } from '../../../lib/format'
-import { Badge, Button, ConfirmDialog, Drawer, Field, Input, Select, Textarea } from '../../../components/ui'
+import { fmtDateTime } from '../../../lib/format'
+import { Button, ConfirmDialog, Drawer, Field, Input, Select, Textarea } from '../../../components/ui'
 import { ConflictNotice, NumberInput, focusFirstInvalid } from '../../../components/page'
-import { NO_PRICING_INPUTS, processLabel, stageLabel } from '../masterSelectors'
+import { processLabel, stageLabel } from '../masterSelectors'
 
 export function MaterialDrawer({ materialId, onClose }: { materialId: string | null; onClose: () => void }) {
   const { db } = useStore()
@@ -249,14 +249,14 @@ function MaterialEditor({ material, onDirty, onDeleted }: { material: Material; 
       </form>
 
       <section>
-        <h3 className="vx-smallcaps text-ink">Product usages ({usages.length})</h3>
-        <p className="mt-1 text-sm text-muted">How each product consumes this material. Cut sizes and overrides edited here update the product definition.</p>
+        <h3 className="vx-smallcaps text-ink">Used in products ({usages.length})</h3>
+        <p className="mt-1 text-sm text-muted">Which products use this material and for what. How much each product takes is set in that product.</p>
         {usages.length === 0 ? (
           <p className="mt-3 rounded-md border border-dashed border-rule-2 px-4 py-5 text-center text-sm text-muted">Not used by any product.</p>
         ) : (
           <ul className="mt-3 space-y-3">
             {usages.map(({ product, line }) => (
-              <UsageEditor key={line.id} product={product} line={line} material={preview} materialDirty={dirty} />
+              <UsageSummary key={line.id} product={product} line={line} material={preview} />
             ))}
           </ul>
         )}
@@ -282,176 +282,54 @@ function MaterialEditor({ material, onDirty, onDeleted }: { material: Material; 
   )
 }
 
-type UsagePatch = Pick<ProductMaterial, 'piecesPerProduct' | 'cutLengthMm' | 'cutWidthMm' | 'rotationAllowed' | 'upsOverride' | 'upsOverrideReason' | 'qtyPerPiece'>
-
-function UsageEditor({ product, line, material, materialDirty }: { product: Product; line: ProductMaterial; material: Material; materialDirty: boolean }) {
-  const { db, run, pushToast } = useStore()
-  const initial: UsagePatch = {
-    piecesPerProduct: line.piecesPerProduct,
-    cutLengthMm: line.cutLengthMm,
-    cutWidthMm: line.cutWidthMm,
-    rotationAllowed: line.rotationAllowed,
-    upsOverride: line.upsOverride,
-    upsOverrideReason: line.upsOverrideReason,
-    qtyPerPiece: line.qtyPerPiece,
-  }
-  const [patch, setPatch] = useState<UsagePatch>(initial)
-  const [errors, setErrors] = useState<Record<string, string>>({})
-  const [sampleQty, setSampleQty] = useState<number | null>(1000)
-  const dirty = JSON.stringify(patch) !== JSON.stringify(initial)
+/**
+ * Where this material is used — read only. The material itself is set up once,
+ * above; how much of it a product takes (cut size, pieces) belongs to that
+ * product and is changed there, so nothing here can block or ask twice.
+ */
+function UsageSummary({ product, line, material }: { product: Product; line: ProductMaterial; material: Material }) {
   const u = material.sizeUnit
-  const merged: ProductMaterial = { ...line, ...patch }
-  const k = (f: string) => errors[`usage.${line.id}.${f}`]
-
+  const pieces = line.piecesPerProduct ?? 1
   const y =
-    material.kind === 'sheet' && material.sheetLengthMm && material.sheetWidthMm && merged.cutLengthMm && merged.cutWidthMm
+    material.kind === 'sheet' && material.sheetLengthMm && material.sheetWidthMm && line.cutLengthMm && line.cutWidthMm
       ? calculateYield({
           sheetLengthMm: material.sheetLengthMm,
           sheetWidthMm: material.sheetWidthMm,
-          cutLengthMm: merged.cutLengthMm,
-          cutWidthMm: merged.cutWidthMm,
+          cutLengthMm: line.cutLengthMm,
+          cutWidthMm: line.cutWidthMm,
           edgeMarginMm: material.edgeMarginMm,
           cutGapMm: material.cutGapMm,
-          rotationAllowed: merged.rotationAllowed,
+          rotationAllowed: line.rotationAllowed,
         })
       : null
-
-  const sample = useMemo(() => {
-    if (!sampleQty || !Number.isInteger(sampleQty) || sampleQty < 1) return null
-    const r = computeOrderCosting({
-      quantity: sampleQty,
-      product: { productId: product.id, stages: [], materials: [merged] },
-      materials: [material],
-      settings: db.settings,
-      inputs: NO_PRICING_INPUTS,
-    })
-    return { line: r.materialLines[0], issues: r.issues.filter((i) => i.level === 'error' && !/no stages/.test(i.message)) }
-    // merged is derived from patch + line
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sampleQty, JSON.stringify(merged), material, db.settings, product.id])
-
-  const toMmValue = (v: number | null) => (v === null ? null : Number.isNaN(v) ? NaN : toMm(v, u))
+  const where = [stageLabel(product, line.stageId), line.processId ? processLabel(product, line.processId) : ''].filter(Boolean).join(' › ')
 
   return (
-    <li className="rounded-md border border-rule-2 p-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <Link to={`/master/products/${product.id}`} className="vx-focus rounded-xs font-medium text-ink hover:text-accent-text hover:underline">
-          {product.name}
-        </Link>
-        <span className="text-xs text-muted">
-          {stageLabel(product, line.stageId)}
-          {line.processId ? ` › ${processLabel(product, line.processId)}` : ''}
-        </span>
+    <li className="flex flex-wrap items-start gap-3 rounded-md border border-rule-2 px-4 py-3 text-sm">
+      <div className="min-w-0 flex-1">
+        <p className="font-medium text-ink">{product.name}</p>
+        <p className="mt-0.5 text-ink-2">
+          {where ? `Used for ${where}` : 'Used in this product'}
+          {material.kind === 'sheet'
+            ? line.cutLengthMm && line.cutWidthMm
+              ? ` · cut piece ${fromMm(line.cutLengthMm, u)} × ${fromMm(line.cutWidthMm, u)} ${u} · ${pieces} piece${pieces === 1 ? '' : 's'} per product`
+              : ' · cut size not entered yet'
+            : line.qtyPerPiece !== null
+              ? ` · ${line.qtyPerPiece} ${material.uom} per piece`
+              : ' · quantity per piece not entered yet'}
+        </p>
+        {material.kind === 'sheet' && y && !y.error ? (
+          <p className="mt-0.5 text-xs text-muted">
+            {line.upsOverride !== null ? `${line.upsOverride} pieces per sheet (set in the product)` : `${y.ups} pieces per sheet`} · {y.yieldPct.toFixed(0)}% of the sheet used
+          </p>
+        ) : null}
       </div>
-
-      <div className="mt-3 grid gap-x-3 sm:grid-cols-4">
-        {material.kind === 'quantity' ? (
-          <Field label={`Per piece (${material.uom})`} error={k('qtyPerPiece')}>
-            <NumberInput value={patch.qtyPerPiece} onChange={(v) => setPatch({ ...patch, qtyPerPiece: v ?? NaN })} invalid={!!k('qtyPerPiece')} />
-          </Field>
-        ) : (
-          <>
-            <Field label="Pieces / product" error={k('piecesPerProduct')}>
-              <NumberInput value={patch.piecesPerProduct} onChange={(v) => setPatch({ ...patch, piecesPerProduct: v ?? NaN })} invalid={!!k('piecesPerProduct')} />
-            </Field>
-            <Field label={`Cut length (${u})`} error={k('cutLengthMm')}>
-              <NumberInput value={fromMm(patch.cutLengthMm, u)} onChange={(v) => setPatch({ ...patch, cutLengthMm: toMmValue(v) })} invalid={!!k('cutLengthMm') || !patch.cutLengthMm} />
-            </Field>
-            <Field label={`Cut width (${u})`} error={k('cutWidthMm')}>
-              <NumberInput value={fromMm(patch.cutWidthMm, u)} onChange={(v) => setPatch({ ...patch, cutWidthMm: toMmValue(v) })} invalid={!!k('cutWidthMm') || !patch.cutWidthMm} />
-            </Field>
-            <Field label="Rotation" as="div">
-              <label className="flex h-9 cursor-pointer items-center gap-2 text-sm text-ink-2">
-                <input type="checkbox" className="h-4 w-4 accent-[var(--color-accent)]" checked={patch.rotationAllowed} onChange={(e) => setPatch({ ...patch, rotationAllowed: e.target.checked })} />
-                Allowed
-              </label>
-            </Field>
-            <Field label="Ups override" error={k('upsOverride')} hint="Blank uses the calculation.">
-              <NumberInput value={patch.upsOverride} onChange={(v) => setPatch({ ...patch, upsOverride: v })} invalid={!!k('upsOverride')} />
-            </Field>
-            <Field label="Override reason" className="sm:col-span-3">
-              <Input value={patch.upsOverrideReason} onChange={(e) => setPatch({ ...patch, upsOverrideReason: e.target.value })} disabled={patch.upsOverride === null} />
-            </Field>
-          </>
-        )}
-      </div>
-
-      {material.kind === 'sheet' ? (
-        <div className={cx('rounded-md px-3 py-2.5 text-sm', y?.error ? 'bg-risk-wash text-risk' : 'bg-surface-2 text-ink-2')} aria-live="polite">
-          {!material.sheetLengthMm || !material.sheetWidthMm
-            ? 'Enter the source sheet size above to calculate ups.'
-            : !y
-              ? 'Enter the cut size to calculate ups.'
-              : y.error ?? (
-                  <>
-                    <strong className="font-semibold text-ink">{y.ups} ups</strong> per sheet — {y.along} along × {y.across} across, {y.orientation === 'rotated' ? 'rotated 90°' : 'as drawn'}. Usable area {fromMm(y.usableLengthMm, u)} × {fromMm(y.usableWidthMm, u)} {u}, {y.yieldPct.toFixed(1)}% of the sheet used. Area limit {y.areaLimit} pieces.
-                    {patch.upsOverride !== null ? <span className="block text-warn">Override in use: {patch.upsOverride} ups.</span> : null}
-                  </>
-                )}
-        </div>
-      ) : null}
-
-      <div className="mt-3 rounded-md border border-rule p-3">
-        <div className="flex flex-wrap items-end gap-3">
-          <Calculator className="mb-2.5 h-4 w-4 text-faint" aria-hidden="true" />
-          <Field label="Sample order qty" className="w-40">
-            <NumberInput value={sampleQty} onChange={setSampleQty} />
-          </Field>
-          {sample?.line && sample.issues.length === 0 ? (
-            <dl className="mb-5 grid flex-1 grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
-              {material.kind === 'sheet' ? (
-                <>
-                  <Pair label="Pieces needed" value={qty(sample.line.piecesNeeded, 0)} />
-                  <Pair label="Net sheets" value={qty(sample.line.netQty, 0)} />
-                  <Pair label={`Wastage (${material.wastagePct}%)`} value={qty(sample.line.wastageQty, 0)} />
-                  <Pair label="Total sheets" value={qty(sample.line.totalQty, 0)} />
-                </>
-              ) : (
-                <>
-                  <Pair label="Net" value={`${qty(sample.line.netQty, 3)} ${material.uom}`} />
-                  <Pair label={`Wastage (${material.wastagePct}%)`} value={qty(sample.line.wastageQty, 3)} />
-                  <Pair label="Total" value={qty(sample.line.totalQty, 3)} />
-                </>
-              )}
-              <Pair label="Purchase" value={`${qty(sample.line.purchaseQty, 3)} × ${sample.line.purchaseUnit}`} />
-              <Pair label="Rounding surplus" value={qty(sample.line.surplusQty, 3)} />
-              <Pair label="Material cost" value={material.price === null ? 'Price missing' : moneyPaise(sample.line.amount)} />
-            </dl>
-          ) : (
-            <p className="mb-5 flex-1 text-xs text-warn">{sample?.issues[0]?.message ?? 'Enter a whole-number quantity.'}</p>
-          )}
-        </div>
-      </div>
-
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <Button
-          size="sm"
-          variant="secondary"
-          disabled={!dirty || materialDirty}
-          onClick={async () => {
-            const r = await run(saveMaterialUsage(product.id, line.id, patch, product.updatedAt))
-            if (!r.ok) {
-              setErrors(r.fieldErrors ?? {})
-              pushToast({ title: 'Usage not saved', message: r.error, level: 'danger' })
-              return
-            }
-            setErrors({})
-            pushToast({ title: `${product.name} usage saved`, message: `Product is now version ${r.value.version}.`, level: 'success' })
-          }}
-        >
-          Save usage
-        </Button>
-        {materialDirty && dirty ? <span className="text-xs text-warn">Save the material first.</span> : dirty ? <Badge tone="amber">Unsaved</Badge> : null}
-      </div>
+      <Link
+        to={`/master/products/${product.id}`}
+        className="vx-focus inline-flex h-9 shrink-0 items-center rounded-md border border-rule-2 px-3 text-sm font-medium text-ink hover:bg-surface-2"
+      >
+        Change in product →
+      </Link>
     </li>
-  )
-}
-
-function Pair({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-faint">{label}</dt>
-      <dd className="vx-code truncate font-medium text-ink">{value}</dd>
-    </div>
   )
 }

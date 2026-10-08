@@ -385,7 +385,7 @@ function validateBomLine(
     if (!positiveOrNull(line.cutLengthMm)) e[key('cutLengthMm')] = 'Cut length must be greater than zero — or leave it blank.'
     if (!positiveOrNull(line.cutWidthMm)) e[key('cutWidthMm')] = 'Cut width must be greater than zero — or leave it blank.'
     if (line.upsOverride !== null && !(Number.isInteger(line.upsOverride) && line.upsOverride >= 1))
-      e[key('upsOverride')] = 'Ups override must be a whole number of at least 1.'
+      e[key('upsOverride')] = 'Pieces per sheet must be a whole number of at least 1.'
   } else if (line.qtyPerPiece !== null && !(isFiniteNumber(line.qtyPerPiece) && line.qtyPerPiece > 0)) {
     e[key('qtyPerPiece')] = 'Consumption per piece must be greater than zero — or leave it blank until it is measured.'
   }

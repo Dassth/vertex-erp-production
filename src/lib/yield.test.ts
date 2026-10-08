@@ -39,12 +39,12 @@ describe('sheet yield (ups)', () => {
 })
 
 describe('ups override validation', () => {
-  it('requires a whole number, a reason and the area limit', () => {
+  it('requires a whole number within the area limit; a note is optional', () => {
     expect(validateUpsOverride(20, 'Nested die-line', base)).toBeNull()
     expect(validateUpsOverride(2.5, 'x', base)).toMatch(/whole number/)
-    expect(validateUpsOverride(20, '  ', base)).toMatch(/why/)
+    expect(validateUpsOverride(20, '  ', base)).toBeNull()
     // usable 990×690 / (200×150) = 22.77 → limit 22
-    expect(validateUpsOverride(23, 'too many', base)).toMatch(/physical area limit of 22/)
+    expect(validateUpsOverride(23, 'too many', base)).toMatch(/at most 22 fit/)
     expect(validateUpsOverride(null, '', base)).toBeNull()
   })
 })

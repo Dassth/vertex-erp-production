@@ -44,11 +44,11 @@ describe('incomplete product drafts can be saved', () => {
     return { seeded, r: saveProduct(draft)(seeded.db, admin()) }
   }
 
-  it('keeps an ups override of 22 with a blank reason, unchanged, and reports it for costing', () => {
+  it('keeps a pieces-per-sheet count of 22 with no note, and costing uses it without asking why', () => {
     const { r } = saveWithSheet({ upsOverride: 22, upsOverrideReason: '' })
     const saved = must(r)
     expect(sheetLine(saved.value)).toMatchObject({ upsOverride: 22, upsOverrideReason: '' })
-    expect(issuesFor(saved.db, saved.value).map((i) => i.message).join(' ')).toMatch(/Record why/)
+    expect(issuesFor(saved.db, saved.value).map((i) => i.message).join(' ')).not.toMatch(/why|reason/i)
   })
 
   it('keeps a cut piece that does not fit the sheet, and missing cut dimensions, exactly as entered', () => {

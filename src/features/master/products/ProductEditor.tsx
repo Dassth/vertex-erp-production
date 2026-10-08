@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   ArrowUp,
   Boxes,
+  CheckCircle2,
   ClipboardList,
   Layers,
   ListPlus,
@@ -163,7 +164,7 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
   const [pickMaterial, setPickMaterial] = useState('')
   const [conflict, setConflict] = useState('')
   const saving = useRef(false)
-  const [savePhase, setSavePhase] = useState<'idle' | 'saving'>('idle')
+  const [savePhase, setSavePhase] = useState<'idle' | 'saving' | 'saving-product'>('idle')
   const dirty = JSON.stringify(draft) !== baseline
   const guard = useUnsavedChanges(dirty, true)
 
@@ -379,12 +380,16 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product?.updatedAt])
 
-  const save = async () => {
+  /**
+   * "Save as draft": keep it as it is and stay here to continue.
+   * "Save product": done — back to the product list (anything still missing keeps it under Drafts).
+   */
+  const save = async (mode: 'draft' | 'product' = 'draft') => {
     if (saving.current) return
     saving.current = true
     // The recovery copy is written first, so a failed or interrupted save loses nothing.
     if (dirty) persistRecovery(draft)
-    setSavePhase('saving')
+    setSavePhase(mode === 'product' ? 'saving-product' : 'saving')
     const incomplete = liveIssues.length > 0
     let r: OpResult<Product>
     try {
@@ -413,12 +418,18 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
     const saved = toDraft(r.value)
     setDraft(saved)
     setBaseline(JSON.stringify(saved))
-    setLastSave(incomplete ? 'draft' : 'complete')
-    pushToast(
-      incomplete
-        ? { title: 'Saved as draft — costing details need attention', message: `${r.value.code} version ${r.value.version}. The missing details are listed under Costing readiness.`, level: 'warn' }
-        : { title: product ? 'Product updated' : 'Product created', message: `${r.value.code} saved as version ${r.value.version}.`, level: 'success' },
-    )
+    setLastSave(incomplete || mode === 'draft' ? 'draft' : 'complete')
+    if (mode === 'product') {
+      pushToast(
+        incomplete
+          ? { title: `${r.value.name} saved`, message: `${liveIssues.length} detail(s) still missing — it stays under Drafts until they are filled.`, level: 'warn' }
+          : { title: `${r.value.name} saved`, message: `${r.value.code} · version ${r.value.version}. Ready for planning and costing.`, level: 'success' },
+      )
+      guard.bypass()
+      navigate('/master/products')
+      return
+    }
+    pushToast({ title: 'Saved as draft', message: `${r.value.code} · version ${r.value.version}.${incomplete ? ' The missing details are listed under Costing readiness.' : ''}`, level: incomplete ? 'warn' : 'success' })
     if (!product) {
       guard.bypass()
       navigate(`/master/products/${r.value.id}`, { replace: true })
@@ -775,8 +786,11 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
               ))}
             </dl>
             <div className="mt-4 flex flex-col gap-2">
-              <Button type="button" icon={<Save className="h-4 w-4" />} onClick={save} loading={savePhase === 'saving'} block>
-                {liveIssues.length ? 'Save draft' : product ? 'Save changes' : 'Create product'}
+              <Button type="button" icon={<CheckCircle2 className="h-4 w-4" />} onClick={() => save('product')} loading={savePhase === 'saving-product'} block>
+                Save product
+              </Button>
+              <Button type="button" variant="secondary" icon={<Save className="h-4 w-4" />} onClick={() => save('draft')} loading={savePhase === 'saving'} block>
+                Save as draft
               </Button>
               <p className="text-center text-xs text-muted" aria-live="polite">
                 {dirty
@@ -1059,7 +1073,7 @@ function MaterialLineEditor({
         ) : (
           <>
             <Field label="Cut pieces per product" error={k('piecesPerProduct')}>
-              <NumberInput value={line.piecesPerProduct} onChange={(v) => onChange({ piecesPerProduct: v })} placeholder="From the approved cut list" invalid={!!k('piecesPerProduct')} />
+              <NumberInput value={line.piecesPerProduct} onChange={(v) => onChange({ piecesPerProduct: v })} placeholder="1 (blank = 1)" invalid={!!k('piecesPerProduct')} />
             </Field>
             <Field label={`Cut size L × W (${unit})`} error={k('cutLengthMm') ?? k('cutWidthMm')} as="div">
               <div className="flex gap-2">
@@ -1077,21 +1091,21 @@ function MaterialLineEditor({
                   {!material.sheetLengthMm || !material.sheetWidthMm
                     ? 'Sheet size not set in Master → Costing yet.'
                     : !yieldResult
-                      ? 'Enter the cut size to calculate ups.'
+                      ? 'Enter the cut size to see how many pieces fit on one sheet.'
                       : yieldResult.error
                         ? <span className="text-risk">{yieldResult.error}</span>
-                        : `${yieldResult.ups} ups per sheet (${yieldResult.along} × ${yieldResult.across}${yieldResult.orientation === 'rotated' ? ', rotated' : ''}) · ${yieldResult.yieldPct.toFixed(1)}% of sheet used`}
+                        : `${yieldResult.ups} pieces fit on one sheet (${yieldResult.along} × ${yieldResult.across}${yieldResult.orientation === 'rotated' ? ', rotated' : ''}) · ${yieldResult.yieldPct.toFixed(1)}% of sheet used`}
                 </p>
                 <button type="button" className="vx-focus rounded-xs text-sm font-medium text-accent-text hover:underline" aria-expanded={overrideOpen} onClick={() => setOverrideOpen((v) => !v)}>
-                  {overrideOpen ? 'Hide yield override' : 'Override yield…'}
+                  {overrideOpen ? 'Use the calculated count' : 'Different count per sheet?…'}
                 </button>
               </div>
               {overrideOpen ? (
                 <div className="mt-3 grid gap-x-3 rounded-md bg-surface-2 p-3 sm:grid-cols-3">
-                  <Field label="Ups override" error={k('upsOverride')} hint="For nested or irregular layouts.">
+                  <Field label="Pieces per sheet" error={k('upsOverride')} hint="Only if your die layout fits a different number. Blank = calculated.">
                     <NumberInput value={line.upsOverride} onChange={(v) => onChange({ upsOverride: v })} invalid={!!k('upsOverride')} />
                   </Field>
-                  <Field label="Reason" className="sm:col-span-2">
+                  <Field label="Note (optional)" className="sm:col-span-2">
                     <Input value={line.upsOverrideReason} onChange={(e) => onChange({ upsOverrideReason: e.target.value })} placeholder="e.g. Interlocking die-line from vendor layout…" />
                   </Field>
                 </div>

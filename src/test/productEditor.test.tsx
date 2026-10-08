@@ -66,22 +66,28 @@ describe('product editor drafts', () => {
 
     // Saving a half-filled product as a draft works: stages and processes left unnamed are numbered,
     // rates and times stay blank — nothing typed is refused or lost.
-    await user.click(screen.getByRole('button', { name: 'Save draft' }))
-    expect((await screen.findAllByText('Saved as draft — costing details need attention', {}, { timeout: 5000 })).length).toBeGreaterThanOrEqual(2)
+    await user.click(screen.getByRole('button', { name: 'Save as draft' }))
+    expect((await screen.findAllByText('Saved as draft — costing details need attention', {}, { timeout: 5000 })).length).toBeGreaterThanOrEqual(1)
     await waitFor(() => expect(stored().products.filter((p) => p.name === 'Draft jewel box')).toHaveLength(1))
     const saved = stored().products.find((p) => p.name === 'Draft jewel box')!
     expect(saved.stages.map((st) => st.name)).toEqual(['Printing', 'Stage 2', 'Stage 3'])
     expect(saved.stages[1].processes[0].name).toBe('Process 1')
     expect(saved.stages[0].processes[0]).toMatchObject({ rate: null, setupCharge: null, setupHours: null, runHoursPer1000: null })
-    // The recovery copy is removed once the save call has returned.
+    await waitFor(() => expect(draftKeys()).toEqual([]), { timeout: 5000 })
     await waitFor(() => expect(draftKeys()).toHaveLength(0), { timeout: 5000 })
 
     // Saving again updates the same product (once the editor has switched to the saved record).
     await screen.findByRole('heading', { name: 'Draft jewel box' }, { timeout: 5000 })
     await user.type(screen.getByLabelText(/Category/), 'Jewellery box')
-    await user.click(screen.getByRole('button', { name: 'Save draft' }))
+    await user.click(screen.getByRole('button', { name: 'Save as draft' }))
     await waitFor(() => expect(stored().products.find((p) => p.id === saved.id)!.category).toBe('Jewellery box'))
     expect(stored().products.filter((p) => p.name === 'Draft jewel box')).toHaveLength(1)
+
+    // "Save product" saves and returns to the product list.
+    await user.type(screen.getByLabelText(/HSN/), '4819')
+    await user.click(screen.getByRole('button', { name: 'Save product' }))
+    await waitFor(() => expect(stored().products.find((p) => p.id === saved.id)!.hsn).toBe('4819'))
+    await screen.findByRole('heading', { name: 'Products' }, { timeout: 5000 })
   }, 60000)
 
   it('keeps separate recovery copies for two new products and discards only after confirmation', async () => {

@@ -165,8 +165,8 @@ export function jobCard(db: VertexDB, planId: string, mode: JobCardMode = 'live'
       }))
     : (product?.materials ?? []).map((m) => {
         const mat = db.materials.find((x) => x.id === m.materialId)
-        const each = mat?.kind === 'sheet' ? (m.piecesPerProduct !== null ? `${n(m.piecesPerProduct)} cut piece(s)` : 'Cut list pending') : m.qtyPerPiece !== null ? `${n(m.qtyPerPiece)} ${mat?.uom ?? ''}` : 'Not measured'
-        const total = mat?.kind === 'sheet' ? (m.piecesPerProduct !== null ? `${n(m.piecesPerProduct * plan.quantity)} cut pieces` : '—') : m.qtyPerPiece !== null ? `${n(m.qtyPerPiece * plan.quantity)} ${mat?.uom ?? ''}` : '—'
+        const each = mat?.kind === 'sheet' ? `${n(m.piecesPerProduct ?? 1)} cut piece(s)` : m.qtyPerPiece !== null ? `${n(m.qtyPerPiece)} ${mat?.uom ?? ''}` : 'Not measured'
+        const total = mat?.kind === 'sheet' ? `${n((m.piecesPerProduct ?? 1) * plan.quantity)} cut pieces` : m.qtyPerPiece !== null ? `${n(m.qtyPerPiece * plan.quantity)} ${mat?.uom ?? ''}` : '—'
         return { code: mat?.code ?? '', name: mat?.name ?? 'Material removed', usedIn: place(m.stageId, m.processId), perPiece: each, required: total, issue: '' }
       })
 

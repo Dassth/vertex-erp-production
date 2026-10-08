@@ -102,8 +102,8 @@ export function materialConfigIssues(m: Material): string[] {
 export function usageConfigIssues(line: ProductMaterial, m: Material): string[] {
   const out: string[] = []
   if (m.kind === 'sheet') {
-    if (line.piecesPerProduct === null) out.push('Cut pieces per product not entered')
-    else if (!(line.piecesPerProduct > 0)) out.push('Cut pieces per product must be greater than zero')
+    // Blank means one cut piece per product — the usual case.
+    if (line.piecesPerProduct !== null && !(line.piecesPerProduct > 0)) out.push('Cut pieces per product must be greater than zero')
     if (!(line.cutLengthMm && line.cutLengthMm > 0) || !(line.cutWidthMm && line.cutWidthMm > 0))
       out.push('Cut-piece size missing')
     if (m.sheetLengthMm && m.sheetWidthMm && line.cutLengthMm && line.cutWidthMm) {
@@ -218,7 +218,7 @@ export function computeOrderCosting(args: {
 
     if (m.kind === 'sheet') {
       const ready =
-        m.sheetLengthMm && m.sheetWidthMm && bom.cutLengthMm && bom.cutWidthMm && bom.piecesPerProduct !== null && bom.piecesPerProduct > 0
+        m.sheetLengthMm && m.sheetWidthMm && bom.cutLengthMm && bom.cutWidthMm && (bom.piecesPerProduct ?? 1) > 0
       if (ready) {
         const input = {
           sheetLengthMm: m.sheetLengthMm!,
@@ -246,7 +246,7 @@ export function computeOrderCosting(args: {
             : y.yieldPct,
         }
         if (ups > 0) {
-          line.piecesNeeded = q * bom.piecesPerProduct!
+          line.piecesNeeded = q * (bom.piecesPerProduct ?? 1)
           line.netQty = ceilSafe(line.piecesNeeded / ups)
           line.wastageQty = ceilSafe((line.netQty * wastagePct) / 100)
           line.totalQty = line.netQty + line.wastageQty

@@ -128,14 +128,15 @@ export function validateUpsOverride(
   input: YieldInput,
 ): string | null {
   if (override === null) return null
-  if (!Number.isInteger(override) || override < 1) return 'Ups override must be a whole number of at least 1.'
-  if (!reason.trim()) return 'Record why the calculated layout is being overridden.'
+  if (!Number.isInteger(override) || override < 1) return 'Pieces per sheet must be a whole number of at least 1.'
+  // A note on why is welcome but never required.
+  void reason
   const invalid = validateYieldInput({ ...input, cutGapMm: 0 })
   if (invalid) return invalid
   const usable = (input.sheetLengthMm - 2 * input.edgeMarginMm) * (input.sheetWidthMm - 2 * input.edgeMarginMm)
   const limit = Math.floor((usable + EPS) / (input.cutLengthMm * input.cutWidthMm))
   if (override > limit)
-    return `Ups override ${override} exceeds the physical area limit of ${limit} pieces for this sheet.`
+    return `${override} pieces cannot fit on this sheet — at most ${limit} fit by area.`
   return null
 }
 
