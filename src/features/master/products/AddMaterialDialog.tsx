@@ -24,7 +24,24 @@ export type UsageInput = Pick<ProductMaterial, 'stageId' | 'processId' | 'cutLen
 
 const blankUsage = (): UsageInput => ({ stageId: null, processId: null, cutLengthMm: null, cutWidthMm: null, piecesPerProduct: 1, qtyPerPiece: null, rotationAllowed: true })
 
-export function AddMaterialDialog({ open, stages, onClose, onAdd }: { open: boolean; stages: ProductStage[]; onClose: () => void; onAdd: (m: Material, usage: UsageInput) => void }) {
+/**
+ * `mode="product"` (default): pick or create, plus how the product uses it.
+ * `mode="registry"` (Master → Materials): create a material on its own — only its setup is asked.
+ */
+export function AddMaterialDialog({
+  open,
+  stages = [],
+  mode = 'product',
+  onClose,
+  onAdd,
+}: {
+  open: boolean
+  stages?: ProductStage[]
+  mode?: 'product' | 'registry'
+  onClose: () => void
+  onAdd: (m: Material, usage: UsageInput) => void
+}) {
+  const registry = mode === 'registry'
   const { db, run, pushToast } = useStore()
   const listId = useId()
   const searchRef = useRef<HTMLInputElement>(null)
@@ -32,7 +49,7 @@ export function AddMaterialDialog({ open, stages, onClose, onAdd }: { open: bool
   const [listOpen, setListOpen] = useState(false)
   const [active, setActive] = useState(0)
   const [picked, setPicked] = useState<Material | null>(null)
-  const [creating, setCreating] = useState(false)
+  const [creating, setCreating] = useState(registry)
   const [mat, setMat] = useState<MaterialDraft>(() => blankMaterialDraft('sheet'))
   const [usage, setUsage] = useState<UsageInput>(blankUsage)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -50,7 +67,7 @@ export function AddMaterialDialog({ open, stages, onClose, onAdd }: { open: bool
     setListOpen(false)
     setActive(0)
     setPicked(null)
-    setCreating(false)
+    setCreating(registry)
     setMat(blankMaterialDraft('sheet'))
     setUsage(blankUsage())
     setErrors({})
@@ -105,7 +122,7 @@ export function AddMaterialDialog({ open, stages, onClose, onAdd }: { open: bool
         return
       }
       onAdd(r.value, usage)
-      pushToast({ title: `${r.value.name} created and added`, message: r.value.price === null ? 'Its price can be added later.' : undefined, level: 'success' })
+      pushToast({ title: registry ? `${r.value.name} created` : `${r.value.name} created and added`, message: r.value.price === null ? 'Its price can be added later.' : undefined, level: 'success' })
       close()
     } finally {
       setBusy(false)
@@ -123,8 +140,8 @@ export function AddMaterialDialog({ open, stages, onClose, onAdd }: { open: bool
       onClose={close}
       size="lg"
       pinnedFooter
-      title="Add material"
-      subtitle="Search an existing material, or create a new one — everything is asked here."
+      title={registry ? 'New material' : 'Add material'}
+      subtitle={registry ? 'Set it up once — price, sheet size, wastage. Products can then use it.' : 'Choose an existing material, or create a new one — everything is asked here.'}
       icon={<Boxes className="h-5 w-5" />}
       footer={
         <>
@@ -132,13 +149,26 @@ export function AddMaterialDialog({ open, stages, onClose, onAdd }: { open: bool
             Cancel
           </Button>
           <Button icon={<Check className="h-4 w-4" />} loading={busy} onClick={() => void finish()}>
-            {creating ? 'Create & add to product' : 'Add to product'}
+            {registry ? 'Create material' : creating ? 'Create & add to product' : 'Add to product'}
           </Button>
         </>
       }
     >
       <div className="space-y-5 text-sm">
         {/* 1. Which material */}
+        {registry ? null : creating ? (
+          <button
+            type="button"
+            className="vx-focus rounded-xs text-sm font-medium text-accent-text hover:underline"
+            onClick={() => {
+              setCreating(false)
+              setListOpen(true)
+              searchRef.current?.focus()
+            }}
+          >
+            ← Choose an existing material instead
+          </button>
+        ) : (
         <div className="relative">
           <Field label="Material" required hint="Type to search, or click to see the whole list.">
             <div className="relative">
@@ -173,7 +203,7 @@ export function AddMaterialDialog({ open, stages, onClose, onAdd }: { open: bool
                   } else if (e.key === 'Enter' && listOpen) {
                     e.preventDefault()
                     if (options[active]) choose(options[active])
-                    else if (query.trim()) startNew()
+                    else startNew()
                   } else if (e.key === 'Escape' && listOpen) {
                     e.stopPropagation()
                     setListOpen(false)
@@ -202,7 +232,7 @@ export function AddMaterialDialog({ open, stages, onClose, onAdd }: { open: bool
                   </span>
                 </li>
               ))}
-              {query.trim() && !exact ? (
+              {!exact ? (
                 <li
                   role="option"
                   aria-selected={active === options.length}
@@ -213,13 +243,24 @@ export function AddMaterialDialog({ open, stages, onClose, onAdd }: { open: bool
                   }}
                 >
                   <Plus className="h-4 w-4" aria-hidden="true" />
-                  Create new material “{query.trim()}”
+                  {query.trim() ? `Create new material “${query.trim()}”` : 'Create a new material…'}
                 </li>
               ) : null}
-              {!options.length && !query.trim() ? <li className="px-3 py-2 text-muted">No materials yet — type a name to create the first one.</li> : null}
+              {!options.length && !query.trim() ? <li className="px-3 py-2 text-muted">No materials yet.</li> : null}
             </ul>
           ) : null}
         </div>
+
+        )}
+
+        {!registry && !creating ? (
+          <div className="flex flex-wrap items-center gap-3 rounded-md border border-dashed border-rule-2 px-3 py-2.5">
+            <span className="text-muted">Not in the list?</span>
+            <Button size="sm" variant="secondary" icon={<Plus className="h-3.5 w-3.5" />} onClick={startNew}>
+              Create a new material{query.trim() && !exact && !picked ? ` “${query.trim()}”` : ''}
+            </Button>
+          </div>
+        ) : null}
 
         {picked ? (
           <p className="rounded-md bg-ok-wash px-3 py-2 text-ok ring-1 ring-inset ring-ok-edge">
@@ -319,7 +360,7 @@ export function AddMaterialDialog({ open, stages, onClose, onAdd }: { open: bool
         ) : null}
 
         {/* 3. How this product uses it */}
-        {kind ? (
+        {registry ? null : kind ? (
           <fieldset className="rounded-md border border-rule-2 p-4">
             <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-muted">In this product</legend>
             <div className="grid gap-x-4 sm:grid-cols-2">

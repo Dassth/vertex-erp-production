@@ -1,6 +1,6 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { BadgeIndianRupee, Boxes, CircleSlash, Settings2, TriangleAlert } from 'lucide-react'
+import { BadgeIndianRupee, Boxes, CircleSlash, Plus, Settings2, TriangleAlert } from 'lucide-react'
 import { useStore } from '../../../store/store'
 import { PRICING_BASIS_LABEL, pricedUnitLabel } from '../../../lib/costing'
 import { fromMm } from '../../../lib/yield'
@@ -10,6 +10,7 @@ import { LinkButton, PageHeader, StatStrip, StatTile, useDocumentTitle } from '.
 import { materialRows } from '../masterSelectors'
 import type { MaterialRow } from '../masterSelectors'
 import { MaterialDrawer } from './MaterialDrawer'
+import { AddMaterialDialog } from '../products/AddMaterialDialog'
 import { DefaultsPanel, ProcessChargesPanel } from './ConfigPanels'
 
 type Tab = 'materials' | 'charges' | 'defaults'
@@ -19,7 +20,8 @@ const PAGE_SIZE = 25
 
 export function MasterCostingPage() {
   useDocumentTitle('Master · Materials')
-  const { db } = useStore()
+  const { db, can } = useStore()
+  const [adding, setAdding] = useState(false)
   const [params, setParams] = useSearchParams()
   const tab = (params.get('tab') ?? 'materials') as Tab
   const filter = (params.get('filter') ?? 'all') as Filter
@@ -93,11 +95,27 @@ export function MasterCostingPage() {
           </>
         }
         icon={<BadgeIndianRupee className="h-4 w-4" />}
+        actions={
+          can('master') ? (
+            <Button icon={<Plus className="h-4 w-4" />} onClick={() => setAdding(true)}>
+              Add material…
+            </Button>
+          ) : null
+        }
+      />
+      <AddMaterialDialog
+        open={adding}
+        mode="registry"
+        onClose={() => setAdding(false)}
+        onAdd={(m) => {
+          setAdding(false)
+          update({ tab: 'materials', q: null, filter: null, material: m.id })
+        }}
       />
 
       <StatStrip className="grid-cols-2 lg:grid-cols-4">
         <StatTile label="Materials" value={String(rows.length)} icon={<Boxes className="h-4 w-4" />} tone="indigo" hint="From all products" onClick={() => update({ tab: 'materials', filter: 'all', page: null })} active={tab === 'materials' && filter === 'all'} />
-        <StatTile label="Price missing" value={String(counts.missing)} icon={<TriangleAlert className="h-4 w-4" />} tone="red" hint="Blocks order costing" onClick={() => update({ tab: 'materials', filter: 'missing-price', page: null })} active={tab === 'materials' && filter === 'missing-price'} />
+        <StatTile label="Price missing" value={String(counts.missing)} icon={<TriangleAlert className="h-4 w-4" />} tone="amber" hint="Counted as zero until set" onClick={() => update({ tab: 'materials', filter: 'missing-price', page: null })} active={tab === 'materials' && filter === 'missing-price'} />
         <StatTile label="Needs configuration" value={String(counts.config)} icon={<Settings2 className="h-4 w-4" />} tone="amber" hint="Sheet size, cut size, pack…" onClick={() => update({ tab: 'materials', filter: 'needs-config', page: null })} active={tab === 'materials' && filter === 'needs-config'} />
         <StatTile label="Unused" value={String(counts.unused)} icon={<CircleSlash className="h-4 w-4" />} tone="slate" hint="Not linked to any product" onClick={() => update({ tab: 'materials', filter: 'unused', page: null })} active={tab === 'materials' && filter === 'unused'} />
       </StatStrip>
@@ -116,7 +134,7 @@ export function MasterCostingPage() {
         <Card className="vx-anim-up overflow-hidden">
           <CardHead
             title="Material register"
-            subtitle={`${filtered.length} of ${rows.length} · materials appear here automatically when added to a product`}
+            subtitle={`${filtered.length} of ${rows.length} · add one here with “Add material…”, or from inside a product`}
             actions={
               <div className="flex flex-wrap items-center gap-2">
                 <SearchInput value={q} onChange={(v) => update({ q: v, page: null })} placeholder="Search material, code, product…" className="w-full sm:w-64" />

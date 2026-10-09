@@ -129,7 +129,7 @@ function MaterialEditor({ material, onDirty, onDeleted }: { material: Material; 
         <section>
           <h3 className="vx-smallcaps text-ink">Price & purchase</h3>
           <div className="mt-3 grid gap-x-4 sm:grid-cols-3">
-            <Field label="Price ₹" error={errors.price} hint={draft.price === null ? 'Not set — blocks costing.' : draft.price === 0 ? 'Explicitly free.' : `per ${pricedUnitLabel(preview)}`}>
+            <Field label="Price ₹" error={errors.price} hint={draft.price === null ? 'Not set yet — counted as zero in costing.' : draft.price === 0 ? 'Explicitly free.' : `per ${pricedUnitLabel(preview)}`}>
               <NumberInput value={draft.price} onChange={(v) => set({ price: v })} invalid={!!errors.price || draft.price === null} autoFocus />
             </Field>
             <Field label="Pricing basis" error={errors.pricingBasis}>
