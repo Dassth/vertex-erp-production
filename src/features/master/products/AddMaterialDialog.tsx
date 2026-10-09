@@ -60,7 +60,6 @@ export function AddMaterialDialog({
     () => db.materials.filter((m) => m.active && (!term || m.name.toLowerCase().includes(term) || m.code.toLowerCase().includes(term))).slice(0, 60),
     [db.materials, term],
   )
-  const exact = db.materials.some((m) => m.name.trim().toLowerCase() === term)
 
   const reset = () => {
     setQuery('')
@@ -170,7 +169,8 @@ export function AddMaterialDialog({
           </button>
         ) : (
         <div className="relative">
-          <Field label="Material" required hint="Type to search, or click to see the whole list.">
+          <div className="flex flex-wrap items-start gap-3">
+          <Field label="Choose an existing material" required hint="Type to search, or click to see the whole list." className="min-w-[14rem] flex-1">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" aria-hidden="true" />
               <Input
@@ -186,6 +186,7 @@ export function AddMaterialDialog({
                 placeholder="e.g. Duplex board 350…"
                 onFocus={() => setListOpen(true)}
                 onClick={() => setListOpen(true)}
+                onBlur={() => setListOpen(false)}
                 onChange={(e) => {
                   setQuery(e.target.value)
                   setListOpen(true)
@@ -196,14 +197,13 @@ export function AddMaterialDialog({
                   if (e.key === 'ArrowDown') {
                     e.preventDefault()
                     setListOpen(true)
-                    setActive((i) => Math.min(i + 1, options.length))
+                    setActive((i) => Math.min(i + 1, Math.max(0, options.length - 1)))
                   } else if (e.key === 'ArrowUp') {
                     e.preventDefault()
                     setActive((i) => Math.max(i - 1, 0))
                   } else if (e.key === 'Enter' && listOpen) {
                     e.preventDefault()
                     if (options[active]) choose(options[active])
-                    else startNew()
                   } else if (e.key === 'Escape' && listOpen) {
                     e.stopPropagation()
                     setListOpen(false)
@@ -212,8 +212,17 @@ export function AddMaterialDialog({
               />
             </div>
           </Field>
+          <div className="flex flex-col">
+            <span className="vx-mono-label mb-1.5" aria-hidden="true">
+              Or
+            </span>
+            <Button variant="secondary" icon={<Plus className="h-4 w-4" />} onClick={startNew} className="h-10">
+              Create new material
+            </Button>
+          </div>
+          </div>
           {listOpen ? (
-            <ul id={listId} role="listbox" className="absolute inset-x-0 top-[4.25rem] z-10 max-h-64 overflow-y-auto overscroll-contain rounded-md border border-rule-2 bg-surface shadow-lg">
+            <ul id={listId} role="listbox" className="-mt-2 mb-1 max-h-64 overflow-y-auto overscroll-contain rounded-md border border-rule-2 bg-surface shadow-sm">
               {options.map((m, i) => (
                 <li
                   key={m.id}
@@ -232,35 +241,13 @@ export function AddMaterialDialog({
                   </span>
                 </li>
               ))}
-              {!exact ? (
-                <li
-                  role="option"
-                  aria-selected={active === options.length}
-                  className={cx('flex cursor-pointer items-center gap-2 border-t border-rule px-3 py-2 font-medium text-accent-text', active === options.length ? 'bg-accent-wash' : 'hover:bg-surface-2')}
-                  onMouseDown={(e) => {
-                    e.preventDefault()
-                    startNew()
-                  }}
-                >
-                  <Plus className="h-4 w-4" aria-hidden="true" />
-                  {query.trim() ? `Create new material “${query.trim()}”` : 'Create a new material…'}
-                </li>
-              ) : null}
-              {!options.length && !query.trim() ? <li className="px-3 py-2 text-muted">No materials yet.</li> : null}
+              {!options.length ? <li className="px-3 py-2 text-muted">{query.trim() ? 'No material by this name — use “Create new material”.' : 'No materials yet — use “Create new material”.'}</li> : null}
             </ul>
           ) : null}
         </div>
 
         )}
 
-        {!registry && !creating ? (
-          <div className="flex flex-wrap items-center gap-3 rounded-md border border-dashed border-rule-2 px-3 py-2.5">
-            <span className="text-muted">Not in the list?</span>
-            <Button size="sm" variant="secondary" icon={<Plus className="h-3.5 w-3.5" />} onClick={startNew}>
-              Create a new material{query.trim() && !exact && !picked ? ` “${query.trim()}”` : ''}
-            </Button>
-          </div>
-        ) : null}
 
         {picked ? (
           <p className="rounded-md bg-ok-wash px-3 py-2 text-ok ring-1 ring-inset ring-ok-edge">
@@ -411,7 +398,7 @@ export function AddMaterialDialog({
             </div>
           </fieldset>
         ) : (
-          <p className="text-muted">Choose a material above, or type a new name and pick “Create new material”.</p>
+          <p className="text-muted">Choose a material from the list, or press “Create new material”.</p>
         )}
       </div>
     </Modal>
