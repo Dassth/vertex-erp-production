@@ -571,3 +571,24 @@ describe('revising the price after release', () => {
     expect(reviseCosting(costingId, { ...costing.inputs, discountType: 'percent', discountValue: 150 }, revised.value.updatedAt)(revised.db, admin()).ok).toBe(false)
   })
 })
+
+describe('choosing who and which machine while planning', () => {
+  it('carries the person and machine of each process into the production order', () => {
+    const seeded = seedMaster()
+    const resources = seedResources(seeded.db)
+    let db = resources.db
+    const people = { 'pr-print': resources.personOf('U1'), 'pr-die': resources.personOf('U2'), 'pr-pack': resources.personOf('U2') }
+    const machines = { 'pr-print': resources.machineOf('U1'), 'pr-die': 'manual', 'pr-paste': resources.machineOf('U2') }
+    const p = must(savePlan({ ...plan(db, seeded.customerId, seeded.productId, PROCESS_UNITS), processPeople: people, processMachines: machines })(db, admin()))
+    // Someone of another unit is not kept: pr-pack is in U1, its person is from U2; the U2 machine on pr-paste (U1) too.
+    expect(p.value.processPeople).toEqual({ 'pr-print': resources.personOf('U1'), 'pr-die': resources.personOf('U2') })
+    expect(p.value.processMachines).toEqual({ 'pr-print': resources.machineOf('U1'), 'pr-die': 'manual' })
+    db = must(submitPlan(p.value.id)(p.db, admin())).db
+    const c = must(openCosting(p.value.id)(db, admin()))
+    const order = must(finalizeCosting(c.value.id)(c.db, admin())).value.order
+    const print = processes(order).find((x) => x.name === 'Offset print')!
+    const die = processes(order).find((x) => x.name === 'Die cut')!
+    expect(print).toMatchObject({ responsiblePersonId: resources.personOf('U1'), machineId: resources.machineOf('U1'), noMachineRequired: false })
+    expect(die).toMatchObject({ responsiblePersonId: resources.personOf('U2'), machineId: null, noMachineRequired: true })
+  })
+})

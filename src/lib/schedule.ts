@@ -169,6 +169,9 @@ export interface BuildStagesInput {
   stages: ProductStage[]
   /** Production unit for every product process id. */
   processUnits: Record<string, UnitId>
+  /** Chosen while planning: who handles a process and on which machine ('manual' = none). */
+  processPeople?: Record<string, string>
+  processMachines?: Record<string, string>
   quantity: number
   orderDate: string
   deliveryDate: string
@@ -209,10 +212,10 @@ export function buildJobStages(input: BuildStagesInput): JobStage[] {
         durationHours: dur,
         plannedStart: plannedStart.toISOString(),
         plannedEnd: plannedEnd.toISOString(),
-        responsiblePersonId: null,
-        machineId: null,
+        responsiblePersonId: input.processPeople?.[p.id] ?? null,
+        machineId: input.processMachines?.[p.id] && input.processMachines[p.id] !== 'manual' ? input.processMachines[p.id] : null,
         requiresMachine: !!p.requiresMachine,
-        noMachineRequired: false,
+        noMachineRequired: input.processMachines?.[p.id] === 'manual',
         done: false,
         doneAt: null,
         doneBy: null,

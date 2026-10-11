@@ -49,6 +49,10 @@ export interface PlanDraft {
   instructions: string
   /** Production unit per product process id. */
   processUnits: Record<string, string>
+  /** Person handling each process (optional; must belong to its unit). */
+  processPeople?: Record<string, string>
+  /** Machine for each process (optional; 'manual' = none needed). */
+  processMachines?: Record<string, string>
   expectedUpdatedAt?: string
 }
 
@@ -140,6 +144,20 @@ export function planReadiness(db: VertexDB, plan: Pick<Plan, 'customerId' | 'pro
   return { blocking, warnings }
 }
 
+/** Person and machine per process: kept only when they belong to the unit the process is allocated to. */
+function cleanProcessResources(db: VertexDB, draft: PlanDraft): { processPeople: Record<string, string>; processMachines: Record<string, string> } {
+  const units = cleanProcessUnits(db, draft.productId, draft.processUnits)
+  const processPeople: Record<string, string> = {}
+  const processMachines: Record<string, string> = {}
+  for (const [processId, unitId] of Object.entries(units)) {
+    const person = draft.processPeople?.[processId]
+    if (person && db.people.some((p) => p.id === person && p.unitId === unitId)) processPeople[processId] = person
+    const machine = draft.processMachines?.[processId]
+    if (machine === 'manual' || (machine && db.machines.some((m) => m.id === machine && m.unitId === unitId))) processMachines[processId] = machine
+  }
+  return { processPeople, processMachines }
+}
+
 /** Keep only allocations that still match a process of the chosen product. */
 function cleanProcessUnits(db: VertexDB, productId: string, processUnits: Record<string, string>): Record<string, string> {
   const product = db.products.find((p) => p.id === productId)
@@ -179,6 +197,7 @@ export const savePlan = command(
       options: draft.options.trim(),
       instructions: draft.instructions.trim(),
       processUnits: cleanProcessUnits(db, draft.productId, draft.processUnits),
+      ...cleanProcessResources(db, draft),
     }
     if (!existing) {
       let next = db

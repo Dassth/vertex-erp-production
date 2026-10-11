@@ -54,6 +54,8 @@ function toDraft(p?: Plan): PlanDraft {
       options: '',
       instructions: '',
       processUnits: {},
+      processPeople: {},
+      processMachines: {},
     }
   return {
     id: p.id,
@@ -69,6 +71,8 @@ function toDraft(p?: Plan): PlanDraft {
     options: p.options,
     instructions: p.instructions,
     processUnits: { ...p.processUnits },
+    processPeople: { ...(p.processPeople ?? {}) },
+    processMachines: { ...(p.processMachines ?? {}) },
     expectedUpdatedAt: p.updatedAt,
   }
 }
@@ -439,7 +443,9 @@ function PlanEditor({ plan, scopeId }: { plan?: Plan; scopeId: string }) {
                             <tr>
                               <th className="vx-th">Process</th>
                               <th className="vx-th w-24">Hours</th>
-                              <th className="vx-th w-56">Assigned unit</th>
+                              <th className="vx-th w-48">Assigned unit</th>
+                              <th className="vx-th w-48">Handled by</th>
+                              <th className="vx-th w-48">Machine</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -465,7 +471,14 @@ function PlanEditor({ plan, scopeId }: { plan?: Plan; scopeId: string }) {
                                         value={unitId}
                                         disabled={readOnly}
                                         aria-invalid={!unitId && Object.keys(errors).length > 0 ? true : undefined}
-                                        onChange={(e) => set({ processUnits: { ...draft.processUnits, [process.id]: e.target.value } })}
+                                        onChange={(e) => {
+                                          // Another unit: its own people and machines are chosen again.
+                                          const { [process.id]: _p, ...people } = draft.processPeople ?? {}
+                                          const { [process.id]: _m, ...machines } = draft.processMachines ?? {}
+                                          void _p
+                                          void _m
+                                          set({ processUnits: { ...draft.processUnits, [process.id]: e.target.value }, processPeople: people, processMachines: machines })
+                                        }}
                                       >
                                         <option value="">Select unit…</option>
                                         {db.units.map((u) => (
@@ -475,6 +488,41 @@ function PlanEditor({ plan, scopeId }: { plan?: Plan; scopeId: string }) {
                                         ))}
                                       </Select>
                                     </label>
+                                  </td>
+                                  <td className="vx-td">
+                                    <Select
+                                      aria-label={`Who handles ${process.name}`}
+                                      value={draft.processPeople?.[process.id] ?? ''}
+                                      disabled={readOnly || !unitId}
+                                      onChange={(e) => set({ processPeople: { ...(draft.processPeople ?? {}), [process.id]: e.target.value } })}
+                                    >
+                                      <option value="">{unitId ? 'Choose later' : 'Choose a unit first'}</option>
+                                      {db.people
+                                        .filter((pp) => pp.unitId === unitId && (pp.active || pp.id === draft.processPeople?.[process.id]))
+                                        .map((pp) => (
+                                          <option key={pp.id} value={pp.id}>
+                                            {pp.name}
+                                          </option>
+                                        ))}
+                                    </Select>
+                                  </td>
+                                  <td className="vx-td">
+                                    <Select
+                                      aria-label={`Machine for ${process.name}`}
+                                      value={draft.processMachines?.[process.id] ?? ''}
+                                      disabled={readOnly || !unitId}
+                                      onChange={(e) => set({ processMachines: { ...(draft.processMachines ?? {}), [process.id]: e.target.value } })}
+                                    >
+                                      <option value="">{unitId ? 'Choose later' : 'Choose a unit first'}</option>
+                                      {db.machines
+                                        .filter((mm) => mm.unitId === unitId && (mm.active || mm.id === draft.processMachines?.[process.id]))
+                                        .map((mm) => (
+                                          <option key={mm.id} value={mm.id}>
+                                            {mm.name}
+                                          </option>
+                                        ))}
+                                      {process.requiresMachine ? null : <option value="manual">No machine (manual work)</option>}
+                                    </Select>
                                   </td>
                                 </tr>
                               )

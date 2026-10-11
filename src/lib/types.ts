@@ -373,6 +373,10 @@ export interface Plan extends Stamp {
   instructions: string
   /** Production unit per product PROCESS id — planning's allocation responsibility. */
   processUnits: Record<string, UnitId>
+  /** Who handles each process (a person of its unit), chosen while planning. */
+  processPeople?: Record<string, string>
+  /** The machine for each process (of its unit); 'manual' = no machine needed. */
+  processMachines?: Record<string, string>
   /** Legacy stage-level allocation kept for plans created before process allocation. */
   stageUnits?: Record<string, UnitId>
   status: PlanStatus

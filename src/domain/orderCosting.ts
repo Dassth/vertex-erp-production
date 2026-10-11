@@ -324,6 +324,8 @@ export const finalizeCosting = command(
       stages: buildJobStages({
         stages: snapshot.product.stages,
         processUnits: plan.processUnits,
+        processPeople: plan.processPeople,
+        processMachines: plan.processMachines,
         quantity: plan.quantity,
         orderDate: plan.orderDate,
         deliveryDate: plan.deliveryDate,
