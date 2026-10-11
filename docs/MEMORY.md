@@ -1,0 +1,74 @@
+# Memory
+Append-only log. Newest at the bottom.
+
+## 2026-09-17 - Two storage modes
+- **Context:** The app had to run in a browser demo and on a real server.
+- **Decision / finding:** The same domain commands run in both; in server mode the server re-runs every command inside a transaction and replies only after COMMIT.
+- **Why:** One set of business rules; permissions enforced server-side.
+- **Impact:** `src/domain/*`, `server/api.ts`, `server/service.ts`, `docs/server-storage.md`
+
+## 2026-10-11 - PowerShell 5.1 treats native stderr as an error
+- **Context:** An update failed with "pg_ctl: PID file … does not exist".
+- **Decision / finding:** Native tools run through `Invoke-Program` (relaxed error preference, judged by exit code); stop the DB only when `postmaster.pid` exists.
+- **Why:** Under `$ErrorActionPreference = 'Stop'`, PS 5.1 turns any native stderr line into a terminating error.
+- **Impact:** `installer/setup.ps1`
+
+## 2026-10-11 - Pre-update backup must run as NETWORK SERVICE
+- **Context:** "Your data could not be backed up" during an update.
+- **Decision / finding:** Backup/restore run through a temporary scheduled task as NETWORK SERVICE (`Invoke-AsServer`), with output logged to `logs\setup-{name}.txt`.
+- **Why:** pg_ctl drops admin rights with a restricted token and cannot write files owned by NETWORK SERVICE.
+- **Impact:** `installer/setup.ps1`
+
+## 2026-10-11 - Licence state must be refreshed while logged in
+- **Context:** The suspend popup only appeared at login.
+- **Decision / finding:** `/api/licence` refreshes if stale (10 s); `LicenceGate` polls every 10 s and on focus/visibility change.
+- **Why:** The endpoint was returning a cached state.
+- **Impact:** `server/api.ts`, `src/components/LicenceGate.tsx`
+
+## 2026-10-11 - Missing details never block work
+- **Context:** Customer product files have gaps; validation stopped saving and costing.
+- **Decision / finding:** Missing values become `gap: true` warnings (amber). Finalising accepts them with a tick (`acceptMissing`) and records `missingAtFinalize`. Wrong values are still refused.
+- **Why:** The owner asked that missing data must not stop the flow; small hints show where to fill.
+- **Impact:** `src/lib/costing.ts`, `src/domain/orderCosting.ts`, `src/domain/master.ts`, `OrderCostingPage.tsx`
+
+## 2026-10-11 - Imports fill blanks only
+- **Context:** Importing 80 products from Excel/CSV/PDF.
+- **Decision / finding:** `importProductsFromFile` creates new products or fills blanks on existing ones; it never overwrites.
+- **Why:** Existing customer data must never be lost.
+- **Impact:** `src/domain/imports.ts`, `src/lib/fileTable.ts`, `src/lib/productSheet.ts`
+
+## 2026-10-11 - Drafts live on the server and resume
+- **Context:** Drafts were lost or caused "already exists".
+- **Decision / finding:** Drafts are stored in `vertex_drafts` (plus localStorage); `useNewDraftId` resumes the latest draft (`?fresh=1` starts a new one); leaving keeps the draft, with no discard prompt.
+- **Why:** The owner wants to come back to the same step.
+- **Impact:** `src/lib/unfinished.ts`, `src/lib/useFormDraft.ts`, `src/components/Unfinished.tsx`, `server/service.ts`
+
+## 2026-10-11 - One time and one rate per process
+- **Context:** Voice note: the customer never filled run hours or setup charge, and those fields confused them.
+- **Decision / finding:** A process has one Time (hours) and one Rate (per piece default, or per hour on total hours). The old run-hours/setup fields are hidden but still counted, so old data keeps its cost.
+- **Why:** Simpler entry; old data was test data only, but nothing is deleted.
+- **Impact:** `ProductEditor.tsx`, `src/lib/costing.ts`
+
+## 2026-10-11 - Size scaling from the product's usual size
+- **Context:** The same product is made in different sizes.
+- **Decision / finding:** `product.baseSize` vs `plan.size` gives L/B factors. Sheet cuts scale by L/B; roll/bulk scale by their average; ready-made stays as is; the ups override is cleared. Always go through `planCostingSource`.
+- **Why:** Proportional scaling was approved by the owner (50×50 → 100×100).
+- **Impact:** `src/lib/sizeScale.ts`, `src/domain/orderCosting.ts`, `src/domain/planning.ts`, `PlanEditor.tsx`
+
+## 2026-10-11 - Loans are not income
+- **Context:** The owner wanted debts tracked with a date and a source.
+- **Decision / finding:** Separate `debts` collection. Money out can be "Paid from" a loan (excluded from the cash balance), and EMIs "Pay back" a loan. A loan can't be deleted while it is linked.
+- **Why:** Borrowed money must not inflate income.
+- **Impact:** `src/domain/cashbook.ts`, `src/lib/cashbook.ts`, `src/features/accounts/*`
+
+## 2026-10-11 - Features must be visible where the user looks
+- **Context:** The owner couldn't find Debts or the supplier field.
+- **Decision / finding:** Add a header button ("Loan taken…") and a popup choice, put "Bought from" first in the material drawer, and add a "No supplier" tile/filter.
+- **Why:** A feature hidden in a tab doesn't exist for this user.
+- **Impact:** `AccountsPage.tsx`, `MaterialDrawer.tsx`, `MasterCostingPage.tsx`
+
+## 2026-10-11 - Build environment notes
+- **Context:** The E: drive is nearly full and the dev PC is low on RAM.
+- **Decision / finding:** `node installer/build.mjs --work <dir on C:>` stages the ~300 MB build elsewhere; IExpress is retried once. Run tests with `--maxWorkers=2`.
+- **Why:** IExpress failed with a full disk; Vitest ran out of memory.
+- **Impact:** `installer/build.mjs`, `vite.desktop.config.ts`
