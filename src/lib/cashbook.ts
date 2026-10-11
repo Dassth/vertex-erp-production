@@ -10,7 +10,7 @@
  * All sums are worked in integer paise and returned in rupees.
  * ------------------------------------------------------------------------- */
 
-import type { Invoice, MoneyDirection, MoneyEntry, MoneyMode, PurchaseBill, VertexDB } from './types'
+import type { Debt, Invoice, MoneyDirection, MoneyEntry, MoneyMode, PurchaseBill, VertexDB } from './types'
 import { fromPaise, toPaise } from './costing'
 import { purchaseTotals } from './gst'
 import { fmtDate } from './format'
@@ -73,7 +73,8 @@ export function entriesOfMonth(db: Pick<VertexDB, 'cashbook'>, month: string): M
 /** Balance carried in from every month before `month`, and the balance at its end. */
 export function balances(db: Pick<VertexDB, 'cashbook'>, month: string): { opening: number; closing: number } {
   const all = db.cashbook ?? []
-  const signed = (e: MoneyEntry) => (e.direction === 'in' ? 1 : -1) * toPaise(e.amount)
+  // Own money only: what was paid with a loan's money did not come out of it.
+  const signed = (e: MoneyEntry) => (e.direction === 'in' ? 1 : e.paidFromDebtId ? 0 : -1) * toPaise(e.amount)
   const opening = all.filter((e) => monthOf(e.date) < month).reduce((s, e) => s + signed(e), 0)
   const closing = all.filter((e) => monthOf(e.date) <= month).reduce((s, e) => s + signed(e), 0)
   return { opening: fromPaise(opening), closing: fromPaise(closing) }
@@ -154,6 +155,60 @@ export function monthReportTable(db: Pick<VertexDB, 'cashbook' | 'invoices' | 'p
       { kind: 'grand', cells: line('Total this month', s.moneyIn, s.moneyOut) },
       { kind: 'total', cells: line('This month (in − out)', s.balance, null) },
       { kind: 'total', cells: line('Balance at month end', b.closing, null) },
+    ],
+  }
+}
+
+/* --------------------------------- Debts ---------------------------------- */
+
+/** Rupees already paid back on a loan (optionally leaving out one entry being edited). */
+export function repaidFor(db: Pick<VertexDB, 'cashbook'>, debtId: string, exceptEntryId?: string): number {
+  return (db.cashbook ?? []).filter((m) => m.direction === 'out' && m.repaysDebtId === debtId && m.id !== exceptEntryId).reduce((n, m) => n + toPaise(m.amount), 0) / 100
+}
+
+export interface DebtRow {
+  debt: Debt
+  /** Spent from this loan's money. */
+  used: number
+  /** Paid back. */
+  repaid: number
+  /** Still owed. */
+  outstanding: number
+  /** Borrowed money not spent yet. */
+  unspent: number
+}
+
+export function debtRows(db: Pick<VertexDB, 'cashbook'> & { debts?: Debt[] }): DebtRow[] {
+  return [...(db.debts ?? [])]
+    .sort((a, b) => b.date.localeCompare(a.date) || b.code.localeCompare(a.code))
+    .map((debt) => {
+      const used = (db.cashbook ?? []).filter((m) => m.direction === 'out' && m.paidFromDebtId === debt.id).reduce((n, m) => n + toPaise(m.amount), 0) / 100
+      const repaid = repaidFor(db, debt.id)
+      return { debt, used, repaid, outstanding: (toPaise(debt.amount) - toPaise(repaid)) / 100, unspent: (toPaise(debt.amount) - toPaise(used)) / 100 }
+    })
+}
+
+export function debtsTable(db: Pick<VertexDB, 'cashbook' | 'company'> & { debts?: Debt[] }): ReportTable {
+  const rows = debtRows(db)
+  const sum = (k: 'used' | 'repaid' | 'outstanding') => rows.reduce((n, r) => n + toPaise(r[k]), 0) / 100
+  const borrowed = rows.reduce((n, r) => n + toPaise(r.debt.amount), 0) / 100
+  return {
+    name: 'Debts',
+    internal: true,
+    heading: [db.company.name, 'Debts — money borrowed'],
+    columns: [
+      { label: 'Date', width: 12 },
+      { label: 'No.', width: 11 },
+      { label: 'Borrowed from', width: 24, wrap: true },
+      { label: 'For', width: 26, wrap: true },
+      { label: 'Borrowed', width: 14, numeric: true },
+      { label: 'Spent from it', width: 14, numeric: true },
+      { label: 'Paid back', width: 14, numeric: true },
+      { label: 'Still owed', width: 14, numeric: true },
+    ],
+    rows: [
+      ...rows.map((r) => ({ kind: 'row' as const, cells: [fmtDate(r.debt.date), r.debt.code, r.debt.lender, r.debt.purpose, r.debt.amount, r.used, r.repaid, r.outstanding] })),
+      { kind: 'grand' as const, cells: ['Total', '', '', '', borrowed, sum('used'), sum('repaid'), sum('outstanding')] },
     ],
   }
 }

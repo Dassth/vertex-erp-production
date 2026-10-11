@@ -830,6 +830,40 @@ export interface MoneyEntry extends Stamp {
   /** Cheque, UPI or bank reference. */
   reference: string
   notes: string
+  /** Money out paid with borrowed money: the loan it came from (null = own money / income). */
+  paidFromDebtId?: string | null
+  /** Money out that pays back a loan (EMI, part or full repayment). */
+  repaysDebtId?: string | null
+}
+
+/** Money borrowed: from whom, how much, when and why. Kept apart from income. */
+export interface Debt extends Stamp {
+  id: string
+  /** DBT-0001 */
+  code: string
+  lender: string
+  date: string
+  /** Rupees borrowed. */
+  amount: number
+  purpose: string
+  mode: MoneyMode
+  reference: string
+  notes: string
+}
+
+/** A supplier of materials: who they are and how to reach them. */
+export interface Supplier extends Stamp {
+  id: string
+  /** SUP-0001 */
+  code: string
+  name: string
+  contactPerson: string
+  phone: string
+  email: string
+  address: string
+  gstin: string
+  notes: string
+  active: boolean
 }
 
 /* ----------------------------- Notifications ----------------------------- */
@@ -871,6 +905,8 @@ export type AuditEntity =
   | 'Invoice'
   | 'Purchase'
   | 'Money'
+  | 'Debt'
+  | 'Supplier'
   | 'Account'
   | 'System'
 
@@ -906,6 +942,8 @@ export type CounterKey =
   | 'machine'
   | 'receipt'
   | 'payment'
+  | 'debt'
+  | 'supplier'
 
 export interface VertexDB {
   version: 2
@@ -930,6 +968,10 @@ export interface VertexDB {
   purchases: PurchaseBill[]
   /** Income & expense entries. */
   cashbook: MoneyEntry[]
+  /** Money borrowed (loans). */
+  debts: Debt[]
+  /** Material suppliers. */
+  suppliers: Supplier[]
   notifications: Notification[]
   audit: AuditEntry[]
   counters: Record<CounterKey, number>

@@ -4,7 +4,8 @@ import { addMonths, format, parse } from 'date-fns'
 import { ArrowDownLeft, ArrowUpRight, ChevronLeft, ChevronRight, Download, HandCoins, Pencil, Plus, Scale, Trash2, Wallet } from 'lucide-react'
 import { useStore } from '../../store/store'
 import type { MoneyDirection, MoneyEntry, MoneyMode } from '../../lib/types'
-import { CATEGORIES, CUSTOMER_PAYMENT, MODE_LABEL, MODES, SUPPLIER_PAYMENT, balances, entriesOfMonth, monthReportTable, summarise, sumDue, toCollect, toPay } from '../../lib/cashbook'
+import { CATEGORIES, CUSTOMER_PAYMENT, MODE_LABEL, MODES, SUPPLIER_PAYMENT, balances, debtRows, entriesOfMonth, monthReportTable, summarise, sumDue, toCollect, toPay } from '../../lib/cashbook'
+import { DebtsCard } from './DebtsCard'
 import { cx, fmtDate, moneyPaise } from '../../lib/format'
 import { deleteMoneyEntry, saveMoneyEntry, validateMoney } from '../../domain/cashbook'
 import type { MoneyDraft } from '../../domain/cashbook'
@@ -18,8 +19,8 @@ import { DownloadButton, ExcelButton, moneyMonthDoc, useLatestDb } from '../../c
  * unpaid bills ("To pay"). Month and tab live in the URL.
  * ------------------------------------------------------------------------- */
 
-type Tab = 'entries' | 'collect' | 'pay' | 'summary'
-const TABS: Tab[] = ['entries', 'collect', 'pay', 'summary']
+type Tab = 'entries' | 'collect' | 'pay' | 'debts' | 'summary'
+const TABS: Tab[] = ['entries', 'collect', 'pay', 'debts', 'summary']
 const amountClass = 'text-right tabular-nums'
 
 const blank = (direction: MoneyDirection, over: Partial<MoneyDraft> = {}): MoneyDraft => ({
@@ -49,6 +50,8 @@ const toDraft = (m: MoneyEntry): MoneyDraft => ({
   purchaseId: m.purchaseId,
   reference: m.reference,
   notes: m.notes,
+  paidFromDebtId: m.paidFromDebtId ?? null,
+  repaysDebtId: m.repaysDebtId ?? null,
   expectedUpdatedAt: m.updatedAt,
 })
 
@@ -132,11 +135,14 @@ export function AccountsPage() {
           { value: 'entries', label: 'Entries', count: entries.length },
           { value: 'collect', label: `To collect · ${moneyPaise(sumDue(collect))}`, count: collect.length },
           { value: 'pay', label: `To pay · ${moneyPaise(sumDue(pay))}`, count: pay.length },
+          { value: 'debts', label: 'Debts', count: (db.debts ?? []).length },
           { value: 'summary', label: 'Summary' },
         ]}
       />
 
       {tab === 'entries' ? <EntriesCard entries={entries} monthLabel={monthLabel} month={month} onEdit={(m) => setEditing(toDraft(m))} onDelete={setDeleting} onNew={(d) => setEditing(blank(d))} /> : null}
+
+      {tab === 'debts' ? <DebtsCard /> : null}
 
       {tab === 'collect' ? (
         <Card className="vx-anim-up overflow-hidden">
@@ -418,6 +424,8 @@ function MoneyEditor({ draft, onClose }: { draft: MoneyDraft; onClose: () => voi
     [db.cashbook, d.direction],
   )
   const [newKind, setNewKind] = useState(false)
+  const debts = useMemo(() => debtRows(db), [db])
+  const repays = debts.find((x) => x.debt.id === d.repaysDebtId)
 
   // Documents still due — plus the one this entry already pays, when editing.
   const invoices = useMemo(() => toCollect(db, false, d.id || undefined), [db, d.id])
@@ -567,6 +575,39 @@ function MoneyEditor({ draft, onClose }: { draft: MoneyDraft; onClose: () => voi
         ) : (
           <div className="hidden sm:block" />
         )}
+
+        {!isIn ? (
+          <>
+            <Field label="Paid from" error={errors.paidFromDebtId} hint="Own money (income), or money from a loan.">
+              <Select value={d.paidFromDebtId ?? ''} onChange={(e) => set({ paidFromDebtId: e.target.value || null })}>
+                <option value="">Own money (income)</option>
+                {debts.map((x) => (
+                  <option key={x.debt.id} value={x.debt.id}>
+                    Loan {x.debt.code} · {x.debt.lender} · {moneyPaise(x.unspent)} left
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Pays back a loan?" error={errors.repaysDebtId} hint={repays ? `Still owed ${moneyPaise(repays.outstanding)}` : 'Choose the loan for an EMI or repayment.'}>
+              <Select
+                value={d.repaysDebtId ?? ''}
+                onChange={(e) => {
+                  const x = debts.find((y) => y.debt.id === e.target.value)
+                  set({ repaysDebtId: e.target.value || null, ...(x ? { party: d.party || x.debt.lender, category: kinds.includes('Loan EMI') ? 'Loan EMI' : d.category } : {}) })
+                }}
+              >
+                <option value="">No</option>
+                {debts
+                  .filter((x) => x.outstanding > 0 || x.debt.id === d.repaysDebtId)
+                  .map((x) => (
+                    <option key={x.debt.id} value={x.debt.id}>
+                      {x.debt.code} · {x.debt.lender} · owed {moneyPaise(x.outstanding)}
+                    </option>
+                  ))}
+              </Select>
+            </Field>
+          </>
+        ) : null}
 
         <Field label="Amount (₹)" required error={errors.amount} as="div">
           <NumberInput value={d.amount} onChange={(v) => set({ amount: v ?? NaN })} invalid={!!errors.amount} aria-label="Amount in rupees" inputMode="decimal" placeholder="0.00" />

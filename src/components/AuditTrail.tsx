@@ -19,6 +19,8 @@ const ENTITY_TONE: Record<AuditEntry['entity'], Tone> = {
   Invoice: 'green',
   Purchase: 'amber',
   Money: 'green',
+  Debt: 'amber',
+  Supplier: 'green',
   Account: 'slate',
   System: 'slate',
 }

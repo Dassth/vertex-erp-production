@@ -164,6 +164,20 @@ export const unitTodayDoc = (read: () => VertexDB, unitId: string): PreviewDoc =
   }
 }
 
+/** Any report table as a PDF — the same rows as its Excel file. */
+export const reportTableDoc = (read: () => VertexDB, make: (db: VertexDB) => ReportTable, title: string, fileName: string): PreviewDoc => ({
+  title,
+  fileName,
+  build: async () => {
+    const db = read()
+    const [{ reportTableDefinition }, { renderPdf }] = await Promise.all([import('../lib/pdfDocs'), import('../lib/pdfRender')])
+    const { updatedAt: _u, updatedBy: _b, ...company } = db.company
+    void _u
+    void _b
+    return renderPdf(reportTableDefinition(make(db), company, new Date(), watermarkOn(db.company)))
+  },
+})
+
 /** One month of income & expenses as a PDF — the same rows as its Excel file. */
 export const moneyMonthDoc = (read: () => VertexDB, month: string): PreviewDoc => ({
   title: `Income & expenses ${month}`,
