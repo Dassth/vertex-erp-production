@@ -124,6 +124,60 @@ export const openCosting = command(
   },
 )
 
+/**
+ * The price of a released costing with changed inputs (profit, discount, tax,
+ * extra charges), worked out from what was frozen at release — the same
+ * material prices, sizes, processes and charges — so only the inputs differ.
+ */
+export function revisedResult(snapshot: CostingSnapshot, inputs: CostingInputs, taxLabel: string): CostingResult {
+  return computeOrderCosting({
+    quantity: snapshot.plan.quantity,
+    product: { productId: snapshot.product.id, stages: snapshot.product.stages, materials: snapshot.product.materials },
+    materials: snapshot.product.materials.map((l) => l.material),
+    settings: { processCharges: snapshot.processCharges, taxLabel },
+    inputs,
+  })
+}
+
+/**
+ * Change the price of a costing already released to production. Invoices
+ * already issued keep their price; dispatches from now on use the new one.
+ */
+export const reviseCosting = command(
+  'reviseCosting',
+  (costingId: string, inputs: CostingInputs, expectedUpdatedAt?: string): Op<OrderCosting> =>
+  (db, ctx) => {
+    const denied = requireCapability(ctx, 'costing')
+    if (denied) return denied
+    const costing = db.costings.find((c) => c.id === costingId)
+    if (!costing) return fail('Costing not found.')
+    if (costing.status !== 'Finalized' || !costing.snapshot) return fail(`${costing.code} is not released yet — change it and finalize as usual.`)
+    const stale = staleRecord(costing.code, costing, expectedUpdatedAt)
+    if (stale) return stale
+    const useInputs = deepClone(inputs)
+    const result = revisedResult(costing.snapshot, useInputs, costing.snapshot.result.taxLabel || db.settings.taxLabel)
+    const wrong = result.issues.filter((i) => i.level === 'error' && !i.gap)
+    if (wrong.length) return fail('Correct these values first.', { issues: wrong })
+    const before = costing.snapshot.result
+    const revision = { at: ctx.now.toISOString(), by: ctx.actor.name, fromTotal: before.grandTotal, toTotal: result.grandTotal, fromPerPiece: before.sellingPerPiece, toPerPiece: result.sellingPerPiece }
+    const updated = stampUpdate(
+      { ...costing, inputs: useInputs, snapshot: { ...costing.snapshot, inputs: useInputs, result }, revisions: [...(costing.revisions ?? []), revision] },
+      ctx,
+    )
+    let next: VertexDB = { ...db, costings: db.costings.map((c) => (c.id === costing.id ? updated : c)) }
+    next = audit(next, ctx, {
+      action: 'Costing revised after release',
+      entity: 'Costing',
+      entityId: costing.id,
+      entityLabel: costing.code,
+      field: 'Customer amount',
+      oldValue: `${before.grandTotal.toFixed(2)} (${before.sellingPerPiece.toFixed(2)} / pc)`,
+      newValue: `${result.grandTotal.toFixed(2)} (${result.sellingPerPiece.toFixed(2)} / pc) — applies to dispatches from now on`,
+    })
+    return ok(next, updated)
+  },
+)
+
 export const saveCostingInputs = command(
   'saveCostingInputs',
   (costingId: string, inputs: CostingInputs, expectedUpdatedAt?: string): Op<OrderCosting> =>

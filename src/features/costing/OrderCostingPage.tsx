@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Calculator, CheckCircle2, Download, Eye, Factory, Lock, Plus, Save, Trash2 } from 'lucide-react'
+import { ArrowLeft, Calculator, CheckCircle2, Download, Eye, Factory, Lock, Plus, Save, Trash2, Pencil } from 'lucide-react'
 import { useStore } from '../../store/store'
 import type { ChargeBasis, CostingInputs, CostingResult, OrderCosting, Plan, ProfitMethod } from '../../lib/types'
-import { finalizeCosting, openCosting, planCostingSource, saveCostingInputs } from '../../domain/orderCosting'
+import { finalizeCosting, openCosting, planCostingSource, reviseCosting, revisedResult, saveCostingInputs } from '../../domain/orderCosting'
 import { COST_BASIS_LABEL, computeOrderCosting } from '../../lib/costing'
 import { cx, fmtDate, fmtDateTime, moneyPaise, moneyPrecise, pct, pieces, qty, uid } from '../../lib/format'
 import { Badge, Button, Card, CardHead, ConfirmDialog, EmptyState, Field, IconButton, Input, Select, Skeleton } from '../../components/ui'
@@ -53,7 +53,10 @@ export function OrderCostingPage() {
 function CostingWorkspace({ plan, costing, back }: { plan: Plan; costing: OrderCosting; back: React.ReactNode }) {
   const { db, run, pushToast } = useStore()
   const navigate = useNavigate()
-  const finalized = costing.status === 'Finalized' && !!costing.snapshot
+  const released = costing.status === 'Finalized' && !!costing.snapshot
+  // A released costing can have its price revised: the inputs open again, everything else stays frozen.
+  const [revising, setRevising] = useState(false)
+  const finalized = released && !revising
   const read = useLatestDb()
   const [preview, setPreview] = useState<PreviewDoc | null>(null)
   const [inputs, setInputs] = useState<CostingInputs>(() => structuredClone(costing.inputs))
@@ -91,6 +94,7 @@ function CostingWorkspace({ plan, costing, back }: { plan: Plan; costing: OrderC
 
   const result = useMemo<CostingResult | null>(() => {
     if (finalized) return costing.snapshot!.result
+    if (released) return revisedResult(costing.snapshot!, inputs, costing.snapshot!.result.taxLabel || db.settings.taxLabel)
     if (!product) return null
     return computeOrderCosting({
       quantity: plan.quantity,
@@ -99,7 +103,7 @@ function CostingWorkspace({ plan, costing, back }: { plan: Plan; costing: OrderC
       settings: db.settings,
       inputs,
     })
-  }, [finalized, costing.snapshot, product, plan.quantity, db.materials, db.settings, inputs])
+  }, [finalized, released, costing.snapshot, product, plan.quantity, db.materials, db.settings, inputs])
 
   const set = (patch: Partial<CostingInputs>) => setInputs((i) => ({ ...i, ...patch }))
   const allErrors = result?.issues.filter((i) => i.level === 'error') ?? []
@@ -174,7 +178,19 @@ function CostingWorkspace({ plan, costing, back }: { plan: Plan; costing: OrderC
           <Lock className="h-4 w-4 shrink-0" aria-hidden="true" />
           <span className="min-w-0 flex-1">
             Finalized {fmtDateTime(costing.finalizedAt)} by {costing.finalizedBy}. This is a saved snapshot — later Master price or definition changes do not alter it.
+            {costing.revisions?.length ? ` Price revised ${costing.revisions.length} time(s), last ${fmtDateTime(costing.revisions[costing.revisions.length - 1].at)} by ${costing.revisions[costing.revisions.length - 1].by}.` : ''}
           </span>
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={<Pencil className="h-3.5 w-3.5" />}
+            onClick={() => {
+              setInputs(structuredClone(costing.snapshot!.inputs))
+              setRevising(true)
+            }}
+          >
+            Revise price…
+          </Button>
           {order ? (
             <LinkButton to={`/production?job=${order.id}`} size="sm" variant="secondary" icon={<Factory className="h-3.5 w-3.5" />}>
               {order.code}
@@ -183,7 +199,16 @@ function CostingWorkspace({ plan, costing, back }: { plan: Plan; costing: OrderC
         </div>
       ) : null}
 
-      {conflict && !finalized ? <ConflictNotice message={conflict} onReload={loadLatest} /> : null}
+      {revising ? (
+        <div className="vx-anim-up flex flex-wrap items-center gap-3 rounded-md bg-warn-wash px-4 py-3 text-sm text-warn ring-1 ring-inset ring-warn-edge" role="status">
+          <Pencil className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 flex-1">
+            Revising the price of a released order: change profit, discount, tax or extra charges below. Materials and processes stay as released. Invoices already issued keep their price; dispatches from now on use the new one.
+          </span>
+        </div>
+      ) : null}
+
+      {conflict && !finalized && !revising ? <ConflictNotice message={conflict} onReload={loadLatest} /> : null}
 
       {!result ? (
         <Card>
@@ -193,7 +218,7 @@ function CostingWorkspace({ plan, costing, back }: { plan: Plan; costing: OrderC
         <>
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px] xl:items-start">
             <div className="min-w-0 space-y-6">
-              {!finalized && (errors.length || missing.length || warnings.length || finalizeIssues.length) ? (
+              {!finalized && !revising && (errors.length || missing.length || warnings.length || finalizeIssues.length) ? (
                 <Card className="vx-anim-up p-5">
                   {errors.length || (finalizeIssues.length && !missing.length) ? (
                     <IssueList issues={errors.length ? errors : finalizeIssues} title={`${errors.length || finalizeIssues.length} value(s) must be corrected before finalizing`} />
@@ -348,7 +373,34 @@ function CostingWorkspace({ plan, costing, back }: { plan: Plan; costing: OrderC
 
               <BuildUp result={result} uom={uom} />
 
-              {!finalized ? (
+              {revising ? (
+                <Card className="vx-anim-up p-5">
+                  <div className="flex flex-col gap-2">
+                    <p className="text-sm text-ink-2">
+                      Now {moneyPaise(costing.snapshot!.result.sellingPerPiece)} per piece · {moneyPaise(costing.snapshot!.result.grandTotal)} in total. Revised: {moneyPaise(result.sellingPerPiece)} per piece · {moneyPaise(result.grandTotal)}.
+                    </p>
+                    <Button
+                      icon={<CheckCircle2 className="h-4 w-4" />}
+                      disabled={errors.length > 0}
+                      loading={saving}
+                      onClick={async () => {
+                        if (saving) return
+                        setSaving(true)
+                        const r = await run(reviseCosting(costing.id, inputs, costing.updatedAt))
+                        setSaving(false)
+                        if (!r.ok) return pushToast({ title: 'Price not revised', message: r.error, level: 'danger' })
+                        setRevising(false)
+                        pushToast({ title: 'Price revised', message: `${moneyPaise(r.value.snapshot!.result.sellingPerPiece)} per piece from the next dispatch on.`, level: 'success' })
+                      }}
+                    >
+                      Save revised price
+                    </Button>
+                    <Button variant="ghost" onClick={() => setRevising(false)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </Card>
+              ) : !finalized ? (
                 <Card className="vx-anim-up p-5">
                   <div className="flex flex-col gap-2">
                     <Button

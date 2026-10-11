@@ -559,6 +559,8 @@ export interface OrderCosting extends Stamp {
   finalizedBy: string | null
   snapshot: CostingSnapshot | null
   orderId: string | null
+  /** Price revisions after release: what changed, when and by whom. Invoices already issued keep their price. */
+  revisions?: Array<{ at: string; by: string; fromTotal: number; toTotal: number; fromPerPiece: number; toPerPiece: number }>
 }
 
 /* ------------------------------- Production ------------------------------ */

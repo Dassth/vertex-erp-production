@@ -4,7 +4,7 @@ import type { ProductionOrder, VertexDB } from '../lib/types'
 import { saveMaterial, materialToDraft, deleteProduct, setProductActive } from './master'
 import { cancelPlan, savePlan, submitPlan } from './planning'
 import type { PlanDraft } from './planning'
-import { finalizeCosting, openCosting } from './orderCosting'
+import { finalizeCosting, openCosting, reviseCosting } from './orderCosting'
 import { assignProcessResources, completeProcess, finishOrderProduction, reportProcessProblem, startProcess } from './production'
 import { confirmDispatch, confirmDispatchReceived } from './dispatch'
 import type { DispatchRequest } from './dispatch'
@@ -550,5 +550,24 @@ describe('cumulative invoice summary', () => {
     const { view, st } = summarise(db, a.order.id)
     expect(view.receivedBilled).toBe(issuedTotal)
     expect(st.total).toBe(issuedTotal)
+  })
+})
+
+describe('revising the price after release', () => {
+  it('changes the price for dispatches from now on and keeps invoices already issued', () => {
+    const { db: start, order, costingId } = completedOrder(1000)
+    const first = must(confirmDispatch(req(order.id, 'rv1', 300))(start, admin()))
+    const costing = first.db.costings.find((c) => c.id === costingId)!
+    const before = costing.snapshot!.result.sellingPerPiece
+    const revised = must(reviseCosting(costingId, { ...costing.inputs, profitPct: costing.inputs.profitPct + 10 }, costing.updatedAt)(first.db, admin()))
+    const after = revised.value.snapshot!.result.sellingPerPiece
+    expect(after).toBeGreaterThan(before)
+    expect(revised.value.revisions).toHaveLength(1)
+    // The first invoice is unchanged; the next dispatch uses the revised price.
+    expect(revised.db.invoices[0].total).toBe(first.db.invoices[0].total)
+    const second = must(confirmDispatch(req(order.id, 'rv2', 300))(revised.db, admin()))
+    expect(second.value.invoice.total).toBeGreaterThan(first.value.invoice.total)
+    // Wrong values are still refused.
+    expect(reviseCosting(costingId, { ...costing.inputs, discountType: 'percent', discountValue: 150 }, revised.value.updatedAt)(revised.db, admin()).ok).toBe(false)
   })
 })
