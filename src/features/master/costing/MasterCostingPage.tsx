@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { BadgeIndianRupee, Boxes, CircleSlash, Plus, Settings2, TriangleAlert } from 'lucide-react'
+import { BadgeIndianRupee, Boxes, CircleSlash, Plus, Settings2, TriangleAlert, Truck } from 'lucide-react'
 import { useStore } from '../../../store/store'
 import { PRICING_BASIS_LABEL, pricedUnitLabel } from '../../../lib/costing'
 import { fromMm } from '../../../lib/yield'
@@ -14,7 +14,7 @@ import { AddMaterialDialog } from '../products/AddMaterialDialog'
 import { DefaultsPanel, ProcessChargesPanel } from './ConfigPanels'
 
 type Tab = 'materials' | 'charges' | 'defaults'
-type Filter = 'all' | 'missing-price' | 'needs-config' | 'sheet' | 'quantity' | 'unused' | 'inactive'
+type Filter = 'all' | 'missing-price' | 'needs-config' | 'no-supplier' | 'sheet' | 'quantity' | 'unused' | 'inactive'
 type Sort = 'priority' | 'name' | 'price' | 'updated'
 const PAGE_SIZE = 25
 
@@ -44,6 +44,7 @@ export function MasterCostingPage() {
     missing: rows.filter((r) => r.missingPrice && r.material.active).length,
     config: rows.filter((r) => r.needsConfig && r.material.active).length,
     unused: rows.filter((r) => r.unused).length,
+    noSupplier: rows.filter((r) => !r.material.supplier.trim() && r.material.active).length,
   }
 
   const filtered = useMemo(() => {
@@ -56,6 +57,8 @@ export function MasterCostingPage() {
           return r.missingPrice
         case 'needs-config':
           return r.needsConfig
+        case 'no-supplier':
+          return !m.supplier.trim()
         case 'sheet':
           return m.kind === 'sheet'
         case 'quantity':
@@ -113,10 +116,11 @@ export function MasterCostingPage() {
         }}
       />
 
-      <StatStrip className="grid-cols-2 lg:grid-cols-4">
+      <StatStrip className="grid-cols-2 lg:grid-cols-5">
         <StatTile label="Materials" value={String(rows.length)} icon={<Boxes className="h-4 w-4" />} tone="indigo" hint="From all products" onClick={() => update({ tab: 'materials', filter: 'all', page: null })} active={tab === 'materials' && filter === 'all'} />
         <StatTile label="Price missing" value={String(counts.missing)} icon={<TriangleAlert className="h-4 w-4" />} tone="amber" hint="Counted as zero until set" onClick={() => update({ tab: 'materials', filter: 'missing-price', page: null })} active={tab === 'materials' && filter === 'missing-price'} />
         <StatTile label="Needs configuration" value={String(counts.config)} icon={<Settings2 className="h-4 w-4" />} tone="amber" hint="Sheet size, cut size, pack…" onClick={() => update({ tab: 'materials', filter: 'needs-config', page: null })} active={tab === 'materials' && filter === 'needs-config'} />
+        <StatTile label="No supplier" value={String(counts.noSupplier)} icon={<Truck className="h-4 w-4" />} tone="amber" hint="Who sells it is not set" onClick={() => update({ tab: 'materials', filter: 'no-supplier', page: null })} active={tab === 'materials' && filter === 'no-supplier'} />
         <StatTile label="Unused" value={String(counts.unused)} icon={<CircleSlash className="h-4 w-4" />} tone="slate" hint="Not linked to any product" onClick={() => update({ tab: 'materials', filter: 'unused', page: null })} active={tab === 'materials' && filter === 'unused'} />
       </StatStrip>
 
@@ -142,6 +146,7 @@ export function MasterCostingPage() {
                   <option value="all">All materials</option>
                   <option value="missing-price">Price missing</option>
                   <option value="needs-config">Needs configuration</option>
+                  <option value="no-supplier">No supplier</option>
                   <option value="sheet">Sheet materials</option>
                   <option value="quantity">Quantity materials</option>
                   <option value="unused">Unused</option>
@@ -173,6 +178,7 @@ export function MasterCostingPage() {
                     <th className="vx-th">Material</th>
                     <th className="vx-th">Unit</th>
                     <th className="vx-th">Used by</th>
+                    <th className="vx-th">Supplier</th>
                     <th className="vx-th text-right">Price</th>
                     <th className="vx-th">Pricing basis</th>
                     <th className="vx-th">Sheet · yield · wastage</th>
@@ -204,6 +210,9 @@ export function MasterCostingPage() {
                           ) : (
                             <span className="text-sm text-faint">Not used</span>
                           )}
+                        </td>
+                        <td className="vx-td vx-td-wrap max-w-[200px] text-sm">
+                          {m.supplier.trim() ? <span className="text-ink-2">{m.supplier}</span> : <Badge tone="amber">Not set</Badge>}
                         </td>
                         <td className="vx-td text-right">
                           {m.price === null ? (

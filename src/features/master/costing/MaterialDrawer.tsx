@@ -128,6 +128,29 @@ function MaterialEditor({ material, onDirty, onDeleted }: { material: Material; 
         }}
       >
         <section>
+          <h3 className="vx-smallcaps text-ink">Bought from</h3>
+          <div className="mt-3 grid gap-x-4 sm:grid-cols-2">
+            <Field label="Supplier" hint="Choose from your suppliers, or type a new one — it is added to Master → Suppliers.">
+              <SupplierInput value={draft.supplier} onChange={(v) => set({ supplier: v })} placeholder="Choose or type a supplier…" aria-invalid={!draft.supplier.trim() || undefined} />
+            </Field>
+            {(() => {
+              const sup = (db.suppliers ?? []).find((x) => x.name.trim().toLowerCase() === draft.supplier.trim().toLowerCase())
+              if (!draft.supplier.trim())
+                return <p className="mb-4 self-end rounded-md bg-warn-wash px-3 py-2 text-sm text-warn ring-1 ring-inset ring-warn-edge">Who sells this material? Add the supplier so purchases and reports show it.</p>
+              if (!sup) return <p className="mb-4 self-end text-sm text-muted">New supplier — added to Master → Suppliers when you save.</p>
+              return (
+                <div className="mb-4 self-end text-sm text-ink-2">
+                  {[sup.contactPerson, sup.phone, sup.email].filter(Boolean).join(' · ') || 'No phone or email yet.'}{' '}
+                  <Link to="/master/suppliers" className="vx-focus rounded-xs font-medium text-accent-text hover:underline">
+                    Supplier details
+                  </Link>
+                </div>
+              )
+            })()}
+          </div>
+        </section>
+
+        <section>
           <h3 className="vx-smallcaps text-ink">Price & purchase</h3>
           <div className="mt-3 grid gap-x-4 sm:grid-cols-3">
             <Field label="Price ₹" error={errors.price} hint={draft.price === null ? 'Not set yet — counted as zero in costing.' : draft.price === 0 ? 'Explicitly free.' : `per ${pricedUnitLabel(preview)}`}>
@@ -206,7 +229,7 @@ function MaterialEditor({ material, onDirty, onDeleted }: { material: Material; 
             </div>
             <p className="flex gap-2 rounded-md bg-surface-2 px-3 py-2.5 text-xs leading-relaxed text-ink-2">
               <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-faint" aria-hidden="true" />
-              Ups are calculated for a straight grid: every piece in one orientation (the better of as-drawn or rotated, when rotation is allowed), an edge allowance on all sides and a uniform gap between pieces. Nested, staggered or irregular die-lines are not optimised — use a validated ups override on the product usage for those.
+              Pieces per sheet are worked out on a straight grid: every piece the same way round (as drawn or turned, whichever fits more), the edge allowance kept clear and the cutting gap between pieces. If your die layout fits a different number, enter it in the product's material use (“Different count per sheet?”).
             </p>
           </section>
         ) : null}
@@ -219,9 +242,6 @@ function MaterialEditor({ material, onDirty, onDeleted }: { material: Material; 
             </Field>
             <Field label="Code" error={errors.code}>
               <Input spellCheck={false} value={draft.code} onChange={(e) => set({ code: e.target.value })} aria-invalid={!!errors.code || undefined} />
-            </Field>
-            <Field label="Supplier">
-              <SupplierInput value={draft.supplier} onChange={(v) => set({ supplier: v })} placeholder="Choose or type a new one…" />
             </Field>
             <Field label="Notes">
               <Textarea rows={1} value={draft.notes} onChange={(e) => set({ notes: e.target.value })} />

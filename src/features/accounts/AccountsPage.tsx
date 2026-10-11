@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { addMonths, format, parse } from 'date-fns'
-import { ArrowDownLeft, ArrowUpRight, ChevronLeft, ChevronRight, Download, HandCoins, Pencil, Plus, Scale, Trash2, Wallet } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, ChevronLeft, ChevronRight, Download, HandCoins, Landmark, Pencil, Plus, Scale, Trash2, Wallet } from 'lucide-react'
 import { useStore } from '../../store/store'
 import type { MoneyDirection, MoneyEntry, MoneyMode } from '../../lib/types'
 import { CATEGORIES, CUSTOMER_PAYMENT, MODE_LABEL, MODES, SUPPLIER_PAYMENT, balances, debtRows, entriesOfMonth, monthReportTable, summarise, sumDue, toCollect, toPay } from '../../lib/cashbook'
-import { DebtsCard } from './DebtsCard'
+import { DebtEditor, DebtsCard, blankDebt } from './DebtsCard'
+import type { DebtDraft } from '../../domain/cashbook'
 import { cx, fmtDate, moneyPaise } from '../../lib/format'
 import { deleteMoneyEntry, saveMoneyEntry, validateMoney } from '../../domain/cashbook'
 import type { MoneyDraft } from '../../domain/cashbook'
@@ -63,6 +64,7 @@ export function AccountsPage() {
   const tab = (TABS as string[]).includes(params.get('tab') ?? '') ? (params.get('tab') as Tab) : 'entries'
   const [editing, setEditing] = useState<MoneyDraft | null>(null)
   const [deleting, setDeleting] = useState<MoneyEntry | null>(null)
+  const [loan, setLoan] = useState<DebtDraft | null>(null)
 
   const set = (patch: Record<string, string | null>) => {
     const next = new URLSearchParams(params)
@@ -96,7 +98,7 @@ export function AccountsPage() {
       <PageHeader
         eyebrow="Billing · Money"
         title="Income & Expenses"
-        subtitle="Record every rupee that comes in and goes out. See the balance each month, what customers still owe you, and what you still owe suppliers."
+        subtitle="Record every rupee that comes in and goes out, and every loan taken. See the balance each month, what customers still owe you, what you owe suppliers and what is still owed on loans."
         icon={<Wallet className="h-4 w-4" />}
         actions={
           <div className="flex flex-wrap gap-2">
@@ -105,6 +107,9 @@ export function AccountsPage() {
             </Button>
             <Button variant="secondary" icon={<ArrowUpRight className="h-4 w-4" />} onClick={() => setEditing(blank('out'))}>
               Money out…
+            </Button>
+            <Button variant="secondary" icon={<Landmark className="h-4 w-4" />} onClick={() => setLoan(blankDebt())}>
+              Loan taken…
             </Button>
           </div>
         }
@@ -135,7 +140,7 @@ export function AccountsPage() {
           { value: 'entries', label: 'Entries', count: entries.length },
           { value: 'collect', label: `To collect · ${moneyPaise(sumDue(collect))}`, count: collect.length },
           { value: 'pay', label: `To pay · ${moneyPaise(sumDue(pay))}`, count: pay.length },
-          { value: 'debts', label: 'Debts', count: (db.debts ?? []).length },
+          { value: 'debts', label: `Debts · owed ${moneyPaise(debtRows(db).reduce((n, r) => n + r.outstanding, 0))}`, count: (db.debts ?? []).length },
           { value: 'summary', label: 'Summary' },
         ]}
       />
@@ -287,7 +292,17 @@ export function AccountsPage() {
         </div>
       ) : null}
 
-      {editing ? <MoneyEditor draft={editing} onClose={() => setEditing(null)} /> : null}
+      {editing ? (
+        <MoneyEditor
+          draft={editing}
+          onClose={() => setEditing(null)}
+          onLoan={() => {
+            setEditing(null)
+            setLoan(blankDebt())
+          }}
+        />
+      ) : null}
+      {loan ? <DebtEditor draft={loan} onClose={() => setLoan(null)} /> : null}
 
       <ConfirmDialog
         open={!!deleting}
@@ -407,7 +422,7 @@ function EntriesCard({ entries, month, monthLabel, onEdit, onDelete, onNew }: { 
 /** The choice in the Kind list that lets a new kind be typed. */
 const NEW_KIND = '__new__'
 
-function MoneyEditor({ draft, onClose }: { draft: MoneyDraft; onClose: () => void }) {
+function MoneyEditor({ draft, onClose, onLoan }: { draft: MoneyDraft; onClose: () => void; onLoan: () => void }) {
   const { db, run, pushToast } = useStore()
   const [d, setD] = useState<MoneyDraft>(draft)
   const [touched, setTouched] = useState(false)
@@ -489,10 +504,11 @@ function MoneyEditor({ draft, onClose }: { draft: MoneyDraft; onClose: () => voi
           <div className="sm:col-span-2 mb-2">
             <Segmented
               value={d.direction}
-              onChange={(v) => set({ direction: v, category: v === 'in' ? CUSTOMER_PAYMENT : SUPPLIER_PAYMENT, invoiceId: null, purchaseId: null })}
+              onChange={(v) => (v === 'loan' ? onLoan() : set({ direction: v, category: v === 'in' ? CUSTOMER_PAYMENT : SUPPLIER_PAYMENT, invoiceId: null, purchaseId: null }))}
               options={[
                 { value: 'in', label: 'Money in' },
                 { value: 'out', label: 'Money out' },
+                { value: 'loan', label: 'Loan taken (debt)' },
               ]}
             />
           </div>

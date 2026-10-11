@@ -18,7 +18,7 @@ import { DownloadButton, ExcelButton, reportTableDoc, useLatestDb } from '../../
  * paid back and what is still owed.
  * ------------------------------------------------------------------------- */
 
-const blankDebt = (): DebtDraft => ({ id: '', lender: '', date: format(new Date(), 'yyyy-MM-dd'), amount: NaN, purpose: '', mode: 'bank', reference: '', notes: '' })
+export const blankDebt = (): DebtDraft => ({ id: '', lender: '', date: format(new Date(), 'yyyy-MM-dd'), amount: NaN, purpose: '', mode: 'bank', reference: '', notes: '' })
 const toDraft = (x: Debt): DebtDraft => ({ id: x.id, lender: x.lender, date: x.date, amount: x.amount, purpose: x.purpose, mode: x.mode, reference: x.reference, notes: x.notes, expectedUpdatedAt: x.updatedAt })
 
 export function DebtsCard() {
@@ -118,7 +118,7 @@ export function DebtsCard() {
   )
 }
 
-function DebtEditor({ draft, onClose }: { draft: DebtDraft; onClose: () => void }) {
+export function DebtEditor({ draft, onClose }: { draft: DebtDraft; onClose: () => void }) {
   const { db, run, pushToast } = useStore()
   const [d, setD] = useState<DebtDraft>(draft)
   const [touched, setTouched] = useState(false)
