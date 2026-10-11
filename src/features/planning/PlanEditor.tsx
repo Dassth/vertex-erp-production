@@ -7,13 +7,17 @@ import type { Plan, Priority } from '../../lib/types'
 import type { PlanDraft } from '../../domain/planning'
 import { cancelPlan, planHasContent, planReadiness, returnPlanToDraft, savePlan, setPlanPinned, submitPlan } from '../../domain/planning'
 import { PRIORITIES, processHours, stageHours } from '../../lib/schedule'
-import { cx, fmtDateTime, qty } from '../../lib/format'
+import { cx, fmtDateTime, moneyPaise, qty } from '../../lib/format'
 import { Badge, Button, Card, CardHead, ConfirmDialog, EmptyState, Field, Input, Modal, Select, Textarea } from '../../components/ui'
 import { ConflictNotice, Detail, IssueList, LinkButton, NumberInput, PageHeader, focusFirstInvalid, useDocumentTitle, useUnsavedChanges } from '../../components/page'
 import { PlanStatusBadge } from '../../components/status'
 import { DocumentPreview, DownloadButton, ExcelButton, jobCardDoc, useLatestDb } from '../../components/DocumentPreview'
 import type { PreviewDoc } from '../../components/DocumentPreview'
 import { ResumedNotice, useNewDraftId } from '../../components/Unfinished'
+import { SizeInput } from '../../components/SizeInput'
+import { hasSize, sameSize, sizeFactors, sizeText } from '../../lib/sizeScale'
+import { computeOrderCosting } from '../../lib/costing'
+import { defaultCostingInputs, planCostingSource } from '../../domain/orderCosting'
 import { useFormDraft } from '../../lib/useFormDraft'
 
 export function PlanEditorPage() {
@@ -46,6 +50,7 @@ function toDraft(p?: Plan): PlanDraft {
       priority: 'Normal',
       customerRef: '',
       dimensions: '',
+      size: null,
       options: '',
       instructions: '',
       processUnits: {},
@@ -60,6 +65,7 @@ function toDraft(p?: Plan): PlanDraft {
     priority: p.priority,
     customerRef: p.customerRef,
     dimensions: p.dimensions,
+    size: p.size ?? null,
     options: p.options,
     instructions: p.instructions,
     processUnits: { ...p.processUnits },
@@ -105,9 +111,9 @@ function PlanEditor({ plan, scopeId }: { plan?: Plan; scopeId: string }) {
   const readiness = useMemo(
     () =>
       draft.customerId && draft.productId
-        ? planReadiness(db, { customerId: draft.customerId, productId: draft.productId, productVersion: plan?.productVersion ?? product?.version ?? 0, quantity: q, processUnits: draft.processUnits })
+        ? planReadiness(db, { customerId: draft.customerId, productId: draft.productId, productVersion: plan?.productVersion ?? product?.version ?? 0, quantity: q, processUnits: draft.processUnits, size: draft.size })
         : null,
-    [db, draft.customerId, draft.productId, draft.processUnits, q, plan?.productVersion, product?.version],
+    [db, draft.customerId, draft.productId, draft.processUnits, draft.size, q, plan?.productVersion, product?.version],
   )
 
   const persist = async (thenSubmit: boolean) => {
@@ -158,6 +164,33 @@ function PlanEditor({ plan, scopeId }: { plan?: Plan; scopeId: string }) {
       navigate(`/planning/${r.value.id}`, { replace: true })
     }
   }
+
+  // Sizes to pick from: the product's usual size and every size planned for it before.
+  const sizeChoices = useMemo(() => {
+    if (!product) return []
+    const out: Array<{ size: NonNullable<Plan['size']>; label: string }> = []
+    if (product.baseSize && hasSize(product.baseSize)) out.push({ size: product.baseSize, label: `Usual size — ${sizeText(product.baseSize)}` })
+    for (const p of db.plans) {
+      if (p.productId !== product.id || p.id === plan?.id || !hasSize(p.size)) continue
+      if (out.some((o) => sameSize(o.size, p.size))) continue
+      const who = db.customers.find((c) => c.id === p.customerId)?.company
+      out.push({ size: p.size, label: `${sizeText(p.size)} — ${p.code}${who ? ` · ${who}` : ''}` })
+    }
+    return out
+  }, [db.plans, db.customers, product, plan?.id])
+
+  // What the order size does to the price, against the usual size.
+  const sizeEffect = useMemo(() => {
+    if (!product || !product.baseSize || !hasSize(draft.size) || !q) return ''
+    const f = sizeFactors(product.baseSize, draft.size)
+    if (!f.scaled) return `Usual size — materials and price as set up in Master.`
+    const inputs = defaultCostingInputs(db, product, () => 'size')
+    const at = (size: Plan['size']) =>
+      computeOrderCosting({ quantity: q, product: planCostingSource(db, { size }, product), materials: db.materials, settings: db.settings, inputs })
+    const now = at(draft.size)
+    const usual = at(product.baseSize)
+    return `Cut pieces × ${f.length.toFixed(2)} (length) and × ${f.breadth.toFixed(2)} (breadth). About ${moneyPaise(now.sellingPerPiece)} per piece for this size (usual size ${moneyPaise(usual.sellingPerPiece)}) — costing uses this size.`
+  }, [db, product, draft.size, q])
 
   const customers = db.customers.filter((c) => c.active || c.id === draft.customerId)
   const products = db.products.filter((p) => p.active || p.id === draft.productId)
@@ -291,8 +324,16 @@ function PlanEditor({ plan, scopeId }: { plan?: Plan; scopeId: string }) {
               <Field label="Customer PO / reference">
                 <Input value={draft.customerRef} onChange={(e) => set({ customerRef: e.target.value })} />
               </Field>
-              <Field label="Dimensions">
-                <Input value={draft.dimensions} onChange={(e) => set({ dimensions: e.target.value })} placeholder="e.g. 200 × 150 × 60 mm…" />
+              <Field label="Size of this order (L × B × H)" as="div" className="sm:col-span-2" hint={product?.baseSize ? `Usual size of ${product.name}: ${sizeText(product.baseSize)}. A different size recalculates materials and price in proportion.` : 'Set the usual size in Master → Products to recalculate by size.'}>
+                <SizeInput label="Order size" value={draft.size} onChange={(v) => set({ size: v })} choices={sizeChoices} />
+                {sizeEffect ? (
+                  <p className="mt-2 rounded-md bg-accent-wash px-3 py-2 text-sm text-accent-text" role="status" aria-live="polite">
+                    {sizeEffect}
+                  </p>
+                ) : null}
+              </Field>
+              <Field label="Size notes">
+                <Input value={draft.dimensions} onChange={(e) => set({ dimensions: e.target.value })} placeholder="e.g. window on the lid, inner partition…" />
               </Field>
               <Field label="Options" className="sm:col-span-2">
                 <Input value={draft.options} onChange={(e) => set({ options: e.target.value })} placeholder="e.g. Matt lamination, gold foil logo…" />

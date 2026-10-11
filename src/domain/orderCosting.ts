@@ -3,11 +3,14 @@ import type {
   CostingResult,
   CostingSnapshot,
   OrderCosting,
+  Plan,
   Product,
   ProductionOrder,
   VertexDB,
 } from '../lib/types'
 import { computeOrderCosting } from '../lib/costing'
+import type { CostingSource } from '../lib/costing'
+import { scaleMaterialLines, sizeFactors } from '../lib/sizeScale'
 import { buildJobStages } from '../lib/schedule'
 import {
   audit,
@@ -50,6 +53,19 @@ export function defaultCostingInputs(db: VertexDB, product: Product | undefined,
   }
 }
 
+/**
+ * What costing reads for a plan: the product, with its material uses following
+ * the order's size in proportion from the product's base size (lib/sizeScale).
+ */
+export function planCostingSource(db: Pick<VertexDB, 'materials'>, plan: { size?: Plan['size'] }, product: Product): CostingSource {
+  return {
+    productId: product.id,
+    stages: product.stages,
+    materials: scaleMaterialLines(product.materials, db.materials, sizeFactors(product.baseSize, plan.size)),
+    spec: product.spec,
+  }
+}
+
 /** Live calculation against current Master data (used while the costing is a draft). */
 export function previewCosting(db: VertexDB, costing: OrderCosting): CostingResult | null {
   if (costing.snapshot) return costing.snapshot.result
@@ -58,7 +74,7 @@ export function previewCosting(db: VertexDB, costing: OrderCosting): CostingResu
   if (!plan || !product) return null
   return computeOrderCosting({
     quantity: plan.quantity,
-    product: { productId: product.id, stages: product.stages, materials: product.materials, spec: product.spec },
+    product: planCostingSource(db, plan, product),
     materials: db.materials,
     settings: db.settings,
     inputs: costing.inputs,
@@ -173,9 +189,10 @@ export const finalizeCosting = command(
     const product = db.products.find((p) => p.id === plan.productId)!
     const customer = db.customers.find((c) => c.id === plan.customerId)!
     const useInputs = deepClone(inputs ?? costing.inputs)
+    const source = planCostingSource(db, plan, product)
     const result = computeOrderCosting({
       quantity: plan.quantity,
-      product: { productId: product.id, stages: product.stages, materials: product.materials, spec: product.spec },
+      product: source,
       materials: db.materials,
       settings: db.settings,
       inputs: useInputs,
@@ -203,7 +220,8 @@ export const finalizeCosting = command(
         uom: product.uom,
         version: product.version,
         stages: product.stages,
-        materials: product.materials
+        // The uses at this order's size — what the job card and units cut.
+        materials: source.materials
           .filter((l) => db.materials.some((m) => m.id === l.materialId))
           .map((l) => ({ ...l, material: db.materials.find((m) => m.id === l.materialId)! })),
       },

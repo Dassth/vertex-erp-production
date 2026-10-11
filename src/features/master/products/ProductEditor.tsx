@@ -28,6 +28,7 @@ import { uid } from '../../../lib/format'
 import { useNewDraftId } from '../../../components/Unfinished'
 import { productIssues } from '../masterSelectors'
 import { GstRateSelect } from '../../../components/GstRateSelect'
+import { SizeInput } from '../../../components/SizeInput'
 import { AddMaterialDialog } from './AddMaterialDialog'
 import type { UsageInput } from './AddMaterialDialog'
 import { FillFromFileButton } from './FillFromFileButton'
@@ -59,7 +60,7 @@ export function ProductEditorPage() {
 }
 
 function toDraft(p?: Product): ProductDraft {
-  if (!p) return { code: '', name: '', category: '', description: '', hsn: '', uom: 'pcs', taxPct: null, stages: [], materials: [] }
+  if (!p) return { code: '', name: '', category: '', description: '', hsn: '', uom: 'pcs', taxPct: null, baseSize: null, stages: [], materials: [] }
   return structuredClone({
     id: p.id,
     code: p.code,
@@ -69,6 +70,7 @@ function toDraft(p?: Product): ProductDraft {
     hsn: p.hsn,
     uom: p.uom,
     taxPct: p.taxPct,
+    baseSize: p.baseSize ?? null,
     stages: p.stages,
     materials: p.materials,
     spec: p.spec ?? null,
@@ -528,6 +530,9 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
               </Field>
               <Field label={`${db.settings.taxLabel} rate`} error={err('taxPct')} hint="Choose the rate; “Other rate…” adds a new one to the list.">
                 <GstRateSelect value={draft.taxPct} onChange={(v) => set({ taxPct: v })} defaultPct={db.settings.taxPct} invalid={!!err('taxPct')} />
+              </Field>
+              <Field label="Usual size (L × B × H)" as="div" className="sm:col-span-2 lg:col-span-3" hint="The average finished size the materials below are entered for. A plan for a bigger or smaller box recalculates everything in proportion.">
+                <SizeInput label="Usual size" value={draft.baseSize} onChange={(v) => set({ baseSize: v })} />
               </Field>
               <Field label="Description" className="sm:col-span-2">
                 <Textarea rows={2} value={draft.description} onChange={(e) => set({ description: e.target.value })} />

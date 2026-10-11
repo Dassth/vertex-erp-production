@@ -111,6 +111,14 @@ export interface CompanyProfile {
 /** `sheet` materials are consumed as cut pieces from a source sheet (yield/ups
  *  applies). `quantity` materials are consumed per finished piece. */
 export type MaterialKind = 'sheet' | 'quantity'
+
+/** A box size as entered (length × breadth × height) in its own unit; blank parts are null. */
+export interface ProductSize {
+  length: number | null
+  breadth: number | null
+  height: number | null
+  unit: LengthUnit
+}
 /**
  * What the material physically is — how it is bought and used:
  *   sheet     board / paper, cut into pieces from a sheet (kind 'sheet')
@@ -227,6 +235,8 @@ export interface Product extends Stamp {
   uom: string
   stages: ProductStage[]
   materials: ProductMaterial[]
+  /** The usual (average) finished size the materials and cut sizes were entered for. */
+  baseSize?: ProductSize | null
   /** Product-specific tax rate; `null` uses the Master → Costing default. */
   taxPct: number | null
   active: boolean
@@ -357,6 +367,8 @@ export interface Plan extends Stamp {
   priority: Priority
   customerRef: string
   dimensions: string
+  /** This order's finished size; materials follow it in proportion from the product's base size. */
+  size?: ProductSize | null
   options: string
   instructions: string
   /** Production unit per product PROCESS id — planning's allocation responsibility. */

@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Calculator, CheckCircle2, Download, Eye, Factory, Lock, Plus, Save, Trash2 } from 'lucide-react'
 import { useStore } from '../../store/store'
 import type { ChargeBasis, CostingInputs, CostingResult, OrderCosting, Plan, ProfitMethod } from '../../lib/types'
-import { finalizeCosting, openCosting, saveCostingInputs } from '../../domain/orderCosting'
+import { finalizeCosting, openCosting, planCostingSource, saveCostingInputs } from '../../domain/orderCosting'
 import { COST_BASIS_LABEL, computeOrderCosting } from '../../lib/costing'
 import { cx, fmtDate, fmtDateTime, moneyPaise, moneyPrecise, pct, pieces, qty, uid } from '../../lib/format'
 import { Badge, Button, Card, CardHead, ConfirmDialog, EmptyState, Field, IconButton, Input, Select, Skeleton } from '../../components/ui'
@@ -94,7 +94,7 @@ function CostingWorkspace({ plan, costing, back }: { plan: Plan; costing: OrderC
     if (!product) return null
     return computeOrderCosting({
       quantity: plan.quantity,
-      product: { productId: product.id, stages: product.stages, materials: product.materials },
+      product: planCostingSource(db, plan, product),
       materials: db.materials,
       settings: db.settings,
       inputs,

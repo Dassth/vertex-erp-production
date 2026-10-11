@@ -1,4 +1,4 @@
-import type { CostingIssue, Plan, Priority, VertexDB } from '../lib/types'
+import type { CostingIssue, Plan, Priority, ProductSize, VertexDB } from '../lib/types'
 import { computeOrderCosting } from '../lib/costing'
 import {
   audit,
@@ -16,7 +16,8 @@ import {
   command,
 } from './common'
 import type { Op } from './common'
-import { defaultCostingInputs } from './orderCosting'
+import { defaultCostingInputs, planCostingSource } from './orderCosting'
+import { cleanSize } from './master'
 
 /* ---------------------------------------------------------------------------
  * Plan lifecycle
@@ -42,6 +43,8 @@ export interface PlanDraft {
   priority: Priority
   customerRef: string
   dimensions: string
+  /** This order's finished size; omitted = keep the stored one. */
+  size?: ProductSize | null
   options: string
   instructions: string
   /** Production unit per product process id. */
@@ -79,7 +82,7 @@ export interface PlanReadiness {
 }
 
 /** Everything that must be true before a plan can move to costing, plus advisory master gaps. */
-export function planReadiness(db: VertexDB, plan: Pick<Plan, 'customerId' | 'productId' | 'productVersion' | 'quantity' | 'processUnits'>): PlanReadiness {
+export function planReadiness(db: VertexDB, plan: Pick<Plan, 'customerId' | 'productId' | 'productVersion' | 'quantity' | 'processUnits'> & { size?: Plan['size'] }): PlanReadiness {
   const blocking: CostingIssue[] = []
   const warnings: CostingIssue[] = []
   const product = db.products.find((p) => p.id === plan.productId)
@@ -122,7 +125,7 @@ export function planReadiness(db: VertexDB, plan: Pick<Plan, 'customerId' | 'pro
   if (Number.isInteger(plan.quantity) && plan.quantity > 0) {
     const preview = computeOrderCosting({
       quantity: plan.quantity,
-      product: { productId: product.id, stages: product.stages, materials: product.materials, spec: product.spec },
+      product: planCostingSource(db, plan, product),
       materials: db.materials,
       settings: db.settings,
       inputs: defaultCostingInputs(db, product, () => 'preview'),
@@ -172,6 +175,7 @@ export const savePlan = command(
       priority: draft.priority,
       customerRef: draft.customerRef.trim(),
       dimensions: draft.dimensions.trim(),
+      ...(draft.size !== undefined ? { size: cleanSize(draft.size) } : {}),
       options: draft.options.trim(),
       instructions: draft.instructions.trim(),
       processUnits: cleanProcessUnits(db, draft.productId, draft.processUnits),

@@ -12,6 +12,7 @@ import type {
   ProcessCharge,
   Product,
   ProductMaterial,
+  ProductSize,
   ProductSpec,
   ProductStage,
   ProfitMethod,
@@ -339,6 +340,8 @@ export interface ProductDraft {
   hsn: string
   uom: string
   taxPct: number | null
+  /** Usual (average) finished size. Omitted = keep the stored one. */
+  baseSize?: ProductSize | null
   stages: ProductStage[]
   materials: ProductMaterial[]
   /** Customer specification. Omitted = keep the stored one. */
@@ -452,6 +455,14 @@ function uniqueStageName(stages: ProductDraft['stages'], i: number): string {
   return `Stage ${n}`
 }
 
+/** A size with only positive numbers kept; null when nothing was entered. */
+export function cleanSize(s: ProductSize | null | undefined): ProductSize | null {
+  if (!s) return null
+  const n = (v: number | null) => (v !== null && Number.isFinite(v) && v > 0 ? v : null)
+  const out = { length: n(s.length), breadth: n(s.breadth), height: n(s.height), unit: s.unit }
+  return out.length || out.breadth || out.height ? out : null
+}
+
 function normaliseProduct(d: ProductDraft) {
   return {
     name: d.name.trim(),
@@ -460,6 +471,7 @@ function normaliseProduct(d: ProductDraft) {
     hsn: d.hsn.trim(),
     uom: d.uom.trim(),
     taxPct: d.taxPct,
+    ...(d.baseSize !== undefined ? { baseSize: cleanSize(d.baseSize) } : {}),
     stages: d.stages.map((s, i) => ({
       ...s,
       // Unnamed in a draft: numbered, so it can be found and renamed later.

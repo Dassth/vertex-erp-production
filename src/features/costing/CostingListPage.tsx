@@ -4,7 +4,7 @@ import { Calculator, CheckCircle2, FileClock, IndianRupee, PencilRuler } from 'l
 import { useStore } from '../../store/store'
 import { previewCosting } from '../../domain/orderCosting'
 import { computeOrderCosting } from '../../lib/costing'
-import { defaultCostingInputs } from '../../domain/orderCosting'
+import { defaultCostingInputs, planCostingSource } from '../../domain/orderCosting'
 import { fmtDate, money, moneyShort, pieces } from '../../lib/format'
 import { Badge, Card, CardHead, EmptyState } from '../../components/ui'
 import { LinkButton, PageHeader, StatStrip, StatTile, useDocumentTitle } from '../../components/page'
@@ -26,7 +26,7 @@ export function CostingListPage() {
             : product
               ? computeOrderCosting({
                   quantity: plan.quantity,
-                  product: { productId: product.id, stages: product.stages, materials: product.materials },
+                  product: planCostingSource(db, plan, product),
                   materials: db.materials,
                   settings: db.settings,
                   inputs: defaultCostingInputs(db, product, () => 'x'),
