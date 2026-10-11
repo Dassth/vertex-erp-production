@@ -9,6 +9,7 @@ import { calculateYield, fromMm, toMm } from '../../../lib/yield'
 import { cx } from '../../../lib/format'
 import { Button, Field, Input, Modal, Select } from '../../../components/ui'
 import { NumberInput, focusFirstInvalid } from '../../../components/page'
+import { SupplierInput } from '../../../components/SupplierInput'
 
 /* ---------------------------------------------------------------------------
  * Add a material to a product, in one place:
@@ -351,7 +352,7 @@ export function AddMaterialDialog({
                 </>
               ) : null}
               <Field label="Supplier" className="sm:col-span-2">
-                <Input value={mat.supplier} onChange={(e) => setM({ supplier: e.target.value })} autoComplete="organization" />
+                <SupplierInput value={mat.supplier} onChange={(v) => setM({ supplier: v })} placeholder="Choose or type a new one…" />
               </Field>
             </div>
           </fieldset>

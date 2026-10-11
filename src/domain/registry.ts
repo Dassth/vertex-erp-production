@@ -8,6 +8,7 @@ import './planning'
 import './production'
 import './purchases'
 import './resources'
+import './suppliers'
 import './system'
 
 export { COMMANDS } from './common'

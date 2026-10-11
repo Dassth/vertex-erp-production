@@ -84,6 +84,7 @@ interface NavItem {
 export const MASTER_SECTIONS: NavChild[] = [
   { to: '/master/products', label: 'Products', hint: 'Stages, processes and materials' },
   { to: '/master/costing', label: 'Materials', hint: 'Board, paper and other materials — set up once' },
+  { to: '/master/suppliers', label: 'Suppliers', hint: 'Who sells you materials, and how to reach them' },
   { to: '/master/customers', label: 'Customers', hint: 'Billing, delivery and GST details' },
 ]
 

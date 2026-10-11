@@ -11,6 +11,7 @@ import { Button, Card, CardHead, ConfirmDialog, EmptyState, Field, IconButton, I
 import { NumberInput, StatStrip, StatTile } from '../../components/page'
 import { DownloadButton, ExcelButton, purchaseDoc, useLatestDb } from '../../components/DocumentPreview'
 import type { PreviewDoc } from '../../components/DocumentPreview'
+import { SupplierInput } from '../../components/SupplierInput'
 
 export const HSN_LIST_ID = 'vx-hsn-suggestions'
 const MATERIAL_LIST_ID = 'vx-material-suggestions'
@@ -282,7 +283,14 @@ export function PurchaseEditor({ bill, onClose, onPreview }: { bill: PurchaseBil
     >
       <div className="grid gap-x-4 gap-y-1 sm:grid-cols-2 lg:grid-cols-4">
         <Field label="Supplier name" required error={errors.supplierName} className="lg:col-span-2">
-          <Input name="supplierName" value={d.supplierName} onChange={(e) => set({ supplierName: e.target.value })} placeholder="e.g. Paper Corporation…" />
+          <SupplierInput
+            name="supplierName"
+            value={d.supplierName}
+            onChange={(v) => set({ supplierName: v })}
+            // A known supplier fills its GSTIN and address.
+            onPick={(s) => set({ supplierName: s.name, supplierGstin: d.supplierGstin || s.gstin, supplierAddress: d.supplierAddress || s.address })}
+            placeholder="Choose or type — e.g. Paper Corporation…"
+          />
         </Field>
         <Field label="Supplier GSTIN" error={errors.supplierGstin} hint="First 2 digits = state (33 = Tamil Nadu)">
           <Input name="supplierGstin" value={d.supplierGstin} spellCheck={false} autoComplete="off" onChange={(e) => set({ supplierGstin: e.target.value.toUpperCase() })} placeholder="33ACCPS0708D1Z5…" />

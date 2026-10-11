@@ -34,6 +34,7 @@ import {
   validationFailure,
   command,
 } from './common'
+import { rememberSupplier } from './suppliers'
 import type { Op } from './common'
 
 const nonNeg = (v: number | null) => v === null || (isFiniteNumber(v) && v >= 0)
@@ -219,6 +220,8 @@ export const saveMaterial = command(
         field: 'Price',
         newValue: material.price === null ? 'Not set' : String(material.price),
       })
+      // The supplier joins Master → Suppliers by itself.
+      next = rememberSupplier(next, ctx, material.supplier)
       return ok(next, material)
     }
 
@@ -247,6 +250,7 @@ export const saveMaterial = command(
       oldValue: priceChanged ? (current.price === null ? 'Not set' : String(current.price)) : undefined,
       newValue: priceChanged ? (updated.price === null ? 'Not set' : String(updated.price)) : undefined,
     })
+    next = rememberSupplier(next, ctx, updated.supplier)
     return ok(next, updated)
   },
 )

@@ -17,6 +17,7 @@ import { canOpenPath, landingPath } from './lib/permissions'
 const ProductsPage = lazy(() => import('./features/master/products/ProductsPage').then((m) => ({ default: m.ProductsPage })))
 const ProductEditorPage = lazy(() => import('./features/master/products/ProductEditor').then((m) => ({ default: m.ProductEditorPage })))
 const MasterCostingPage = lazy(() => import('./features/master/costing/MasterCostingPage').then((m) => ({ default: m.MasterCostingPage })))
+const SuppliersPage = lazy(() => import('./features/master/suppliers/SuppliersPage').then((m) => ({ default: m.SuppliersPage })))
 const CustomersPage = lazy(() => import('./features/master/customers/CustomersPage').then((m) => ({ default: m.CustomersPage })))
 const PlanningPage = lazy(() => import('./features/planning/PlanningPage').then((m) => ({ default: m.PlanningPage })))
 const PlanEditorPage = lazy(() => import('./features/planning/PlanEditor').then((m) => ({ default: m.PlanEditorPage })))
@@ -105,6 +106,7 @@ export default function App() {
                     <Route path="products" element={page(<ProductsPage />)} />
                     <Route path="products/:productId" element={page(<ProductEditorPage />)} />
                     <Route path="costing" element={page(<MasterCostingPage />)} />
+                    <Route path="suppliers" element={page(<SuppliersPage />)} />
                     <Route path="customers" element={page(<CustomersPage />)} />
                   </Route>
                   <Route path="planning" element={guarded('planning', <PlanningPage />)} />

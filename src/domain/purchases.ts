@@ -18,6 +18,7 @@ import {
   staleRecord,
   validationFailure,
 } from './common'
+import { rememberSupplier } from './suppliers'
 import type { Op } from './common'
 
 /* ---------------------------------------------------------------------------
@@ -99,6 +100,7 @@ export const savePurchaseBill = command(
           oldValue: net(current),
           newValue: net(updated),
         })
+        next = rememberSupplier(next, ctx, updated.supplierName, { gstin: updated.supplierGstin, address: updated.supplierAddress })
         return ok(next, updated)
       }
 
@@ -115,6 +117,8 @@ export const savePurchaseBill = command(
         field: 'Net amount',
         newValue: net(bill),
       })
+      // The supplier joins Master → Suppliers (or has its empty GSTIN / address filled).
+      next = rememberSupplier(next, ctx, bill.supplierName, { gstin: bill.supplierGstin, address: bill.supplierAddress })
       return ok(next, bill)
     },
 )

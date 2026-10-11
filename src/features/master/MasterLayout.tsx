@@ -2,7 +2,7 @@ import { Outlet } from 'react-router-dom'
 import { SubNav } from '../../components/page'
 import { MASTER_SECTIONS } from '../../components/AppShell'
 
-/** Master has exactly three sections: Products, Costing and Customers. */
+/** Master sections: Products, Materials, Suppliers and Customers. */
 export function MasterLayout() {
   return (
     <div>

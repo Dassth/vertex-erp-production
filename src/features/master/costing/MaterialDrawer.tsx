@@ -11,6 +11,7 @@ import { fmtDateTime } from '../../../lib/format'
 import { Button, ConfirmDialog, Drawer, Field, Input, Select, Textarea } from '../../../components/ui'
 import { ConflictNotice, NumberInput, focusFirstInvalid } from '../../../components/page'
 import { processLabel, stageLabel } from '../masterSelectors'
+import { SupplierInput } from '../../../components/SupplierInput'
 
 export function MaterialDrawer({ materialId, onClose }: { materialId: string | null; onClose: () => void }) {
   const { db } = useStore()
@@ -220,7 +221,7 @@ function MaterialEditor({ material, onDirty, onDeleted }: { material: Material; 
               <Input spellCheck={false} value={draft.code} onChange={(e) => set({ code: e.target.value })} aria-invalid={!!errors.code || undefined} />
             </Field>
             <Field label="Supplier">
-              <Input value={draft.supplier} onChange={(e) => set({ supplier: e.target.value })} />
+              <SupplierInput value={draft.supplier} onChange={(v) => set({ supplier: v })} placeholder="Choose or type a new one…" />
             </Field>
             <Field label="Notes">
               <Textarea rows={1} value={draft.notes} onChange={(e) => set({ notes: e.target.value })} />
