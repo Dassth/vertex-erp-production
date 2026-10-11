@@ -22,6 +22,7 @@ const toDraft = (c?: Customer): CustomerDraft =>
         billingAddress: c.billingAddress,
         deliveryAddress: c.deliveryAddress,
         gstin: c.gstin,
+        unregistered: !!c.unregistered,
         placeOfSupply: c.placeOfSupply,
         paymentTerms: c.paymentTerms,
         notes: c.notes,
@@ -49,7 +50,7 @@ export function CustomersPage() {
   const list = useMemo(
     () =>
       db.customers
-        .filter((c) => (status === 'active' ? c.active : status === 'inactive' ? !c.active : status === 'incomplete' ? !c.gstin || !c.billingAddress : true))
+        .filter((c) => (status === 'active' ? c.active : status === 'inactive' ? !c.active : status === 'incomplete' ? (!c.gstin && !c.unregistered) || !c.billingAddress : true))
         .filter((c) => !q.trim() || `${c.company} ${c.code} ${c.contactPerson} ${c.phone} ${c.email} ${c.gstin}`.toLowerCase().includes(q.trim().toLowerCase()))
         .sort((a, b) => a.company.localeCompare(b.company)),
     [db.customers, q, status],
@@ -75,7 +76,7 @@ export function CustomersPage() {
       <StatStrip className="grid-cols-2 lg:grid-cols-4">
         <StatTile label="Customers" value={String(db.customers.length)} icon={<Users className="h-4 w-4" />} tone="indigo" hint="In the master" onClick={() => set({ status: 'all' })} active={status === 'all'} />
         <StatTile label="Active" value={String(db.customers.filter((c) => c.active).length)} icon={<Building2 className="h-4 w-4" />} tone="green" hint="Selectable in planning" onClick={() => set({ status: 'active' })} active={status === 'active'} />
-        <StatTile label="Incomplete" value={String(db.customers.filter((c) => !c.gstin || !c.billingAddress).length)} icon={<FileWarning className="h-4 w-4" />} tone="amber" hint="GSTIN or billing address" onClick={() => set({ status: 'incomplete' })} active={status === 'incomplete'} />
+        <StatTile label="Incomplete" value={String(db.customers.filter((c) => (!c.gstin && !c.unregistered) || !c.billingAddress).length)} icon={<FileWarning className="h-4 w-4" />} tone="amber" hint="GSTIN or billing address" onClick={() => set({ status: 'incomplete' })} active={status === 'incomplete'} />
         <StatTile label="With orders" value={String(withOrders)} icon={<ReceiptText className="h-4 w-4" />} tone="slate" hint="Referenced by plans" />
       </StatStrip>
 
@@ -112,7 +113,7 @@ export function CustomersPage() {
                           {c.contactPerson ? ` · ${c.contactPerson}` : ''}
                         </span>
                       </span>
-                      {!c.active ? <Badge tone="slate">Inactive</Badge> : !c.gstin ? <Badge tone="amber">No GSTIN</Badge> : null}
+                      {!c.active ? <Badge tone="slate">Inactive</Badge> : c.unregistered ? <Badge tone="slate">URD</Badge> : !c.gstin ? <Badge tone="amber">No GSTIN</Badge> : null}
                     </button>
                   </li>
                 ))}
@@ -251,9 +252,26 @@ function CustomerForm({ customer, onSaved, onClosed }: { customer?: Customer; on
               </Field>
             ) : null}
           </div>
-          <Field label="GSTIN" error={e('gstin')} hint="Optional for unregistered customers.">
-            <Input spellCheck={false} value={draft.gstin} onChange={(ev) => patch({ gstin: ev.target.value.toUpperCase() })} aria-invalid={!!e('gstin') || undefined} placeholder="15-character GSTIN…" />
+          <Field label="GST registration" as="div">
+            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="GST registration">
+              {[
+                { v: false, label: 'Registered (has GSTIN)' },
+                { v: true, label: 'Unregistered (URD)' },
+              ].map((o) => (
+                <label key={o.label} className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm ${!!draft.unregistered === o.v ? 'border-accent bg-accent-wash' : 'border-rule-2 hover:bg-surface-2'}`}>
+                  <input type="radio" name="gst-registration" className="accent-[var(--color-accent)]" checked={!!draft.unregistered === o.v} onChange={() => patch({ unregistered: o.v })} />
+                  {o.label}
+                </label>
+              ))}
+            </div>
           </Field>
+          {draft.unregistered ? (
+            <p className="mb-4 self-center text-sm text-muted">No GSTIN needed — invoices show “Unregistered (URD)”.</p>
+          ) : (
+            <Field label="GSTIN" error={e('gstin')} hint="Can be added later.">
+              <Input spellCheck={false} value={draft.gstin} onChange={(ev) => patch({ gstin: ev.target.value.toUpperCase() })} aria-invalid={!!e('gstin') || undefined} placeholder="15-character GSTIN…" />
+            </Field>
+          )}
           <Field label="Place of supply" hint="State name or 2-digit state code.">
             <Input value={draft.placeOfSupply} onChange={(ev) => patch({ placeOfSupply: ev.target.value })} />
           </Field>

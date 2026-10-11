@@ -23,7 +23,7 @@ export const OPENING_BALANCE = 'Opening balance'
 /** The kinds of money in and out a printing unit meets every month. Any other text may be typed. */
 export const CATEGORIES: Record<MoneyDirection, string[]> = {
   in: [CUSTOMER_PAYMENT, 'Advance from customer', 'Other income', OPENING_BALANCE],
-  out: [SUPPLIER_PAYMENT, 'Salary & wages', 'Electricity', 'Rent', 'Transport', 'Machine repair', 'Raw material (no bill)', 'Office expenses', 'Tax payment', 'Other expense'],
+  out: [SUPPLIER_PAYMENT, 'Salary & wages', 'Electricity', 'Rent', 'Loan EMI', 'Transport', 'Machine repair', 'Raw material (no bill)', 'Office expenses', 'Tax payment', 'Other expense'],
 }
 
 export const MODE_LABEL: Record<MoneyMode, string> = { cash: 'Cash', bank: 'Bank transfer', upi: 'UPI', cheque: 'Cheque' }

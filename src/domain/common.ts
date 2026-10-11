@@ -147,6 +147,7 @@ export function customerSnapshot(c: Customer): CustomerSnapshot {
     billingAddress: c.billingAddress,
     deliveryAddress: c.deliveryAddress || c.billingAddress,
     gstin: c.gstin,
+    ...(c.unregistered ? { unregistered: true } : {}),
     placeOfSupply: c.placeOfSupply,
     paymentTerms: c.paymentTerms,
   }

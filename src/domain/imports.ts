@@ -341,7 +341,7 @@ function fillFromSheet(
       setupHours: zeroOrMore(pr.setupHours),
       runHoursPer1000: zeroOrMore(pr.runHoursPer1000),
       chargeId: null,
-      costBasis: pr.costBasis ?? 'per_1000',
+      costBasis: pr.costBasis ?? 'per_piece',
       rate: zeroOrMore(pr.rate),
       setupCharge: zeroOrMore(pr.setupCharge),
       requiresMachine: false,
@@ -521,7 +521,7 @@ export const importProductsFromFile = command(
           setupHours: zeroOrMore(pr.setupHours),
           runHoursPer1000: zeroOrMore(pr.runHoursPer1000),
           chargeId: null,
-          costBasis: pr.costBasis ?? 'per_1000',
+          costBasis: pr.costBasis ?? 'per_piece',
           rate: zeroOrMore(pr.rate),
           setupCharge: zeroOrMore(pr.setupCharge),
           requiresMachine: false,
@@ -532,7 +532,7 @@ export const importProductsFromFile = command(
           id: ctx.newId('STG'),
           name: 'Production',
           description: 'Added because the file had no processes — replace with the real stages.',
-          processes: [{ id: ctx.newId('PRC'), name: 'Production', description: '', setupHours: null, runHoursPer1000: null, chargeId: null, costBasis: 'per_1000', rate: null, setupCharge: null, requiresMachine: false }],
+          processes: [{ id: ctx.newId('PRC'), name: 'Production', description: '', setupHours: null, runHoursPer1000: null, chargeId: null, costBasis: 'per_piece', rate: null, setupCharge: null, requiresMachine: false }],
         })
 
       const lines: ProductMaterial[] = []

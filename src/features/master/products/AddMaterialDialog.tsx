@@ -1,7 +1,7 @@
 import { useId, useMemo, useRef, useState } from 'react'
 import { Boxes, Check, Plus, Search } from 'lucide-react'
 import { useStore } from '../../../store/store'
-import type { LengthUnit, Material, MaterialKind, ProductMaterial, ProductStage, PricingBasis } from '../../../lib/types'
+import type { LengthUnit, Material, MaterialForm, MaterialKind, ProductMaterial, ProductStage, PricingBasis } from '../../../lib/types'
 import type { MaterialDraft } from '../../../domain/master'
 import { blankMaterialDraft, saveMaterial } from '../../../domain/master'
 import { PRICING_BASIS_LABEL } from '../../../lib/costing'
@@ -22,10 +22,19 @@ import { NumberInput, focusFirstInvalid } from '../../../components/page'
 
 export type UsageInput = Pick<ProductMaterial, 'stageId' | 'processId' | 'cutLengthMm' | 'cutWidthMm' | 'piecesPerProduct' | 'qtyPerPiece' | 'rotationAllowed'>
 
+/** The four kinds of material a box maker buys, and the unit each is usually counted in. */
+export const MATERIAL_FORMS: Array<{ form: MaterialForm; label: string; hint: string; uom: string }> = [
+  { form: 'sheet', label: 'Sheet', hint: 'Board, paper — cut into pieces', uom: 'sheet' },
+  { form: 'roll', label: 'Roll', hint: 'Cut by length — film, ribbon, cloth', uom: 'mtr' },
+  { form: 'readymade', label: 'Ready-made', hint: 'Fitted as it is — magnet, lock, button', uom: 'nos' },
+  { form: 'bulk', label: 'Other', hint: 'By weight or volume — glue, ink', uom: 'kg' },
+]
+
 const blankUsage = (): UsageInput => ({ stageId: null, processId: null, cutLengthMm: null, cutWidthMm: null, piecesPerProduct: 1, qtyPerPiece: null, rotationAllowed: true })
 
 /**
  * `mode="product"` (default): pick or create, plus how the product uses it.
+ * `mode="pick"`: pick or create only — how it is used is asked where it is used (a process).
  * `mode="registry"` (Master → Materials): create a material on its own — only its setup is asked.
  */
 export function AddMaterialDialog({
@@ -37,11 +46,12 @@ export function AddMaterialDialog({
 }: {
   open: boolean
   stages?: ProductStage[]
-  mode?: 'product' | 'registry'
+  mode?: 'product' | 'pick' | 'registry'
   onClose: () => void
   onAdd: (m: Material, usage: UsageInput) => void
 }) {
   const registry = mode === 'registry'
+  const askUsage = mode === 'product'
   const { db, run, pushToast } = useStore()
   const listId = useId()
   const searchRef = useRef<HTMLInputElement>(null)
@@ -50,7 +60,7 @@ export function AddMaterialDialog({
   const [active, setActive] = useState(0)
   const [picked, setPicked] = useState<Material | null>(null)
   const [creating, setCreating] = useState(registry)
-  const [mat, setMat] = useState<MaterialDraft>(() => blankMaterialDraft('sheet'))
+  const [mat, setMat] = useState<MaterialDraft>(() => ({ ...blankMaterialDraft('sheet'), form: 'sheet' }))
   const [usage, setUsage] = useState<UsageInput>(blankUsage)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
@@ -67,7 +77,7 @@ export function AddMaterialDialog({
     setActive(0)
     setPicked(null)
     setCreating(registry)
-    setMat(blankMaterialDraft('sheet'))
+    setMat({ ...blankMaterialDraft('sheet'), form: 'sheet' })
     setUsage(blankUsage())
     setErrors({})
   }
@@ -85,7 +95,7 @@ export function AddMaterialDialog({
     setPicked(null)
     setCreating(true)
     setListOpen(false)
-    setMat({ ...blankMaterialDraft('sheet'), name: query.trim() })
+    setMat({ ...blankMaterialDraft('sheet'), form: 'sheet', name: query.trim() })
   }
 
   const kind: MaterialKind | null = picked ? picked.kind : creating ? mat.kind : null
@@ -148,7 +158,7 @@ export function AddMaterialDialog({
             Cancel
           </Button>
           <Button icon={<Check className="h-4 w-4" />} loading={busy} onClick={() => void finish()}>
-            {registry ? 'Create material' : creating ? 'Create & add to product' : 'Add to product'}
+            {registry ? 'Create material' : creating ? 'Create & add' : 'Add'}
           </Button>
         </>
       }
@@ -266,14 +276,15 @@ export function AddMaterialDialog({
               </Field>
               <Field label="Type" as="div" className="sm:col-span-2">
                 <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Material type">
-                  {(
-                    [
-                      ['sheet', 'Sheet (board, paper)', 'Cut into pieces from a sheet'],
-                      ['quantity', 'Quantity (glue, film, ribbon…)', 'Used by weight, length or count'],
-                    ] as Array<[MaterialKind, string, string]>
-                  ).map(([k, label, hint]) => (
-                    <label key={k} className={cx('flex flex-1 cursor-pointer items-start gap-2 rounded-md border px-3 py-2.5', mat.kind === k ? 'border-accent bg-accent-wash' : 'border-rule-2 hover:bg-surface-2')}>
-                      <input type="radio" name="new-material-kind" className="mt-1 accent-[var(--color-accent)]" checked={mat.kind === k} onChange={() => setMat({ ...blankMaterialDraft(k), name: mat.name, price: mat.price, supplier: mat.supplier })} />
+                  {MATERIAL_FORMS.map(({ form, label, hint, uom }) => (
+                    <label key={form} className={cx('flex min-w-[10rem] flex-1 cursor-pointer items-start gap-2 rounded-md border px-3 py-2.5', (mat.form ?? 'sheet') === form ? 'border-accent bg-accent-wash' : 'border-rule-2 hover:bg-surface-2')}>
+                      <input
+                        type="radio"
+                        name="new-material-form"
+                        className="mt-1 accent-[var(--color-accent)]"
+                        checked={(mat.form ?? 'sheet') === form}
+                        onChange={() => setMat({ ...blankMaterialDraft(form === 'sheet' ? 'sheet' : 'quantity'), ...(form === 'sheet' ? {} : { uom }), form, name: mat.name, price: mat.price, supplier: mat.supplier })}
+                      />
                       <span>
                         <span className="block font-medium text-ink">{label}</span>
                         <span className="block text-xs text-muted">{hint}</span>
@@ -295,8 +306,8 @@ export function AddMaterialDialog({
                   </div>
                 </Field>
               ) : (
-                <Field label="Unit" required error={errors.uom}>
-                  <Input value={mat.uom} onChange={(e) => setM({ uom: e.target.value })} aria-invalid={!!errors.uom || undefined} placeholder="kg, mtr, nos…" />
+                <Field label={mat.form === 'roll' ? 'Measured in' : mat.form === 'readymade' ? 'Counted in' : 'Unit'} required error={errors.uom} hint={mat.form === 'roll' ? 'mtr, cm, ft…' : mat.form === 'readymade' ? 'nos, pair, set…' : 'kg, ltr, gm…'}>
+                  <Input value={mat.uom} onChange={(e) => setM({ uom: e.target.value })} aria-invalid={!!errors.uom || undefined} />
                 </Field>
               )}
               <Field label={`Price ₹ per ${mat.kind === 'sheet' ? 'sheet' : mat.uom || 'unit'}`} error={errors.price} hint="Blank if not known yet.">
@@ -347,7 +358,7 @@ export function AddMaterialDialog({
         ) : null}
 
         {/* 3. How this product uses it */}
-        {registry ? null : kind ? (
+        {!askUsage ? null : kind ? (
           <fieldset className="rounded-md border border-rule-2 p-4">
             <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-muted">In this product</legend>
             <div className="grid gap-x-4 sm:grid-cols-2">

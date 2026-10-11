@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Info, Save } from 'lucide-react'
 import { useStore } from '../../../store/store'
-import type { LengthUnit, Material, PricingBasis, Product, ProductMaterial } from '../../../lib/types'
+import type { LengthUnit, Material, MaterialForm, PricingBasis, Product, ProductMaterial } from '../../../lib/types'
 import type { MaterialDraft } from '../../../domain/master'
-import { deleteMaterial, materialToDraft, saveMaterial, setMaterialActive } from '../../../domain/master'
+import { deleteMaterial, materialForm, materialToDraft, saveMaterial, setMaterialActive } from '../../../domain/master'
 import { PRICING_BASIS_LABEL, pricedUnitLabel } from '../../../lib/costing'
 import { calculateYield, fromMm, toMm } from '../../../lib/yield'
 import { fmtDateTime } from '../../../lib/format'
@@ -25,7 +25,7 @@ export function MaterialDrawer({ materialId, onClose }: { materialId: string | n
         open={!!material}
         onClose={requestClose}
         title={material?.name ?? ''}
-        subtitle={material ? `${material.code} · ${material.kind === 'sheet' ? 'Sheet material' : `Quantity material (${material.uom})`}` : ''}
+        subtitle={material ? `${material.code} · ${{ sheet: 'Sheet material', roll: `Roll (${material.uom})`, readymade: `Ready-made (${material.uom})`, bulk: `By ${material.uom}` }[materialForm(material)]}` : ''}
         width="w-full max-w-3xl"
       >
         {material ? (
@@ -159,9 +159,18 @@ function MaterialEditor({ material, onDirty, onDeleted }: { material: Material; 
               <NumberInput value={draft.purchaseMultiple} onChange={(v) => set({ purchaseMultiple: v ?? NaN })} invalid={!!errors.purchaseMultiple} />
             </Field>
             {draft.kind === 'quantity' ? (
-              <Field label="Unit of measure" required error={errors.uom}>
-                <Input value={draft.uom} onChange={(e) => set({ uom: e.target.value })} aria-invalid={!!errors.uom || undefined} />
-              </Field>
+              <>
+                <Field label="What it is">
+                  <Select value={draft.form && draft.form !== 'sheet' ? draft.form : 'bulk'} onChange={(e) => set({ form: e.target.value as MaterialForm })}>
+                    <option value="roll">Roll — cut by length</option>
+                    <option value="readymade">Ready-made — fitted as it is (magnet, lock…)</option>
+                    <option value="bulk">Other — by weight or volume (glue, ink…)</option>
+                  </Select>
+                </Field>
+                <Field label="Unit of measure" required error={errors.uom}>
+                  <Input value={draft.uom} onChange={(e) => set({ uom: e.target.value })} aria-invalid={!!errors.uom || undefined} />
+                </Field>
+              </>
             ) : null}
           </div>
           <p className="text-xs text-muted">

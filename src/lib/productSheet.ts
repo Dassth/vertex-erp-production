@@ -144,8 +144,9 @@ function basisOf(s: string): CostBasis {
   const t = s.toLowerCase()
   if (/hour|hr/.test(t)) return 'per_hour'
   if (/fixed|lump|job|flat/.test(t)) return 'fixed'
-  if (/piece|pc|each|unit/.test(t) && !/1000|thousand/.test(t)) return 'per_piece'
-  return 'per_1000'
+  if (/1000|thousand|k/.test(t)) return 'per_1000'
+  // Blank or "per piece": rates are per piece unless the file says otherwise.
+  return 'per_piece'
 }
 
 /** The row that names the most known columns is the heading row. */

@@ -9,7 +9,7 @@ import { assignProcessResources, completeProcess, finishOrderProduction, reportP
 import { confirmDispatch, confirmDispatchReceived } from './dispatch'
 import type { DispatchRequest } from './dispatch'
 import { saveCompanyProfile } from './system'
-import { DELIVERY_PENDING_MESSAGE, consolidatedStatement, invoiceDownloadBlock, orderBalance, orderInvoiceSummary, receivedInvoices } from '../lib/billing'
+import { consolidatedStatement, invoiceDownloadBlock, orderBalance, orderInvoiceSummary, receivedInvoices } from '../lib/billing'
 import { toPaise } from '../lib/costing'
 
 const admin = (n = 0) => ctxFor(ADMIN[n])
@@ -468,14 +468,15 @@ describe('cumulative invoice summary', () => {
   }
   const receive = (db: VertexDB, dispatchId: string, n = 0) => must(confirmDispatchReceived(dispatchId)(db, admin(n))).db
 
-  it('covers only shipments confirmed received: 0 → 300 → 300 → 5,300 → 7,300 of 10,000', () => {
+  it('covers every dispatched shipment, confirmed or not: 300 → 5,300 → 7,300 of 10,000', () => {
     const { db: start, order } = completedOrder(10_000)
     let db = start
 
     const d1 = must(confirmDispatch(req(order.id, 'r1', 300, '2026-09-15'))(db, admin()))
     db = d1.db
-    expect(summarise(db, order.id).st.invoices).toHaveLength(0)
-    expect(invoiceDownloadBlock(d1.value.invoice, db.dispatches)).toBe(DELIVERY_PENDING_MESSAGE)
+    expect(summarise(db, order.id).st.invoices).toHaveLength(1)
+    // Downloadable at once: confirming delivery is optional.
+    expect(invoiceDownloadBlock(d1.value.invoice, db.dispatches)).toBeNull()
     expect(summarise(db, order.id).view).toMatchObject({ dispatchedQty: 300, receivedQty: 0, awaitingQty: 300, remainingQty: 9_700 })
 
     db = receive(db, d1.value.dispatch.id)
@@ -484,7 +485,7 @@ describe('cumulative invoice summary', () => {
 
     const d2 = must(confirmDispatch(req(order.id, 'r2', 5_000, '2026-09-16'))(db, admin(1)))
     db = d2.db
-    expect(summarise(db, order.id).st.invoicedQty).toBe(300)
+    expect(summarise(db, order.id).st.invoicedQty).toBe(5_300)
     expect(summarise(db, order.id).view).toMatchObject({ dispatchedQty: 5_300, receivedQty: 300, awaitingQty: 5_000, remainingQty: 4_700 })
 
     db = receive(db, d2.value.dispatch.id, 1)

@@ -111,6 +111,14 @@ export interface CompanyProfile {
 /** `sheet` materials are consumed as cut pieces from a source sheet (yield/ups
  *  applies). `quantity` materials are consumed per finished piece. */
 export type MaterialKind = 'sheet' | 'quantity'
+/**
+ * What the material physically is — how it is bought and used:
+ *   sheet     board / paper, cut into pieces from a sheet (kind 'sheet')
+ *   roll      cut by length from a roll (kind 'quantity', uom e.g. mtr)
+ *   readymade bought ready and fitted as it is — magnet, lock, ribbon tag (kind 'quantity', uom nos)
+ *   bulk      used by weight or volume — glue, ink (kind 'quantity', uom kg / ltr)
+ */
+export type MaterialForm = 'sheet' | 'roll' | 'readymade' | 'bulk'
 
 /**
  * per_unit — price per consumption unit (per sheet, per kg of adhesive, per nos)
@@ -154,6 +162,8 @@ export interface Material extends Stamp {
   thicknessMm?: number | null
   /** Stable identifier when the material came from an import. */
   importKey?: string | null
+  /** How it is bought and used; missing = 'sheet' for sheet materials, 'bulk' otherwise. */
+  form?: MaterialForm
 }
 
 /* ------------------------------- Products -------------------------------- */
@@ -203,6 +213,8 @@ export interface ProductMaterial {
   upsOverride: number | null
   upsOverrideReason: string
   note: string
+  /** Wastage for this use only (e.g. die cutting wastes more than printing); missing/null = the material's own. */
+  wastagePct?: number | null
 }
 
 export interface Product extends Stamp {
@@ -305,6 +317,8 @@ export interface Customer extends Stamp {
   billingAddress: string
   deliveryAddress: string
   gstin: string
+  /** Not registered under GST (URD): no GSTIN is expected, and invoices say so. */
+  unregistered?: boolean
   placeOfSupply: string
   paymentTerms: string
   notes: string
@@ -322,6 +336,7 @@ export type CustomerSnapshot = Pick<
   | 'billingAddress'
   | 'deliveryAddress'
   | 'gstin'
+  | 'unregistered'
   | 'placeOfSupply'
   | 'paymentTerms'
 >

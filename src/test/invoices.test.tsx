@@ -13,7 +13,8 @@ import { savePlan, submitPlan } from '../domain/planning'
 import { finalizeCosting, openCosting } from '../domain/orderCosting'
 import { assignProcessResources, completeProcess } from '../domain/production'
 import { confirmDispatch, confirmDispatchReceived } from '../domain/dispatch'
-import { DocumentBlockedError, invoiceDoc } from '../components/DocumentPreview'
+import { invoiceDoc } from '../components/DocumentPreview'
+import { invoiceDownloadBlock } from '../lib/billing'
 import { saveCompanyProfile } from '../domain/system'
 
 const TEST_PASSWORD = 'disposable-test-pass-1'
@@ -146,10 +147,11 @@ describe('Invoices page', () => {
       expect((screen.getByRole('button', { name: `Download this dispatch invoice — invoice ${inv.number}` }) as HTMLButtonElement).disabled).toBe(false)
   }, 90000)
 
-  it('refuses to build an invoice PDF for a shipment that is not confirmed received', async () => {
+  it('builds an invoice PDF as soon as the shipment is dispatched — confirming delivery is optional', async () => {
     const db = stored()
     const pending = db.invoices[1]
-    await expect(invoiceDoc(pending, () => db).build()).rejects.toBeInstanceOf(DocumentBlockedError)
+    expect(invoiceDownloadBlock(pending, db.dispatches)).toBeNull()
+    expect(invoiceDoc(pending, () => db)).toBeTruthy()
   })
 
 })

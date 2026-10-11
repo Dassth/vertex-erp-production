@@ -211,15 +211,20 @@ export function isReceived(dispatch: Pick<Dispatch, 'receivedAt'> | undefined | 
   return !!dispatch?.receivedAt
 }
 
-/** Null when the invoice may be previewed or downloaded; otherwise the reason it may not. */
+/**
+ * Null when the invoice may be previewed or downloaded; otherwise the reason it may not.
+ * An invoice can be downloaded as soon as its dispatch is saved — confirming delivery is optional.
+ */
 export function invoiceDownloadBlock(invoice: Pick<Invoice, 'dispatchId'>, dispatches: Dispatch[]): string | null {
-  return isReceived(dispatches.find((d) => d.id === invoice.dispatchId)) ? null : DELIVERY_PENDING_MESSAGE
+  void invoice
+  void dispatches
+  return null
 }
 
-/** Invoices of one order whose shipment is dispatched AND confirmed received — what the cumulative summary covers. */
+/** Invoices of one order's dispatches — what the cumulative summary covers (delivery confirmed or not). */
 export function receivedInvoices(orderId: string, dispatches: Dispatch[], invoices: Invoice[]): Invoice[] {
-  const received = new Set(dispatches.filter((d) => d.orderId === orderId && isReceived(d)).map((d) => d.id))
-  return invoices.filter((i) => i.orderId === orderId && received.has(i.dispatchId))
+  const dispatched = new Set(dispatches.filter((d) => d.orderId === orderId).map((d) => d.id))
+  return invoices.filter((i) => i.orderId === orderId && dispatched.has(i.dispatchId))
 }
 
 export interface OrderInvoiceSummary {

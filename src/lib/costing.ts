@@ -63,7 +63,7 @@ const round4 = (value: number): number => Math.round(value * 10000) / 10000
 export const COST_BASIS_LABEL: Record<string, string> = {
   per_1000: 'per 1,000 pcs',
   per_piece: 'per piece',
-  per_hour: 'per run hour',
+  per_hour: 'per hour',
   fixed: 'fixed per order',
   percent: '% of materials + processes',
 }
@@ -213,7 +213,10 @@ export function computeOrderCosting(args: {
       surplusQty: 0,
       amount: 0,
     }
-    const wastagePct = m.wastagePct >= 0 && m.wastagePct < 100 ? m.wastagePct : 0
+    // The wastage of this use (e.g. die cutting) when given, else the material's own.
+    const ownWaste = bom.wastagePct ?? null
+    const wastagePct = ownWaste !== null && ownWaste >= 0 && ownWaste < 100 ? ownWaste : m.wastagePct >= 0 && m.wastagePct < 100 ? m.wastagePct : 0
+    line.wastagePct = wastagePct
     const multiple = m.purchaseMultiple > 0 ? m.purchaseMultiple : 1
 
     if (m.kind === 'sheet') {
@@ -286,8 +289,9 @@ export function computeOrderCosting(args: {
   const processLines: ProcessCostLine[] = []
   for (const stage of product.stages) {
     for (const p of stage.processes) {
-      if (p.setupHours === null) gap(`${stage.name} › ${p.name}: setup time not entered (enter 0 if none).`, productFix)
-      if (p.runHoursPer1000 === null) gap(`${stage.name} › ${p.name}: run time not entered.`, productFix)
+      // One time and one rate per process. Run time and setup charge are no longer asked for;
+      // values entered earlier are kept and still counted, so nothing already entered changes.
+      if (p.setupHours === null) gap(`${stage.name} › ${p.name}: time not entered (enter 0 if none).`, productFix)
       const runHours = (Math.max(0, p.runHoursPer1000 ?? 0) * q) / 1000
       const hours = round2(Math.max(0, p.setupHours ?? 0) + runHours)
       let basis = p.costBasis
@@ -309,12 +313,9 @@ export function computeOrderCosting(args: {
           setupCharge = charge.setupCharge
           if (!charge.active) warn(`Process charge “${charge.name}” is deactivated but still referenced.`, chargeFix)
           if (rate === null) gap(`Process charge “${charge.name}” has no rate.`, chargeFix)
-          if (setupCharge === null) gap(`Process charge “${charge.name}” has no setup charge (enter 0 if none).`, chargeFix)
         }
       } else {
-        if (rate === null) gap(`${stage.name} › ${p.name}: process rate missing (enter 0 if no charge).`, productFix)
-        if (setupCharge === null)
-          gap(`${stage.name} › ${p.name}: setup charge missing (enter 0 if none).`, productFix)
+        if (rate === null) gap(`${stage.name} › ${p.name}: rate not entered (enter 0 if no charge).`, productFix)
       }
       if ((rate !== null && rate < 0) || (setupCharge !== null && setupCharge < 0))
         error(`${stage.name} › ${p.name}: charges cannot be negative.`, productFix)
@@ -326,7 +327,7 @@ export function computeOrderCosting(args: {
           : basis === 'per_piece'
             ? r * q
             : basis === 'per_hour'
-              ? r * runHours
+              ? r * hours
               : r
       const setupCost = setupCharge !== null && setupCharge >= 0 ? setupCharge : 0
       processLines.push({

@@ -398,7 +398,8 @@ function EntriesCard({ entries, month, monthLabel, onEdit, onDelete, onNew }: { 
   )
 }
 
-const CATEGORY_LIST_ID = 'vx-money-categories'
+/** The choice in the Kind list that lets a new kind be typed. */
+const NEW_KIND = '__new__'
 
 function MoneyEditor({ draft, onClose }: { draft: MoneyDraft; onClose: () => void }) {
   const { db, run, pushToast } = useStore()
@@ -411,6 +412,12 @@ function MoneyEditor({ draft, onClose }: { draft: MoneyDraft; onClose: () => voi
   const errors = touched ? validateMoney(d, db) : {}
   const set = (patch: Partial<MoneyDraft>) => setD((x) => ({ ...x, ...patch }))
   const isIn = d.direction === 'in'
+  // The usual kinds, plus every kind already used here — a new kind joins the list once saved.
+  const kinds = useMemo(
+    () => [...new Set([...CATEGORIES[d.direction], ...(db.cashbook ?? []).filter((m) => m.direction === d.direction).map((m) => m.category.trim()).filter(Boolean)])],
+    [db.cashbook, d.direction],
+  )
+  const [newKind, setNewKind] = useState(false)
 
   // Documents still due — plus the one this entry already pays, when editing.
   const invoices = useMemo(() => toCollect(db, false, d.id || undefined), [db, d.id])
@@ -483,20 +490,44 @@ function MoneyEditor({ draft, onClose }: { draft: MoneyDraft; onClose: () => voi
           </div>
         ) : null}
 
-        <Field label="Kind" required error={errors.category} hint="Choose one, or type your own">
-          <Input
-            name="category"
-            list={CATEGORY_LIST_ID}
-            value={d.category}
-            autoComplete="off"
-            onChange={(e) => set({ category: e.target.value, ...(e.target.value !== CUSTOMER_PAYMENT && e.target.value !== SUPPLIER_PAYMENT ? { invoiceId: null, purchaseId: null } : {}) })}
-            placeholder={isIn ? 'e.g. Customer payment…' : 'e.g. Electricity…'}
-          />
-          <datalist id={CATEGORY_LIST_ID}>
-            {CATEGORIES[d.direction].map((c) => (
-              <option key={c} value={c} />
-            ))}
-          </datalist>
+        <Field label="Kind" required error={errors.category} hint={newKind ? 'Type the new kind — it stays in this list for next time.' : 'Not in the list? Choose “New kind…”.'}>
+          {newKind ? (
+            <div className="flex gap-2">
+              <Input
+                name="category"
+                value={d.category}
+                autoComplete="off"
+                autoFocus
+                onChange={(e) => set({ category: e.target.value, invoiceId: null, purchaseId: null })}
+                placeholder={isIn ? 'e.g. Scrap sale…' : 'e.g. Unit loan EMI…'}
+              />
+              <Button type="button" variant="ghost" size="sm" onClick={() => setNewKind(false)}>
+                List
+              </Button>
+            </div>
+          ) : (
+            <Select
+              name="category"
+              value={kinds.includes(d.category) ? d.category : ''}
+              onChange={(e) => {
+                const v = e.target.value
+                if (v === NEW_KIND) {
+                  setNewKind(true)
+                  set({ category: '', invoiceId: null, purchaseId: null })
+                  return
+                }
+                set({ category: v, ...(v !== CUSTOMER_PAYMENT && v !== SUPPLIER_PAYMENT ? { invoiceId: null, purchaseId: null } : {}) })
+              }}
+            >
+              {!kinds.includes(d.category) ? <option value="">Choose a kind…</option> : null}
+              {kinds.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+              <option value={NEW_KIND}>+ New kind…</option>
+            </Select>
+          )}
         </Field>
 
         {isIn && d.category === CUSTOMER_PAYMENT ? (

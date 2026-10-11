@@ -248,7 +248,7 @@ export function invoiceDefinition(inv: Invoice): TDocumentDefinitions {
             inv.customer.company,
             inv.customer.contactPerson ? `Attn: ${inv.customer.contactPerson}` : '',
             inv.customer.billingAddress,
-            inv.customer.gstin ? `GSTIN ${inv.customer.gstin}` : '',
+            inv.customer.gstin ? `GSTIN ${inv.customer.gstin}` : inv.customer.unregistered ? 'GSTIN: Unregistered (URD)' : '',
             inv.customer.placeOfSupply ? `Place of supply ${inv.customer.placeOfSupply}` : '',
             [inv.customer.phone, inv.customer.email].filter(Boolean).join('   '),
           ],

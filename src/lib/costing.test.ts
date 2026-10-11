@@ -43,36 +43,36 @@ describe('order costing totals', () => {
     expect(glue.purchaseQty).toBe(4.5) // rounded up to 0.5 kg
     expect(glue.amount).toBe(900)
 
-    // processes: offset print 500 run + 250 setup; die cut 2 run h × 300; others 0
-    expect(r.processRunCost).toBe(1100)
+    // processes: offset print 500 run + 250 setup; die cut per hour: (0.5 setup + 2 run) h × 300 = 750; others 0
+    expect(r.processRunCost).toBe(1250)
     expect(r.setupCost).toBe(250)
     expect(r.chargesCost).toBe(1000)
-    expect(r.totalCost).toBe(4666)
-    expect(r.costPerPiece).toBeCloseTo(4.666)
+    expect(r.totalCost).toBe(4816)
+    expect(r.costPerPiece).toBeCloseTo(4.816)
 
-    // markup 20 % → 5599.20 → 5.60 / pc → 5,600
-    expect(r.sellingPerPiece).toBe(5.6)
-    expect(r.totalSelling).toBe(5600)
-    expect(r.profitAmount).toBe(934)
-    expect(r.taxAmount).toBe(1008)
-    expect(r.grandTotal).toBe(6608)
+    // markup 20 % → 5779.20 → 5.78 / pc → 5,780
+    expect(r.sellingPerPiece).toBe(5.78)
+    expect(r.totalSelling).toBe(5780)
+    expect(r.profitAmount).toBe(964)
+    expect(r.taxAmount).toBe(1040.4)
+    expect(r.grandTotal).toBe(6820.4)
   })
 
   it('distinguishes margin on selling price from markup on cost', () => {
     const r = run({ profitMethod: 'margin', profitPct: 20 })
-    // 4666 ÷ 0.8 = 5832.50 → 5.83 / pc
-    expect(r.sellingPerPiece).toBe(5.83)
-    expect(r.totalSelling).toBe(5830)
-    expect(r.effectiveMarginPct).toBeCloseTo(19.97, 1)
+    // 4816 ÷ 0.8 = 6020 → 6.02 / pc
+    expect(r.sellingPerPiece).toBe(6.02)
+    expect(r.totalSelling).toBe(6020)
+    expect(r.effectiveMarginPct).toBeCloseTo(20, 1)
     expect(run({ profitMethod: 'margin', profitPct: 100 }).valid).toBe(false)
   })
 
   it('applies discount before tax', () => {
     const r = run({ discountType: 'percent', discountValue: 10 })
-    expect(r.discountAmount).toBe(560)
-    expect(r.taxableValue).toBe(5040)
-    expect(r.taxAmount).toBe(907.2)
-    expect(r.grandTotal).toBe(5947.2)
+    expect(r.discountAmount).toBe(578)
+    expect(r.taxableValue).toBe(5202)
+    expect(r.taxAmount).toBe(936.36)
+    expect(r.grandTotal).toBe(6138.36)
   })
 
   it('never treats a missing price as zero', () => {

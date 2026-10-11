@@ -6,6 +6,7 @@ import type {
   LengthUnit,
   Material,
   MaterialKind,
+  MaterialForm,
   OrderChargeTemplate,
   PricingBasis,
   ProcessCharge,
@@ -62,6 +63,8 @@ export interface MaterialDraft {
   approval?: 'approved' | 'candidate'
   /** Supplier-stated thickness in mm, kept separately from GSM. */
   thicknessMm?: number | null
+  /** Sheet, roll, ready-made or bulk. Omitted = derived from the kind. */
+  form?: MaterialForm
   /** `updatedAt` of the record when the editor loaded it (stale-edit protection). */
   expectedUpdatedAt?: string
 }
@@ -88,6 +91,11 @@ export function blankMaterialDraft(kind: MaterialKind = 'quantity'): MaterialDra
   }
 }
 
+/** What a material physically is (older records have no form stored). */
+export function materialForm(m: Pick<Material, 'kind' | 'form'>): MaterialForm {
+  return m.kind === 'sheet' ? 'sheet' : m.form && m.form !== 'sheet' ? m.form : 'bulk'
+}
+
 export function materialToDraft(m: Material): MaterialDraft {
   return {
     id: m.id,
@@ -110,6 +118,7 @@ export function materialToDraft(m: Material): MaterialDraft {
     notes: m.notes,
     approval: m.approval,
     thicknessMm: m.thicknessMm ?? null,
+    form: materialForm(m),
     expectedUpdatedAt: m.updatedAt,
   }
 }
@@ -184,6 +193,7 @@ export const saveMaterial = command(
       notes: draft.notes.trim(),
       ...(draft.approval ? { approval: draft.approval } : {}),
       ...(draft.thicknessMm !== undefined ? { thicknessMm: draft.thicknessMm } : {}),
+      form: draft.kind === 'sheet' ? ('sheet' as const) : draft.form && draft.form !== 'sheet' ? draft.form : ('bulk' as const),
     }
 
     if (!draft.id) {
@@ -375,6 +385,8 @@ function validateBomLine(
   const e: Record<string, string> = {}
   const key = (f: string) => `${prefix}.${line.id}.${f}`
   if (line.stageId && !stages.some((s) => s.id === line.stageId)) e[key('stage')] = 'The linked stage no longer exists.'
+  const waste = line.wastagePct ?? null
+  if (waste !== null && !(Number.isFinite(waste) && waste >= 0 && waste < 100)) e[key('wastagePct')] = 'Wastage must be between 0 and 99.99% — or leave it blank to use the material’s own.'
   if (line.processId) {
     const stage = stages.find((s) => s.id === line.stageId)
     if (!stage || !stage.processes.some((p) => p.id === line.processId)) e[key('process')] = 'The linked process must belong to the selected stage.'
@@ -576,6 +588,8 @@ export interface CustomerDraft {
   billingAddress: string
   deliveryAddress: string
   gstin: string
+  /** Unregistered under GST (URD) — no GSTIN. */
+  unregistered?: boolean
   placeOfSupply: string
   paymentTerms: string
   notes: string
@@ -626,7 +640,9 @@ export const saveCustomer = command(
       email: draft.email.trim(),
       billingAddress: draft.billingAddress.trim(),
       deliveryAddress: draft.deliveryAddress.trim(),
-      gstin: draft.gstin.trim().toUpperCase(),
+      // An unregistered (URD) customer has no GSTIN.
+      gstin: draft.unregistered ? '' : draft.gstin.trim().toUpperCase(),
+      unregistered: !!draft.unregistered,
       placeOfSupply: draft.placeOfSupply.trim(),
       paymentTerms: draft.paymentTerms.trim(),
       notes: draft.notes.trim(),

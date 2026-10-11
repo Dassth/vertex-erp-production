@@ -69,8 +69,8 @@ describe('incomplete product drafts can be saved', () => {
     expect(saved.value.stages[0].processes[1]).toMatchObject({ rate: null, setupCharge: null, setupHours: null, runHoursPer1000: null })
     const messages = issuesFor(saved.db, saved.value).map((i) => i.message).join(' ')
     expect(messages).toMatch(/Price missing/)
-    expect(messages).toMatch(/process rate missing/)
-    expect(messages).toMatch(/setup time not entered/)
+    expect(messages).toMatch(/rate not entered/)
+    expect(messages).toMatch(/time not entered/)
   })
 
   it('still refuses values the product cannot hold, and correcting them restores normal costing', () => {
@@ -207,7 +207,7 @@ describe('jewellery template import', () => {
     const p = r.db.products.find((x) => x.name === 'Bracelet — 2*8.5')!
     const messages = issuesFor(r.db, p).map((i) => i.message)
     expect(messages.some((m) => /Specification is a proposal awaiting customer confirmation \(size 2\*8\.5, unit unknown\)/.test(m))).toBe(true)
-    expect(messages.some((m) => /process rate missing/.test(m))).toBe(true)
+    expect(messages.some((m) => /rate not entered/.test(m))).toBe(true)
   })
 
   it('a repeated import creates nothing and never overwrites later edits', () => {

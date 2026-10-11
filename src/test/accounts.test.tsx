@@ -61,9 +61,7 @@ describe('Income & Expenses page', () => {
 
     // An everyday expense with no bill.
     await user.click(screen.getByRole('button', { name: /Money out…/ }))
-    const kind = screen.getByRole('combobox', { name: /Kind/ }) as HTMLInputElement
-    await user.clear(kind)
-    await user.type(kind, 'Electricity')
+    await user.selectOptions(screen.getByRole('combobox', { name: /Kind/ }), 'Electricity')
     await user.type(screen.getByLabelText('Amount in rupees'), '1200.50')
     await user.type(screen.getByLabelText(/Paid to/), 'TNEB')
     await user.click(screen.getByRole('button', { name: 'Save money out' }))

@@ -198,12 +198,13 @@ export function BillingPage() {
 function OrderInvoices({ row, read, onBack, onPreview, onEditTax, onEdit }: { row: OrderInvoiceSummary; read: () => VertexDB; onBack: () => void; onPreview: (d: PreviewDoc) => void; onEditTax: (inv: Invoice) => void; onEdit: (inv: Invoice) => void }) {
   const { can } = useStore()
   const pending = useDeliveryPendingMessage()
-  const { order, shipments, dispatchedQty, receivedQty, awaitingQty, remainingQty, billed, receivedBilled, status } = row
-  const receivedCount = shipments.filter((x) => isReceived(x.dispatch) && x.invoice).length
+  const { order, shipments, dispatchedQty, receivedQty, awaitingQty, remainingQty, billed, status } = row
+  // Every dispatched shipment with an invoice counts — confirming delivery is optional.
+  const receivedCount = shipments.filter((x) => x.invoice).length
   const eligible = receivedCount > 0
   const summary = () => {
     const doc = summaryDoc(read, order.id)
-    if (!doc) throw new Error('No shipment is confirmed received yet.')
+    if (!doc) throw new Error('Nothing has been dispatched yet.')
     return doc
   }
   const last = shipments[shipments.length - 1]
@@ -268,8 +269,8 @@ function OrderInvoices({ row, read, onBack, onPreview, onEditTax, onEdit }: { ro
           </Button>
           {eligible ? (
             <p className="w-full text-xs text-muted">
-              Updated cumulative invoice summary of the {receivedCount} shipment(s) confirmed received: {qty(receivedQty, order.uom)}, {moneyShort(receivedBilled)} in total. It lists those invoices and is not an additional amount payable.
-              {awaitingQty > 0 ? ` ${qty(awaitingQty, order.uom)} dispatched but awaiting receipt are not included yet.` : ''}
+              Updated cumulative invoice summary of the {receivedCount} shipment(s) dispatched: {qty(dispatchedQty, order.uom)}, {moneyShort(billed)} in total. It lists those invoices and is not an additional amount payable.
+              {awaitingQty > 0 ? ` ${qty(awaitingQty, order.uom)} not yet confirmed received (confirming is optional).` : ''}
             </p>
           ) : (
             <p className="w-full text-sm text-warn" role="status">

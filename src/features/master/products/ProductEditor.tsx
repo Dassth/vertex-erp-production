@@ -15,18 +15,19 @@ import {
   Trash2,
 } from 'lucide-react'
 import { useStore } from '../../../store/store'
-import type { CostBasis, LengthUnit, Material, Product, ProductMaterial, ProductProcess, ProductSpec, ProductStage } from '../../../lib/types'
+import type { CostBasis, LengthUnit, Material, MaterialForm, Product, ProductMaterial, ProductProcess, ProductSpec, ProductStage } from '../../../lib/types'
 import { draftKey, readDraft, removeDraft, writeDraft } from '../../../lib/drafts'
 import type { StoredDraft } from '../../../lib/drafts'
 import { remote } from '../../../store/remote'
 import { fromWire } from '../../../lib/wire'
 import type { ProductDraft } from '../../../domain/master'
-import { productHasContent, saveProduct } from '../../../domain/master'
+import { materialForm, productHasContent, saveProduct } from '../../../domain/master'
 import { COST_BASIS_LABEL, computeOrderCosting, pricedUnitLabel } from '../../../lib/costing'
 import { calculateYield, fromMm, toMm } from '../../../lib/yield'
 import { uid } from '../../../lib/format'
 import { useNewDraftId } from '../../../components/Unfinished'
 import { productIssues } from '../masterSelectors'
+import { GstRateSelect } from '../../../components/GstRateSelect'
 import { AddMaterialDialog } from './AddMaterialDialog'
 import type { UsageInput } from './AddMaterialDialog'
 import { FillFromFileButton } from './FillFromFileButton'
@@ -83,7 +84,7 @@ const newProcess = (): ProductProcess => ({
   setupHours: null,
   runHoursPer1000: null,
   chargeId: null,
-  costBasis: 'per_1000',
+  costBasis: 'per_piece',
   rate: null,
   setupCharge: null,
   // Manual by default: a unit may run it with "No machine required".
@@ -162,7 +163,8 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [stageCount, setStageCount] = useState<number | null>(3)
   const [confirm, setConfirm] = useState<PendingConfirm | null>(null)
-  const [newMaterialOpen, setNewMaterialOpen] = useState(false)
+  // Where a material picked in the dialog goes: the product (section 2) or one process.
+  const [materialTarget, setMaterialTarget] = useState<{ stageId: string | null; processId: string | null } | null>(null)
   const [conflict, setConflict] = useState('')
   const saving = useRef(false)
   const [savePhase, setSavePhase] = useState<'idle' | 'saving' | 'saving-product'>('idle')
@@ -368,6 +370,26 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
       },
     ])
 
+  /** Materials of this product, each once, in the order first added. */
+  const productMaterialIds = [...new Set(draft.materials.map((l) => l.materialId))]
+  /** Add a material to the product (once) without tying it to a process yet. */
+  const addToProduct = (m: Material) => {
+    if (!draft.materials.some((l) => l.materialId === m.id)) addLine(m)
+  }
+  /** Use a material in a process: an untied entry of it is moved there, otherwise a new use is added. */
+  const putInProcess = (stageId: string, processId: string, materialId: string) => {
+    const m = db.materials.find((x) => x.id === materialId)
+    if (!m) return
+    setLines((list) => {
+      const free = list.find((l) => l.materialId === materialId && !l.processId && !l.stageId && !hasUsageDetail(l))
+      if (free) return list.map((l) => (l.id === free.id ? { ...l, stageId, processId } : l))
+      return [
+        ...list,
+        { id: uid('bom'), materialId, stageId, processId, qtyPerPiece: m.kind === 'sheet' ? 0 : null, piecesPerProduct: null, cutLengthMm: null, cutWidthMm: null, rotationAllowed: true, upsOverride: null, upsOverrideReason: '', note: '' },
+      ]
+    })
+  }
+
   const loadLatest = () => {
     const next = toDraft(product)
     setDraft(next)
@@ -504,8 +526,8 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
               <Field label="Finished-goods unit" required error={err('uom')}>
                 <Input value={draft.uom} onChange={(e) => set({ uom: e.target.value })} aria-invalid={!!err('uom') || undefined} />
               </Field>
-              <Field label="Tax %" error={err('taxPct')} hint={`Blank uses the default (${db.settings.taxLabel} ${db.settings.taxPct}%).`}>
-                <NumberInput value={draft.taxPct} onChange={(v) => set({ taxPct: v })} invalid={!!err('taxPct')} />
+              <Field label={`${db.settings.taxLabel} rate`} error={err('taxPct')} hint="Choose the rate; “Other rate…” adds a new one to the list.">
+                <GstRateSelect value={draft.taxPct} onChange={(v) => set({ taxPct: v })} defaultPct={db.settings.taxPct} invalid={!!err('taxPct')} />
               </Field>
               <Field label="Description" className="sm:col-span-2">
                 <Textarea rows={2} value={draft.description} onChange={(e) => set({ description: e.target.value })} />
@@ -535,11 +557,98 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
 
           <SpecCard spec={draft.spec ?? null} errors={errors} onChange={(spec) => set({ spec })} />
 
-          {/* ----------------------------- 2. Stages ---------------------------- */}
+          {/* ---------------------------- 2. Materials -------------------------- */}
           <Card className="vx-anim-up">
             <CardHead
-              title="2 · Stages and processes"
-              subtitle="Stages run in this order on the shop floor. Each needs at least one process."
+              title="2 · Materials"
+              subtitle="Every material this product uses — board, paper, roll, magnet, glue. How much each process uses is set in that process below."
+              icon={<Boxes className="h-4 w-4" />}
+              actions={
+                <Button type="button" size="sm" icon={<Plus className="h-3.5 w-3.5" />} onClick={() => setMaterialTarget({ stageId: null, processId: null })}>
+                  Add material…
+                </Button>
+              }
+            />
+            <div className="space-y-4 p-5">
+              {productMaterialIds.length === 0 ? (
+                <p className="rounded-md border border-dashed border-rule-2 px-4 py-6 text-center text-sm text-muted">No materials yet — press “Add material…”.</p>
+              ) : (
+                <ul className="divide-y divide-rule rounded-md border border-rule-2">
+                  {productMaterialIds.map((id) => {
+                    const m = db.materials.find((x) => x.id === id)
+                    const uses = draft.materials.filter((l) => l.materialId === id && l.processId)
+                    const where = uses
+                      .map((l) => {
+                        const si = draft.stages.findIndex((st) => st.processes.some((pr) => pr.id === l.processId))
+                        const st = draft.stages[si]
+                        const pi = st ? st.processes.findIndex((pr) => pr.id === l.processId) : -1
+                        return st && pi >= 0 ? `${si + 1}.${pi + 1} ${st.processes[pi].name || 'Process'}` : ''
+                      })
+                      .filter(Boolean)
+                    return (
+                      <li key={id} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-medium text-ink">{m?.name ?? 'Material no longer in Master'}</p>
+                          <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted">
+                            {m ? <Badge tone={m.kind === 'sheet' ? 'violet' : 'slate'}>{FORM_LABEL[materialForm(m)]}</Badge> : null}
+                            {m ? (m.price === null ? <span className="text-warn">price not set yet</span> : <span>₹{m.price} per {pricedUnitLabel(m)}</span>) : null}
+                            <span>· {where.length ? `used in ${where.join(', ')}` : 'not used in a process yet'}</span>
+                          </p>
+                        </div>
+                        {m ? (
+                          <Link to={`/master/costing?material=${m.id}`} className="vx-focus rounded-xs text-xs font-medium text-accent-text hover:underline">
+                            Material settings
+                          </Link>
+                        ) : null}
+                        <IconButton
+                          type="button"
+                          label={`Remove ${m?.name ?? 'material'} from this product`}
+                          className="hover:text-risk"
+                          onClick={() =>
+                            setConfirm({
+                              title: 'Remove this material from the product?',
+                              body: uses.length ? `It is used in ${uses.length} process(es); those uses are removed too. The material stays in Master for other products.` : 'The material stays in Master for other products.',
+                              confirmLabel: 'Remove material',
+                              run: () => setLines((l) => l.filter((x) => x.materialId !== id)),
+                            })
+                          }
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </IconButton>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+              {/* Uses not tied to one process (earlier entries, or whole-product use) stay fully editable here. */}
+              {draft.materials.some((l) => !l.processId && hasUsageDetail(l)) ? (
+                <div className="space-y-3">
+                  <p className="vx-mono-label">Used for the whole product or a whole stage</p>
+                  <ul className="space-y-3">
+                    {draft.materials
+                      .filter((l) => !l.processId && hasUsageDetail(l))
+                      .map((line) => (
+                        <MaterialLineEditor
+                          key={line.id}
+                          line={line}
+                          stages={draft.stages}
+                          material={db.materials.find((m) => m.id === line.materialId)}
+                          errors={errors}
+                          onChange={(patch) => updateLine(line.id, patch)}
+                          onRemove={() => setLines((l) => l.filter((x) => x.id !== line.id))}
+                        />
+                      ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          </Card>
+
+          {/* ----------------------------- 3. Stages ---------------------------- */}
+          <Card className="vx-anim-up">
+            <CardHead
+              title="3 · Stages and processes"
+              subtitle="Stages run in this order on the shop floor. In each process: its time, its rate, and the materials it uses."
               icon={<Layers className="h-4 w-4" />}
               actions={draft.stages.length ? <Badge tone="indigo">{draft.stages.length} stages</Badge> : null}
             />
@@ -626,11 +735,8 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
                               <Field label="Production method" className="sm:col-span-2 lg:col-span-4" hint="e.g. in-house digital print, outsourced lamination. Blank = not selected yet.">
                                 <Input value={proc.method ?? ''} onChange={(e) => updateProcess(stage.id, proc.id, { method: e.target.value })} />
                               </Field>
-                              <Field label="Setup hours" error={k('setupHours')}>
-                                <NumberInput value={proc.setupHours} onChange={(v) => updateProcess(stage.id, proc.id, { setupHours: v })} invalid={!!k('setupHours')} placeholder="Not measured" />
-                              </Field>
-                              <Field label="Run h / 1,000 pcs" error={k('runHoursPer1000')}>
-                                <NumberInput value={proc.runHoursPer1000} onChange={(v) => updateProcess(stage.id, proc.id, { runHoursPer1000: v })} invalid={!!k('runHoursPer1000')} placeholder="Not measured" />
+                              <Field label="Time (hours)" error={k('setupHours')} hint="For the whole job.">
+                                <NumberInput value={proc.setupHours} onChange={(v) => updateProcess(stage.id, proc.id, { setupHours: v })} invalid={!!k('setupHours')} placeholder="Not known yet" />
                               </Field>
                               <Field label="Cost from" error={k('chargeId')} className="sm:col-span-2">
                                 <Select value={proc.chargeId ?? ''} onChange={(e) => updateProcess(stage.id, proc.id, { chargeId: e.target.value || null })} aria-invalid={!!k('chargeId') || undefined}>
@@ -652,7 +758,7 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
                                 </p>
                               ) : (
                                 <>
-                                  <Field label="Cost basis" className="sm:col-span-2">
+                                  <Field label="Rate per" className="sm:col-span-2">
                                     <Select value={proc.costBasis} onChange={(e) => updateProcess(stage.id, proc.id, { costBasis: e.target.value as CostBasis })}>
                                       {(['per_1000', 'per_piece', 'per_hour', 'fixed'] as CostBasis[]).map((b) => (
                                         <option key={b} value={b}>
@@ -661,14 +767,22 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
                                       ))}
                                     </Select>
                                   </Field>
-                                  <Field label="Rate ₹" error={k('rate')} hint="Blank = not configured; 0 = no charge.">
+                                  <Field label="Rate ₹" error={k('rate')} hint="Blank = not known yet; 0 = no charge.">
                                     <NumberInput value={proc.rate} onChange={(v) => updateProcess(stage.id, proc.id, { rate: v })} invalid={!!k('rate')} />
-                                  </Field>
-                                  <Field label="Setup charge ₹" error={k('setupCharge')}>
-                                    <NumberInput value={proc.setupCharge} onChange={(v) => updateProcess(stage.id, proc.id, { setupCharge: v })} invalid={!!k('setupCharge')} />
                                   </Field>
                                 </>
                               )}
+                              {/* Values from the earlier two-field layout are kept and still counted — shown so they can be seen and cleared. */}
+                              {(proc.runHoursPer1000 ?? 0) > 0 || (!proc.chargeId && (proc.setupCharge ?? 0) > 0) ? (
+                                <p className="flex flex-wrap items-center gap-2 rounded-md bg-surface-2 px-3 py-2 text-xs text-ink-2 sm:col-span-2 lg:col-span-6">
+                                  Entered earlier and still counted:
+                                  {(proc.runHoursPer1000 ?? 0) > 0 ? <span>run time {proc.runHoursPer1000} h per 1,000 pcs</span> : null}
+                                  {!proc.chargeId && (proc.setupCharge ?? 0) > 0 ? <span>· setup charge ₹{proc.setupCharge}</span> : null}
+                                  <button type="button" className="vx-focus rounded-xs font-medium text-accent-text hover:underline" onClick={() => updateProcess(stage.id, proc.id, { runHoursPer1000: null, setupCharge: null })}>
+                                    Clear these
+                                  </button>
+                                </p>
+                              ) : null}
                               {/* Production uses this: a machine-bound process cannot start without one. */}
                               <label className="mb-5 flex items-start gap-2.5 sm:col-span-2">
                                 <input
@@ -685,6 +799,17 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
                                 </span>
                               </label>
                             </div>
+                            <ProcessMaterials
+                              proc={proc}
+                              lines={draft.materials.filter((l) => l.processId === proc.id)}
+                              productMaterialIds={productMaterialIds}
+                              stages={draft.stages}
+                              errors={errors}
+                              onUse={(materialId) => putInProcess(stage.id, proc.id, materialId)}
+                              onNew={() => setMaterialTarget({ stageId: stage.id, processId: proc.id })}
+                              onChange={updateLine}
+                              onRemove={(lineId) => setLines((l) => l.filter((x) => x.id !== lineId))}
+                            />
                           </li>
                         )
                       })}
@@ -704,47 +829,6 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
             </div>
           </Card>
 
-          {/* ---------------------------- 3. Materials -------------------------- */}
-          <Card className="vx-anim-up">
-            <CardHead
-              title="3 · Materials"
-              subtitle="The board, paper, glue and other materials this product uses, and how much of each."
-              icon={<Boxes className="h-4 w-4" />}
-            />
-            <div className="space-y-4 p-5">
-              <div className="flex flex-wrap items-center gap-3">
-                <Button type="button" icon={<Plus className="h-4 w-4" />} onClick={() => setNewMaterialOpen(true)}>
-                  Add material…
-                </Button>
-                <span className="text-xs text-muted">Search an existing material, or create a new one — its setup and how this product uses it are asked together.</span>
-              </div>
-
-              {draft.materials.length === 0 ? (
-                <p className="rounded-md border border-dashed border-rule-2 px-4 py-6 text-center text-sm text-muted">No materials linked yet.</p>
-              ) : (
-                <ul className="space-y-3">
-                  {draft.materials.map((line) => (
-                    <MaterialLineEditor
-                      key={line.id}
-                      line={line}
-                      stages={draft.stages}
-                      material={db.materials.find((m) => m.id === line.materialId)}
-                      errors={errors}
-                      onChange={(patch) => updateLine(line.id, patch)}
-                      onRemove={() =>
-                        setConfirm({
-                          title: 'Remove this material from the product?',
-                          body: 'The material stays in the shared registry for other products.',
-                          confirmLabel: 'Remove material',
-                          run: () => setLines((l) => l.filter((x) => x.id !== line.id)),
-                        })
-                      }
-                    />
-                  ))}
-                </ul>
-              )}
-            </div>
-          </Card>
           <button type="submit" hidden />
         </form>
 
@@ -814,10 +898,14 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
       </div>
 
       <AddMaterialDialog
-        open={newMaterialOpen}
-        stages={draft.stages}
-        onClose={() => setNewMaterialOpen(false)}
-        onAdd={(m, usage) => addLine(m, usage)}
+        open={!!materialTarget}
+        mode="pick"
+        onClose={() => setMaterialTarget(null)}
+        onAdd={(m) => {
+          if (materialTarget?.processId && materialTarget.stageId) putInProcess(materialTarget.stageId, materialTarget.processId, m.id)
+          else addToProduct(m)
+          setMaterialTarget(null)
+        }}
       />
       <ConfirmDialog
         open={!!confirm}
@@ -973,6 +1061,7 @@ function MaterialLineEditor({
   errors,
   onChange,
   onRemove,
+  inProcess = false,
 }: {
   line: ProductMaterial
   stages: ProductStage[]
@@ -980,7 +1069,10 @@ function MaterialLineEditor({
   errors: Record<string, string>
   onChange: (patch: Partial<ProductMaterial>) => void
   onRemove: () => void
+  /** Shown inside its process: no stage / process pickers. */
+  inProcess?: boolean
 }) {
+  const form = material ? materialForm(material) : 'bulk'
   const k = (f: string) => errors[`material.${line.id}.${f}`]
   const stage = stages.find((s) => s.id === line.stageId)
   const unit: LengthUnit = material?.sizeUnit ?? 'mm'
@@ -1016,8 +1108,8 @@ function MaterialLineEditor({
           <p className="font-medium text-ink">{material.name}</p>
           <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted">
             <span className="vx-code">{material.code}</span>
-            <Badge tone={material.kind === 'sheet' ? 'violet' : 'slate'}>{material.kind === 'sheet' ? 'Sheet' : material.uom}</Badge>
-            {material.price === null ? <Badge tone="red">Price missing</Badge> : <span>₹{material.price} per {pricedUnitLabel(material)}</span>}
+            <Badge tone={material.kind === 'sheet' ? 'violet' : 'slate'}>{FORM_LABEL[form]}</Badge>
+            {material.price === null ? <Badge tone="amber">Price not set yet</Badge> : <span>₹{material.price} per {pricedUnitLabel(material)}</span>}
             {!material.active ? <Badge tone="slate">Inactive</Badge> : null}
           </p>
         </div>
@@ -1030,6 +1122,8 @@ function MaterialLineEditor({
       </div>
 
       <div className="mt-3 grid gap-x-3 sm:grid-cols-2 lg:grid-cols-4">
+        {inProcess ? null : (
+          <>
         <Field label="Used in stage" error={k('stage')}>
           <Select value={line.stageId ?? ''} onChange={(e) => onChange({ stageId: e.target.value || null, processId: null })}>
             <option value="">Whole product</option>
@@ -1050,10 +1144,16 @@ function MaterialLineEditor({
             ))}
           </Select>
         </Field>
+          </>
+        )}
 
         {material.kind === 'quantity' ? (
-          <Field label={`Quantity per piece (${material.uom})`} error={k('qtyPerPiece')}>
-            <NumberInput value={line.qtyPerPiece} onChange={(v) => onChange({ qtyPerPiece: v })} placeholder="Not measured" invalid={!!k('qtyPerPiece')} />
+          <Field
+            label={form === 'roll' ? `Length per product (${material.uom})` : form === 'readymade' ? `Per product (${material.uom})` : `Quantity per product (${material.uom})`}
+            error={k('qtyPerPiece')}
+            hint={form === 'readymade' ? 'e.g. 2 magnets in one box.' : undefined}
+          >
+            <NumberInput value={line.qtyPerPiece} onChange={(v) => onChange({ qtyPerPiece: v })} placeholder="Not known yet" invalid={!!k('qtyPerPiece')} />
           </Field>
         ) : (
           <>
@@ -1098,7 +1198,87 @@ function MaterialLineEditor({
             </div>
           </>
         )}
+        <Field label="Wastage % here" error={k('wastagePct')} hint={`Blank = the material's ${material.wastagePct}%.`}>
+          <NumberInput value={line.wastagePct ?? null} onChange={(v) => onChange({ wastagePct: v })} placeholder={`${material.wastagePct}`} invalid={!!k('wastagePct')} />
+        </Field>
       </div>
     </li>
+  )
+}
+
+/** A use with something entered (a cut size, a quantity, a stage) — never dropped silently. */
+function hasUsageDetail(l: ProductMaterial): boolean {
+  return l.stageId !== null || l.cutLengthMm !== null || l.cutWidthMm !== null || (l.qtyPerPiece !== null && l.qtyPerPiece !== 0) || l.piecesPerProduct !== null || l.upsOverride !== null || (l.wastagePct ?? null) !== null
+}
+
+const FORM_LABEL: Record<MaterialForm, string> = { sheet: 'Sheet', roll: 'Roll', readymade: 'Ready-made', bulk: 'Other' }
+
+/** Inside one process: the materials it uses, each with its own size / quantity / wastage. */
+function ProcessMaterials({
+  proc,
+  lines,
+  productMaterialIds,
+  stages,
+  errors,
+  onUse,
+  onNew,
+  onChange,
+  onRemove,
+}: {
+  proc: ProductProcess
+  lines: ProductMaterial[]
+  productMaterialIds: string[]
+  stages: ProductStage[]
+  errors: Record<string, string>
+  onUse: (materialId: string) => void
+  onNew: () => void
+  onChange: (lineId: string, patch: Partial<ProductMaterial>) => void
+  onRemove: (lineId: string) => void
+}) {
+  const { db } = useStore()
+  return (
+    <div className="mt-2 rounded-md bg-surface-2 p-3">
+      <p className="vx-mono-label">Materials used in this process</p>
+      {lines.length ? (
+        <ul className="mt-2 space-y-2">
+          {lines.map((line) => (
+            <MaterialLineEditor
+              key={line.id}
+              inProcess
+              line={line}
+              stages={stages}
+              material={db.materials.find((m) => m.id === line.materialId)}
+              errors={errors}
+              onChange={(patch) => onChange(line.id, patch)}
+              onRemove={() => onRemove(line.id)}
+            />
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-1 text-xs text-muted">None yet.</p>
+      )}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <Select
+          aria-label={`Use a material in ${proc.name || 'this process'}`}
+          value=""
+          onChange={(e) => e.target.value && onUse(e.target.value)}
+          className="w-auto min-w-[14rem]"
+          disabled={!productMaterialIds.length}
+        >
+          <option value="">{productMaterialIds.length ? 'Use a material of this product…' : 'Add materials in section 2 first'}</option>
+          {productMaterialIds.map((id) => {
+            const m = db.materials.find((x) => x.id === id)
+            return m ? (
+              <option key={id} value={id}>
+                {m.name}
+              </option>
+            ) : null
+          })}
+        </Select>
+        <Button type="button" size="sm" variant="ghost" icon={<Plus className="h-3.5 w-3.5" />} onClick={onNew}>
+          Other material…
+        </Button>
+      </div>
+    </div>
   )
 }
