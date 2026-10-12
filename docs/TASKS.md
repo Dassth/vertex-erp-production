@@ -1,7 +1,7 @@
 # Tasks
 
 ## In progress
-- [ ] Customer trial of the 2026-10-11 build (`VertexERP-Setup-VPP-2026-01-v2026.10.11.2130.exe`) at Vertex Print Pack
+- [ ] Customer trial of the 2026-10-12 build (`VertexERP-Setup-VPP-2026-01-v2026.10.12.1126.exe`) at Vertex Print Pack — one picker everywhere, month-end entries
 
 ## Next up (priority order)
 - [ ] Collect feedback on size-based pricing, loans, suppliers, process allocation and price revision from the customer
