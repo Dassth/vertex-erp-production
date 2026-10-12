@@ -289,7 +289,11 @@ export const finalizeCosting = command(
         // The uses at this order's size — what the job card and units cut.
         materials: source.materials
           .filter((l) => priced.some((m) => m.id === l.materialId))
-          .map((l) => ({ ...l, material: priced.find((m) => m.id === l.materialId)! })),
+          .map((l) => {
+            const m = priced.find((x) => x.id === l.materialId)!
+            const own = useInputs.materialPrices?.[m.id]
+            return { ...l, material: own !== undefined && Number.isFinite(own) && own >= 0 ? { ...m, price: own } : m }
+          }),
       },
       processCharges: db.settings.processCharges.filter((c) => usedChargeIds.has(c.id)),
       plan: {

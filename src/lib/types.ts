@@ -413,6 +413,10 @@ export interface CostingInputs {
   charges: OrderChargeInput[]
   discountType: 'amount' | 'percent'
   discountValue: number
+  /** This order's own material price (material id → price), changed on the costing screen. */
+  materialPrices?: Record<string, number>
+  /** This order's own process rate (process id → rate in the process's basis). */
+  processRates?: Record<string, number>
 }
 
 export interface SheetLayout {

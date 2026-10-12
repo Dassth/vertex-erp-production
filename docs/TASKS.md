@@ -40,6 +40,8 @@
 - [x] 2026-10-12 - Units: “Add unit…” for own units and outside units (job work), with contact, phone and address for every unit; Planning lists outside units separately and can add one from the unit list
 - [x] 2026-10-12 - Product “For exact costing” panel: long material links wrap; a cut piece that doesn't fit now names both sizes and flags a sheet typed in inches as mm
 - [x] 2026-10-12 - Planning: “Material prices for this order” — type a new price for this order (costing and the finalize snapshot use it), or “Save to Master too”
+- [x] 2026-10-12 - Costing: tap any material or process rate to change it for this order — also while revising a released order; issues are listed while revising
+- [x] 2026-10-12 - Edge allowance removed: the whole sheet is used for pieces per sheet; the field is gone from the forms (stored values kept, not counted)
 
 ## Blocked
 - [ ] Cloud stored backups on Cloudflare - R2 is not enabled on the account

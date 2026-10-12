@@ -105,3 +105,16 @@ Append-only log. Newest at the bottom.
 - **Impact:** `src/lib/types.ts`, `src/domain/orderCosting.ts`, `src/domain/planning.ts`, `src/domain/master.ts`, `PlanEditor.tsx` (`MaterialPricesCard`), `OrderCostingPage.tsx`
 - **Gotcha:** building the EXE writes into `release/`, which the Vite dev server watches — it crashed with EBUSY. Stop the preview before `installer/build.mjs`.
 
+## 2026-10-12 - Rates editable on the costing screen
+- **Context:** The owner couldn't change a material or process rate on a costing, even on a released order being revised.
+- **Decision / finding:** `CostingInputs.materialPrices` / `processRates` hold this order's own rates; `computeOrderCosting` applies them (a process shows “This order” as its rate source). They travel with the inputs, so draft costing, finalize (also baked into the snapshot materials) and `reviseCosting` all use them. The Rate column sits next to the name and shows the rate in use; typing the usual rate or clearing goes back to it.
+- **Why:** Prices change after Master and planning; the costing screen is where the owner checks the price.
+- **Impact:** `src/lib/types.ts`, `src/lib/costing.ts`, `src/domain/orderCosting.ts`, `OrderCostingPage.tsx`
+
+## 2026-10-12 - Edge allowance dropped
+- **Context:** The owner asked to remove edge allowance completely.
+- **Decision / finding:** `calculateYield` / `validateUpsOverride` use the whole sheet; `edgeMarginMm` is optional on `YieldInput` and ignored. New materials store 0; stored values stay in the data but are not counted. Fields removed from Add material and the material drawer.
+- **Why:** Not how the customer's shop works; it lowered pieces per sheet.
+- **Impact:** `src/lib/yield.ts`, `src/domain/master.ts`, `MaterialDrawer.tsx`, `AddMaterialDialog.tsx`, `MasterCostingPage.tsx`, `src/lib/costing.ts`
+- **Note:** pieces per sheet can go up for existing products; finalized costings keep their snapshot.
+

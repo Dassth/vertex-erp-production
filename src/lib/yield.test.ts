@@ -4,8 +4,8 @@ import { calculateYield, ceilSafe, fromMm, roundUpToMultiple, toMm, validateUpsO
 const base = { sheetLengthMm: 1000, sheetWidthMm: 700, cutLengthMm: 200, cutWidthMm: 150, edgeMarginMm: 5, cutGapMm: 3, rotationAllowed: false }
 
 describe('sheet yield (ups)', () => {
-  it('fits a grid with edge allowance and cutting gap', () => {
-    // usable 990 × 690 → along floor(993/203)=4, across floor(693/153)=4
+  it('fits a grid on the whole sheet with a cutting gap', () => {
+    // whole sheet 1000 × 700 → along floor(1003/203)=4, across floor(703/153)=4
     const y = calculateYield(base)
     expect(y.ups).toBe(16)
     expect(y.along).toBe(4)
@@ -14,7 +14,7 @@ describe('sheet yield (ups)', () => {
   })
 
   it('uses the rotated orientation when it yields more and rotation is allowed', () => {
-    // rotated: along floor(993/153)=6, across floor(693/203)=3 → 18
+    // rotated: along floor(1003/153)=6, across floor(703/203)=3 → 18
     const y = calculateYield({ ...base, rotationAllowed: true })
     expect(y.ups).toBe(18)
     expect(y.orientation).toBe('rotated')
@@ -34,7 +34,10 @@ describe('sheet yield (ups)', () => {
 
   it('rejects invalid dimensions', () => {
     expect(calculateYield({ ...base, sheetWidthMm: 0 }).error).toMatch(/greater than zero/)
-    expect(calculateYield({ ...base, edgeMarginMm: 400 }).error).toMatch(/no usable area/)
+  })
+
+  it('ignores an old edge allowance — the whole sheet is used', () => {
+    expect(calculateYield({ ...base, edgeMarginMm: 400 })).toMatchObject({ ups: 16, error: null })
   })
 })
 
@@ -43,8 +46,9 @@ describe('ups override validation', () => {
     expect(validateUpsOverride(20, 'Nested die-line', base)).toBeNull()
     expect(validateUpsOverride(2.5, 'x', base)).toMatch(/whole number/)
     expect(validateUpsOverride(20, '  ', base)).toBeNull()
-    // usable 990×690 / (200×150) = 22.77 → limit 22
-    expect(validateUpsOverride(23, 'too many', base)).toMatch(/at most 22 fit/)
+    // whole sheet 1000×700 / (200×150) = 23.33 → limit 23
+    expect(validateUpsOverride(23, 'fits', base)).toBeNull()
+    expect(validateUpsOverride(24, 'too many', base)).toMatch(/at most 23 fit/)
     expect(validateUpsOverride(null, '', base)).toBeNull()
   })
 })

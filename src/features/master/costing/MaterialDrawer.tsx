@@ -220,16 +220,13 @@ function MaterialEditor({ material, onDirty, onDeleted }: { material: Material; 
                 <NumberInput value={fromMm(draft.sheetWidthMm, u)} onChange={mm('sheetWidthMm')} invalid={!!errors.sheetWidthMm || !draft.sheetWidthMm} />
               </Field>
               <div />
-              <Field label={`Edge allowance (${u})`} error={errors.edgeMarginMm} hint="Kept clear on all 4 edges.">
-                <NumberInput value={fromMm(draft.edgeMarginMm, u)} onChange={mm('edgeMarginMm')} invalid={!!errors.edgeMarginMm} />
-              </Field>
               <Field label={`Cutting gap (${u})`} error={errors.cutGapMm} hint="Between adjacent pieces.">
                 <NumberInput value={fromMm(draft.cutGapMm, u)} onChange={mm('cutGapMm')} invalid={!!errors.cutGapMm} />
               </Field>
             </div>
             <p className="flex gap-2 rounded-md bg-surface-2 px-3 py-2.5 text-xs leading-relaxed text-ink-2">
               <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-faint" aria-hidden="true" />
-              Pieces per sheet are worked out on a straight grid: every piece the same way round (as drawn or turned, whichever fits more), the edge allowance kept clear and the cutting gap between pieces. If your die layout fits a different number, enter it in the product's material use (“Different count per sheet?”).
+              Pieces per sheet are worked out on a straight grid: every piece the same way round (as drawn or turned, whichever fits more), using the whole sheet, with the cutting gap between pieces. If your die layout fits a different number, enter it in the product's material use (“Different count per sheet?”).
             </p>
           </section>
         ) : null}

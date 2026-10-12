@@ -92,9 +92,9 @@ function CostingWorkspace({ plan, costing, back }: { plan: Plan; costing: OrderC
   const uom = finalized ? costing.snapshot!.product.uom : (product?.uom ?? 'pcs')
   const order = db.orders.find((o) => o.id === costing.orderId)
 
-  const result = useMemo<CostingResult | null>(() => {
+  const calc = (inp: CostingInputs): CostingResult | null => {
     if (finalized) return costing.snapshot!.result
-    if (released) return revisedResult(costing.snapshot!, inputs, costing.snapshot!.result.taxLabel || db.settings.taxLabel)
+    if (released) return revisedResult(costing.snapshot!, inp, costing.snapshot!.result.taxLabel || db.settings.taxLabel)
     if (!product) return null
     return computeOrderCosting({
       quantity: plan.quantity,
@@ -102,10 +102,27 @@ function CostingWorkspace({ plan, costing, back }: { plan: Plan; costing: OrderC
       // This order's own material prices (set while planning) apply.
       materials: planMaterials(db, plan),
       settings: db.settings,
-      inputs,
+      inputs: inp,
     })
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const result = useMemo(() => calc(inputs), [finalized, released, costing.snapshot, product, plan.quantity, plan.materialPrices, db.materials, db.settings, inputs])
+  // The same without this screen's own prices and rates: what each would be otherwise (shown as a hint).
+  const usual = useMemo(
+    () => (finalized || (!inputs.materialPrices && !inputs.processRates) ? result : calc({ ...inputs, materialPrices: undefined, processRates: undefined })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [finalized, released, costing.snapshot, product, plan.quantity, plan.materialPrices, db.materials, db.settings, inputs])
+    [result, inputs, finalized],
+  )
+  /** Type a price or rate for this order; blank goes back to the usual one. */
+  const own = (key: 'materialPrices' | 'processRates', id: string, v: number | null) =>
+    setInputs((i) => {
+      const { [id]: _old, ...rest } = i[key] ?? {}
+      void _old
+      const next = v === null ? rest : { ...rest, [id]: v }
+      return { ...i, [key]: Object.keys(next).length ? next : undefined }
+    })
+  const usualPrice = (materialId: string) => usual?.materialLines.find((l) => l.materialId === materialId)?.price ?? null
+  const usualRate = (processId: string) => usual?.processLines.find((l) => l.processId === processId)?.rate ?? null
 
   const set = (patch: Partial<CostingInputs>) => setInputs((i) => ({ ...i, ...patch }))
   const allErrors = result?.issues.filter((i) => i.level === 'error') ?? []
@@ -205,7 +222,7 @@ function CostingWorkspace({ plan, costing, back }: { plan: Plan; costing: OrderC
         <div className="vx-anim-up flex flex-wrap items-center gap-3 rounded-md bg-warn-wash px-4 py-3 text-sm text-warn ring-1 ring-inset ring-warn-edge" role="status">
           <Pencil className="h-4 w-4 shrink-0" aria-hidden="true" />
           <span className="min-w-0 flex-1">
-            Revising the price of a released order: change profit, discount, tax or extra charges below. Materials and processes stay as released. Invoices already issued keep their price; dispatches from now on use the new one.
+            Revising the price of a released order: change a material or process rate, profit, discount, tax or extra charges below. Invoices already issued keep their price; dispatches from now on use the new one.
           </span>
         </div>
       ) : null}
@@ -220,7 +237,8 @@ function CostingWorkspace({ plan, costing, back }: { plan: Plan; costing: OrderC
         <>
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px] xl:items-start">
             <div className="min-w-0 space-y-6">
-              {!finalized && !revising && (errors.length || missing.length || warnings.length || finalizeIssues.length) ? (
+              {/* While revising, wrong values are listed too — otherwise the amount shows “—” with no reason. */}
+              {!finalized && (errors.length || (!revising && (missing.length || warnings.length || finalizeIssues.length))) ? (
                 <Card className="vx-anim-up p-5">
                   {errors.length || (finalizeIssues.length && !missing.length) ? (
                     <IssueList issues={errors.length ? errors : finalizeIssues} title={`${errors.length || finalizeIssues.length} value(s) must be corrected before finalizing`} />
@@ -237,8 +255,12 @@ function CostingWorkspace({ plan, costing, back }: { plan: Plan; costing: OrderC
                 </Card>
               ) : null}
 
-              <MaterialsTable result={result} ownPrices={finalized || released ? 0 : Object.keys(plan.materialPrices ?? {}).length} />
-              <ProcessesTable result={result} />
+              <MaterialsTable
+                result={result}
+                ownPrices={finalized || released ? 0 : Object.keys(plan.materialPrices ?? {}).length}
+                edit={finalized ? undefined : { prices: inputs.materialPrices ?? {}, usual: usualPrice, onChange: (id, v) => own('materialPrices', id, v) }}
+              />
+              <ProcessesTable result={result} edit={finalized ? undefined : { rates: inputs.processRates ?? {}, usual: usualRate, onChange: (id, v) => own('processRates', id, v) }} />
 
               <Card className="vx-anim-up">
                 <CardHead title="Additional order charges" subtitle="Order-specific costs added to total cost (e.g. transport, design, plates)" />
@@ -505,12 +527,38 @@ function Mini({ label, value, tone }: { label: string; value: string; tone?: str
   )
 }
 
-function MaterialsTable({ result, ownPrices = 0 }: { result: CostingResult; ownPrices?: number }) {
+/** A rate typed for this order: blank = the usual one (shown as the hint). */
+function RateInput({ label, value, usual, onChange }: { label: string; value: number | undefined; usual: number | null; onChange: (v: number | null) => void }) {
+  return (
+    <div className="ml-auto w-28">
+      {/* Shows the rate in use; typing the usual rate again (or clearing) goes back to it. */}
+      <NumberInput
+        aria-label={label}
+        className={cx('h-8 text-right', value !== undefined && value !== usual && 'border-accent bg-accent-wash')}
+        value={value ?? usual}
+        placeholder="Enter"
+        invalid={value !== undefined && (!Number.isFinite(value) || value < 0)}
+        onChange={(v) => onChange(v === null || v === usual ? null : v)}
+      />
+      {value !== undefined && value !== usual ? <span className="mt-0.5 block text-right text-2xs text-accent-text">was {usual === null ? 'not set' : moneyPaise(usual)}</span> : null}
+    </div>
+  )
+}
+
+function MaterialsTable({
+  result,
+  ownPrices = 0,
+  edit,
+}: {
+  result: CostingResult
+  ownPrices?: number
+  edit?: { prices: Record<string, number>; usual: (materialId: string) => number | null; onChange: (materialId: string, v: number | null) => void }
+}) {
   return (
     <Card className="vx-anim-up overflow-hidden">
       <CardHead
         title="Materials"
-        subtitle={`${ownPrices ? `${ownPrices} material price(s) were changed for this order in the plan. ` : ''}Wastage is applied once to the net requirement; purchase quantities are rounded up. Total ${moneyPaise(result.materialCost)}`}
+        subtitle={`${edit ? 'Tap a rate to change it for this order. ' : ''}${ownPrices ? `${ownPrices} material price(s) were changed for this order in the plan. ` : ''}Wastage is applied once; purchase quantities are rounded up. Total ${moneyPaise(result.materialCost)}`}
       />
       {result.materialLines.length === 0 ? (
         <p className="px-5 py-6 text-sm text-muted">No materials on this product.</p>
@@ -520,13 +568,13 @@ function MaterialsTable({ result, ownPrices = 0 }: { result: CostingResult; ownP
             <thead>
               <tr>
                 <th className="vx-th">Material</th>
+                <th className="vx-th text-right">Rate</th>
                 <th className="vx-th text-right">Ups / sheet</th>
                 <th className="vx-th text-right">Pieces</th>
                 <th className="vx-th text-right">Net</th>
                 <th className="vx-th text-right">Wastage</th>
                 <th className="vx-th text-right">Total</th>
                 <th className="vx-th text-right">Purchase</th>
-                <th className="vx-th text-right">Rate</th>
                 <th className="vx-th text-right">Amount</th>
               </tr>
             </thead>
@@ -542,6 +590,16 @@ function MaterialsTable({ result, ownPrices = 0 }: { result: CostingResult; ownP
                         {l.code}
                         {l.stageName ? ` · ${l.stageName}${l.processName ? ` › ${l.processName}` : ''}` : ' · whole product'}
                       </span>
+                    </td>
+                    <td className="vx-td text-right tabular-nums">
+                      {edit ? (
+                        <RateInput label={`${l.name} rate for this order`} value={edit.prices[l.materialId]} usual={edit.usual(l.materialId)} onChange={(v) => edit.onChange(l.materialId, v)} />
+                      ) : l.price === null ? (
+                        <Badge tone="red">Missing</Badge>
+                      ) : (
+                        moneyPaise(l.price)
+                      )}
+                      <span className="block text-2xs text-faint">per {l.pricedUnitLabel}</span>
                     </td>
                     <td className="vx-td text-right">
                       {l.sheet ? (
@@ -569,7 +627,6 @@ function MaterialsTable({ result, ownPrices = 0 }: { result: CostingResult; ownP
                       </span>
                       {l.surplusQty > 0 ? <span className="block text-2xs text-faint">+{qty(l.surplusQty, digits)} {unit} surplus</span> : null}
                     </td>
-                    <td className="vx-td text-right tabular-nums">{l.price === null ? <Badge tone="red">Missing</Badge> : moneyPaise(l.price)}</td>
                     <td className="vx-td text-right font-semibold tabular-nums text-ink">{moneyPaise(l.amount)}</td>
                   </tr>
                 )
@@ -582,18 +639,18 @@ function MaterialsTable({ result, ownPrices = 0 }: { result: CostingResult; ownP
   )
 }
 
-function ProcessesTable({ result }: { result: CostingResult }) {
+function ProcessesTable({ result, edit }: { result: CostingResult; edit?: { rates: Record<string, number>; usual: (processId: string) => number | null; onChange: (processId: string, v: number | null) => void } }) {
   return (
     <Card className="vx-anim-up overflow-hidden">
-      <CardHead title="Processes & setup" subtitle={`Run ${moneyPaise(result.processRunCost)} · setup ${moneyPaise(result.setupCost)}`} />
+      <CardHead title="Processes & setup" subtitle={`${edit ? 'Tap a rate to change it for this order. ' : ''}Run ${moneyPaise(result.processRunCost)} · setup ${moneyPaise(result.setupCost)}`} />
       <div className="overflow-x-auto">
         <table className="w-full min-w-[860px]">
           <thead>
             <tr>
               <th className="vx-th">Stage › process</th>
+              <th className="vx-th text-right">Rate</th>
               <th className="vx-th">Rate source</th>
               <th className="vx-th text-right">Hours</th>
-              <th className="vx-th text-right">Rate</th>
               <th className="vx-th text-right">Run cost</th>
               <th className="vx-th text-right">Setup</th>
               <th className="vx-th text-right">Amount</th>
@@ -606,11 +663,19 @@ function ProcessesTable({ result }: { result: CostingResult }) {
                   <span className="block text-2xs text-faint">{l.stageName}</span>
                   <span className="block font-medium text-ink">{l.processName}</span>
                 </td>
+                <td className="vx-td text-right tabular-nums">
+                  {edit ? (
+                    <RateInput label={`${l.processName} rate for this order`} value={edit.rates[l.processId]} usual={edit.usual(l.processId)} onChange={(v) => edit.onChange(l.processId, v)} />
+                  ) : l.rate === null ? (
+                    <Badge tone="red">Missing</Badge>
+                  ) : (
+                    moneyPaise(l.rate)
+                  )}
+                </td>
                 <td className="vx-td text-sm">
                   {l.chargeName ?? 'Custom'} <span className="block text-2xs text-faint">{COST_BASIS_LABEL[l.basis]}</span>
                 </td>
                 <td className="vx-td text-right tabular-nums">{qty(l.hours, 2)}</td>
-                <td className="vx-td text-right tabular-nums">{l.rate === null ? <Badge tone="red">Missing</Badge> : moneyPaise(l.rate)}</td>
                 <td className="vx-td text-right tabular-nums">{moneyPaise(l.runCost)}</td>
                 <td className="vx-td text-right tabular-nums">{l.setupCharge === null ? <Badge tone="red">Missing</Badge> : moneyPaise(l.setupCost)}</td>
                 <td className="vx-td text-right font-semibold tabular-nums text-ink">{moneyPaise(l.amount)}</td>

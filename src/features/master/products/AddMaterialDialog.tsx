@@ -274,9 +274,6 @@ export function AddMaterialDialog({
               </Field>
               {mat.kind === 'sheet' ? (
                 <>
-                  <Field label={`Edge allowance (${mat.sizeUnit})`} error={errors.edgeMarginMm} hint="Kept clear on all 4 edges.">
-                    <NumberInput value={fromMm(mat.edgeMarginMm, mat.sizeUnit)} onChange={(v) => setM({ edgeMarginMm: v === null ? 0 : (mm(v, mat.sizeUnit) ?? 0) })} invalid={!!errors.edgeMarginMm} />
-                  </Field>
                   <Field label={`Cutting gap (${mat.sizeUnit})`} error={errors.cutGapMm} hint="Between pieces.">
                     <NumberInput value={fromMm(mat.cutGapMm, mat.sizeUnit)} onChange={(v) => setM({ cutGapMm: v === null ? 0 : (mm(v, mat.sizeUnit) ?? 0) })} invalid={!!errors.cutGapMm} />
                   </Field>

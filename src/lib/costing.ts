@@ -135,10 +135,9 @@ export function usageConfigIssues(line: ProductMaterial, m: Material): string[] 
 function doesNotFit(m: Material, line: ProductMaterial): string {
   const u = m.sizeUnit ?? 'mm'
   const size = (a: number | null, b: number | null) => `${fromMm(a, u)} × ${fromMm(b, u)} ${u === 'in' ? 'inch' : u}`
-  const edge = m.edgeMarginMm ? `, less ${fromMm(m.edgeMarginMm, u)} ${u === 'in' ? 'inch' : u} edge allowance` : ''
   const tiny = (m.sheetLengthMm ?? 0) < 120 && (m.sheetWidthMm ?? 0) < 120
   return (
-    `the cut piece ${size(line.cutLengthMm, line.cutWidthMm)} does not fit on the sheet ${size(m.sheetLengthMm, m.sheetWidthMm)}${edge}` +
+    `the cut piece ${size(line.cutLengthMm, line.cutWidthMm)} does not fit on the sheet ${size(m.sheetLengthMm, m.sheetWidthMm)}` +
     (tiny ? ' — the sheet size looks very small; was it typed in inches with the unit set to mm?' : ' — check the sheet size or the cut size')
   )
 }
@@ -182,7 +181,11 @@ export function computeOrderCosting(args: {
     if (!s.processes.length) error(`Stage “${s.name}” has no processes.`, productFix)
   }
 
-  const byId = new Map(args.materials.map((m) => [m.id, m]))
+  // Prices and rates typed on the costing screen for this order win over Master.
+  const ownPrice = inputs.materialPrices ?? {}
+  for (const [id, v] of Object.entries(ownPrice))
+    if (!Number.isFinite(v) || v < 0) error(`${args.materials.find((m) => m.id === id)?.name ?? 'A material'}: the price for this order must be 0 or more.`)
+  const byId = new Map(args.materials.map((m) => [m.id, ownPrice[m.id] !== undefined && Number.isFinite(ownPrice[m.id]) && ownPrice[m.id] >= 0 ? { ...m, price: ownPrice[m.id] } : m]))
   const stageName = (id: string | null) => product.stages.find((s) => s.id === id)?.name ?? ''
   const processName = (id: string | null) =>
     product.stages.flatMap((s) => s.processes).find((p) => p.id === id)?.name ?? ''
@@ -310,6 +313,9 @@ export function computeOrderCosting(args: {
       let rate = p.rate
       let setupCharge = p.setupCharge
       let chargeName: string | null = null
+      const typed = inputs.processRates?.[p.id]
+      if (typed !== undefined && (!Number.isFinite(typed) || typed < 0)) error(`${stage.name} › ${p.name}: the rate for this order must be 0 or more.`)
+      const own = typed !== undefined && Number.isFinite(typed) && typed >= 0 ? typed : undefined
 
       if (p.chargeId) {
         const charge = settings.processCharges.find((c) => c.id === p.chargeId)
@@ -319,14 +325,18 @@ export function computeOrderCosting(args: {
           rate = null
           setupCharge = null
         } else {
-          chargeName = charge.name
+          chargeName = own !== undefined ? 'This order' : charge.name
           basis = charge.basis
-          rate = charge.rate
+          rate = own ?? charge.rate
           setupCharge = charge.setupCharge
           if (!charge.active) warn(`Process charge “${charge.name}” is deactivated but still referenced.`, chargeFix)
           if (rate === null) gap(`Process charge “${charge.name}” has no rate.`, chargeFix)
         }
       } else {
+        if (own !== undefined) {
+          rate = own
+          chargeName = 'This order'
+        }
         if (rate === null) gap(`${stage.name} › ${p.name}: rate not entered (enter 0 if no charge).`, productFix)
       }
       if ((rate !== null && rate < 0) || (setupCharge !== null && setupCharge < 0))

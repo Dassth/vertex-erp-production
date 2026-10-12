@@ -238,7 +238,7 @@ export function MasterCostingPage() {
                                 {m.sheetLengthMm && m.sheetWidthMm ? `${fromMm(m.sheetLengthMm, u)} × ${fromMm(m.sheetWidthMm, u)} ${u}` : <span className="text-risk">Sheet size missing</span>}
                               </span>
                               <span className="block text-2xs text-faint">
-                                edge {fromMm(m.edgeMarginMm, u)} · gap {fromMm(m.cutGapMm, u)} {u} · wastage {m.wastagePct}% · {r.usages.length} usage(s)
+                                cutting gap {fromMm(m.cutGapMm, u)} {u} · wastage {m.wastagePct}% · {r.usages.length} usage(s)
                               </span>
                             </>
                           ) : (

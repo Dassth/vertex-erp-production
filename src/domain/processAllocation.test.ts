@@ -4,7 +4,7 @@ import { ADMIN, UNIT, ctxFor, must, seedResources } from '../test/fixtures'
 import { buildEmptyDB } from '../lib/defaults'
 import { blankMaterialDraft, saveCustomer, saveMaterial, saveProduct, setMaterialPrice } from './master'
 import { savePlan, submitPlan } from './planning'
-import { finalizeCosting, openCosting } from './orderCosting'
+import { finalizeCosting, openCosting, reviseCosting } from './orderCosting'
 import { assignProcessResources, completeProcess, startProcess } from './production'
 import { unitWork } from '../lib/selectors'
 import { isStageDone } from '../lib/schedule'
@@ -178,5 +178,26 @@ describe('a material price changed while planning', () => {
     expect(master.value.price).toBe(25)
     expect(master.db.audit[0]).toMatchObject({ action: 'Material price changed', oldValue: '20', newValue: '25' })
     expect(setMaterialPrice(materialId, -5)(priced.db, admin()).ok).toBe(false)
+  })
+})
+
+describe('rates changed on the costing screen', () => {
+  it('apply to a draft costing and to the revision of a released order', () => {
+    const base = oneStageThreeProcesses()
+    const materialId = base.db.materials[0].id
+    const plan = must(savePlan(planDraft(base.customerId, base.productId, { 'PRC-001': 'U1', 'PRC-002': 'U2', 'PRC-003': 'U1' }))(base.db, admin()))
+    const submitted = must(submitPlan(plan.value.id)(plan.db, admin()))
+    const costing = must(openCosting(plan.value.id)(submitted.db, admin()))
+    const inputs = { ...costing.value.inputs, materialPrices: { [materialId]: 30 }, processRates: { 'PRC-002': 600 } }
+    const done = must(finalizeCosting(costing.value.id, inputs)(costing.db, admin()))
+    const snap = done.value.costing.snapshot!
+    expect(snap.result.materialLines[0].price).toBe(30)
+    expect(snap.result.processLines.find((l) => l.processId === 'PRC-002')).toMatchObject({ rate: 600, chargeName: 'This order', runCost: 600 })
+
+    const released = done.db.costings.find((c) => c.id === costing.value.id)!
+    const revised = must(reviseCosting(released.id, { ...snap.inputs, materialPrices: { [materialId]: 40 } }, released.updatedAt)(done.db, admin()))
+    expect(revised.value.snapshot!.result.materialLines[0].price).toBe(40)
+    expect(revised.value.snapshot!.result.grandTotal).toBeGreaterThan(snap.result.grandTotal)
+    expect(reviseCosting(released.id, { ...snap.inputs, processRates: { 'PRC-002': -1 } }, released.updatedAt)(done.db, admin()).ok).toBe(false)
   })
 })

@@ -4,11 +4,12 @@
  * SUPPORTED LAYOUT — a straight guillotine grid:
  *   • every piece on a sheet has the same orientation (all as drawn, or all
  *     rotated 90° when rotation is allowed — the better of the two is used);
- *   • an edge allowance is kept clear on all four sides of the sheet;
+ *   • the whole sheet is usable (the owner asked to drop the edge allowance,
+ *     2026-10-12 — a stored value is kept but no longer counted);
  *   • a uniform cutting gap separates adjacent pieces (none at the outer edge);
  *   • pieces are rectangles.
  *
- *   usable length  = sheet length − 2 × edge allowance
+ *   usable length  = sheet length
  *   pieces along   = floor((usable length + gap) ÷ (piece length + gap))
  *   ups            = pieces along × pieces across
  *
@@ -26,7 +27,8 @@ export interface YieldInput {
   sheetWidthMm: number
   cutLengthMm: number
   cutWidthMm: number
-  edgeMarginMm: number
+  /** No longer counted — the whole sheet is usable. Kept so older callers and data still fit. */
+  edgeMarginMm?: number
   cutGapMm: number
   rotationAllowed: boolean
 }
@@ -53,18 +55,16 @@ export function fitCount(usable: number, piece: number, gap: number): number {
 }
 
 export function validateYieldInput(input: YieldInput): string | null {
-  const { sheetLengthMm, sheetWidthMm, cutLengthMm, cutWidthMm, edgeMarginMm, cutGapMm } = input
+  const { sheetLengthMm, sheetWidthMm, cutLengthMm, cutWidthMm, cutGapMm } = input
   if (!(sheetLengthMm > 0) || !(sheetWidthMm > 0)) return 'Source sheet dimensions must be greater than zero.'
   if (!(cutLengthMm > 0) || !(cutWidthMm > 0)) return 'Cut-piece dimensions must be greater than zero.'
-  if (!(edgeMarginMm >= 0) || !(cutGapMm >= 0)) return 'Edge allowance and cutting gap cannot be negative.'
-  if (sheetLengthMm - 2 * edgeMarginMm <= 0 || sheetWidthMm - 2 * edgeMarginMm <= 0)
-    return 'The edge allowance leaves no usable area on the sheet.'
+  if (!(cutGapMm >= 0)) return 'Cutting gap cannot be negative.'
   return null
 }
 
 export function calculateYield(input: YieldInput): YieldResult {
-  const usableLengthMm = input.sheetLengthMm - 2 * input.edgeMarginMm
-  const usableWidthMm = input.sheetWidthMm - 2 * input.edgeMarginMm
+  const usableLengthMm = input.sheetLengthMm
+  const usableWidthMm = input.sheetWidthMm
   const empty: YieldResult = {
     ups: 0,
     orientation: 'as-drawn',
@@ -133,7 +133,7 @@ export function validateUpsOverride(
   void reason
   const invalid = validateYieldInput({ ...input, cutGapMm: 0 })
   if (invalid) return invalid
-  const usable = (input.sheetLengthMm - 2 * input.edgeMarginMm) * (input.sheetWidthMm - 2 * input.edgeMarginMm)
+  const usable = input.sheetLengthMm * input.sheetWidthMm
   const limit = Math.floor((usable + EPS) / (input.cutLengthMm * input.cutWidthMm))
   if (override > limit)
     return `${override} pieces cannot fit on this sheet — at most ${limit} fit by area.`
