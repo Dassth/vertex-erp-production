@@ -272,13 +272,6 @@ export function AddMaterialDialog({
               <Field label="Buy in multiples of" error={errors.purchaseMultiple} hint={mat.kind === 'sheet' ? 'sheets' : mat.uom || 'units'}>
                 <NumberInput value={mat.purchaseMultiple} onChange={(v) => setM({ purchaseMultiple: v ?? 1 })} invalid={!!errors.purchaseMultiple} />
               </Field>
-              {mat.kind === 'sheet' ? (
-                <>
-                  <Field label={`Cutting gap (${mat.sizeUnit})`} error={errors.cutGapMm} hint="Between pieces.">
-                    <NumberInput value={fromMm(mat.cutGapMm, mat.sizeUnit)} onChange={(v) => setM({ cutGapMm: v === null ? 0 : (mm(v, mat.sizeUnit) ?? 0) })} invalid={!!errors.cutGapMm} />
-                  </Field>
-                </>
-              ) : null}
               <Field label="Supplier" className="sm:col-span-2" as="div">
                 <SupplierInput aria-label="Supplier" value={mat.supplier} onChange={(v) => setM({ supplier: v })} placeholder="Choose or type a new one…" />
               </Field>

@@ -67,6 +67,19 @@ export function planCostingSource(db: Pick<VertexDB, 'materials'>, plan: { size?
   }
 }
 
+/** The quotation's costing inputs for a plan made from it (see domain/quotations). */
+function quotationInputs(db: VertexDB, quotationId: string | null | undefined, fresh: (prefix: string) => string): CostingInputs | null {
+  const q = quotationId ? (db.quotations ?? []).find((x) => x.id === quotationId) : undefined
+  if (!q) return null
+  const inputs: CostingInputs = { ...structuredClone(q.inputs), charges: q.inputs.charges.map((c) => ({ ...c, id: fresh('chg') })) }
+  // A round price typed by hand becomes the markup on cost that gives it.
+  if (q.pricePerPiece !== null && q.totals.totalCost > 0) {
+    const markup = ((q.pricePerPiece * q.quantity) / q.totals.totalCost - 1) * 100
+    return { ...inputs, profitMethod: 'markup', profitPct: Math.max(0, Math.round(markup * 10000) / 10000) }
+  }
+  return inputs
+}
+
 /**
  * Master materials with this order's own prices applied — every costing of a
  * plan reads materials through here, so a price changed while planning is used.
@@ -112,7 +125,8 @@ export const openCosting = command(
       id: ctx.newId('CST'),
       code: docCode('CST', seq),
       planId,
-      inputs: defaultCostingInputs(db, product, ctx.newId),
+      // A plan made from a quotation starts with the profit, rates and charges the customer was quoted.
+      inputs: quotationInputs(db, plan.quotationId, ctx.newId) ?? defaultCostingInputs(db, product, ctx.newId),
       status: 'Draft',
       finalizedAt: null,
       finalizedBy: null,

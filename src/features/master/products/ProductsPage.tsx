@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { Boxes, CheckCircle2, FileDown, FileInput, FileUp, Layers, Package, Pencil, Plus, Search, TriangleAlert } from 'lucide-react'
 import { useStore } from '../../../store/store'
 import type { Product } from '../../../lib/types'
@@ -9,7 +9,7 @@ import { Badge, Button, Card, CardHead, ConfirmDialog, EmptyState, Modal, Search
 import { importProductTemplates, planTemplateImport, TEMPLATE_BATCHES } from '../../../domain/imports'
 import type { ImportResult } from '../../../domain/imports'
 import { JEWELLERY_BATCH_ID } from '../../../lib/templates/jewelleryBoxes'
-import { LinkButton, PageHeader, StatStrip, StatTile, useDocumentTitle } from '../../../components/page'
+import { LinkButton, PageHeader, StatStrip, StatTile, openRow, useDocumentTitle } from '../../../components/page'
 import { ActiveBadge } from '../../../components/status'
 import { productIssues } from '../masterSelectors'
 import { AddFromFileDialog } from './AddFromFileDialog'
@@ -21,6 +21,7 @@ import type { ProductDraft } from '../../../domain/master'
 type StatusFilter = 'all' | 'active' | 'inactive' | 'issues'
 
 export function ProductsPage() {
+  const navigate = useNavigate()
   useDocumentTitle('Master · Products')
   const { db, run, pushToast, can } = useStore()
   const [importOpen, setImportOpen] = useState(false)
@@ -166,7 +167,7 @@ export function ProductsPage() {
               </thead>
               <tbody>
                 {filtered.map(({ product: p, issues, plans, processes }) => (
-                  <tr key={p.id} className="vx-row">
+                  <tr key={p.id} {...openRow(() => navigate(`/master/products/${p.id}`))} className="vx-row cursor-pointer">
                     <td className="vx-td vx-td-wrap">
                       <Link to={`/master/products/${p.id}`} className="vx-focus rounded-xs font-medium text-ink hover:text-accent-text hover:underline">
                         {p.name}

@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Calculator, CheckCircle2, FileClock, IndianRupee, PencilRuler } from 'lucide-react'
 import { useStore } from '../../store/store'
 import { previewCosting } from '../../domain/orderCosting'
@@ -7,10 +7,11 @@ import { computeOrderCosting } from '../../lib/costing'
 import { defaultCostingInputs, planCostingSource } from '../../domain/orderCosting'
 import { fmtDate, money, moneyShort, pieces } from '../../lib/format'
 import { Badge, Card, CardHead, EmptyState } from '../../components/ui'
-import { LinkButton, PageHeader, StatStrip, StatTile, useDocumentTitle } from '../../components/page'
+import { LinkButton, PageHeader, StatStrip, StatTile, openRow, useDocumentTitle } from '../../components/page'
 import { CostingStatusBadge } from '../../components/status'
 
 export function CostingListPage() {
+  const navigate = useNavigate()
   useDocumentTitle('Order costing')
   const { db } = useStore()
 
@@ -101,7 +102,7 @@ export function CostingListPage() {
                   const errors = result?.issues.filter((i) => i.level === 'error').length ?? 0
                   const done = costing?.status === 'Finalized'
                   return (
-                    <tr key={plan.id} className="vx-row">
+                    <tr key={plan.id} {...openRow(() => navigate(`/costing/${plan.id}`))} className="vx-row cursor-pointer">
                       <td className="vx-td">
                         <span className="vx-code block font-semibold text-ink">{plan.code}</span>
                         <span className="block text-2xs text-faint">delivery {fmtDate(plan.deliveryDate, 'dd MMM yy')}</span>

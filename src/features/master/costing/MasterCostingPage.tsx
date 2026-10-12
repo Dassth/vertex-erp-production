@@ -6,7 +6,7 @@ import { PRICING_BASIS_LABEL, pricedUnitLabel } from '../../../lib/costing'
 import { fromMm } from '../../../lib/yield'
 import { cx, fmtDate, moneyPaise } from '../../../lib/format'
 import { Badge, Button, Card, CardHead, EmptyState, Pagination, SearchInput, Segmented, Select } from '../../../components/ui'
-import { LinkButton, PageHeader, StatStrip, StatTile, useDocumentTitle } from '../../../components/page'
+import { LinkButton, PageHeader, StatStrip, StatTile, openRow, useDocumentTitle } from '../../../components/page'
 import { materialRows } from '../masterSelectors'
 import type { MaterialRow } from '../masterSelectors'
 import { MaterialDrawer } from './MaterialDrawer'
@@ -191,7 +191,7 @@ export function MasterCostingPage() {
                     const m = r.material
                     const u = m.sizeUnit
                     return (
-                      <tr key={m.id} className={cx('vx-row', r.missingPrice && m.active && 'bg-risk-wash/40')}>
+                      <tr key={m.id} {...openRow(() => update({ material: m.id }))} className={cx('vx-row cursor-pointer', r.missingPrice && m.active && 'bg-risk-wash/40')}>
                         <td className="vx-td vx-td-wrap">
                           <span className="block font-medium text-ink">{m.name}</span>
                           <span className="vx-code block text-2xs text-faint">{m.code}</span>
@@ -238,7 +238,7 @@ export function MasterCostingPage() {
                                 {m.sheetLengthMm && m.sheetWidthMm ? `${fromMm(m.sheetLengthMm, u)} × ${fromMm(m.sheetWidthMm, u)} ${u}` : <span className="text-risk">Sheet size missing</span>}
                               </span>
                               <span className="block text-2xs text-faint">
-                                cutting gap {fromMm(m.cutGapMm, u)} {u} · wastage {m.wastagePct}% · {r.usages.length} usage(s)
+                                wastage {m.wastagePct}% · {r.usages.length} usage(s)
                               </span>
                             </>
                           ) : (

@@ -6,7 +6,8 @@
  *     rotated 90° when rotation is allowed — the better of the two is used);
  *   • the whole sheet is usable (the owner asked to drop the edge allowance,
  *     2026-10-12 — a stored value is kept but no longer counted);
- *   • a uniform cutting gap separates adjacent pieces (none at the outer edge);
+ *   • pieces sit edge to edge (the cutting gap was dropped on 2026-10-12 like
+ *     the edge allowance — stored values are kept but no longer counted);
  *   • pieces are rectangles.
  *
  *   usable length  = sheet length
@@ -29,7 +30,8 @@ export interface YieldInput {
   cutWidthMm: number
   /** No longer counted — the whole sheet is usable. Kept so older callers and data still fit. */
   edgeMarginMm?: number
-  cutGapMm: number
+  /** No longer counted — pieces sit edge to edge. Kept so older callers and data still fit. */
+  cutGapMm?: number
   rotationAllowed: boolean
 }
 
@@ -55,10 +57,9 @@ export function fitCount(usable: number, piece: number, gap: number): number {
 }
 
 export function validateYieldInput(input: YieldInput): string | null {
-  const { sheetLengthMm, sheetWidthMm, cutLengthMm, cutWidthMm, cutGapMm } = input
+  const { sheetLengthMm, sheetWidthMm, cutLengthMm, cutWidthMm } = input
   if (!(sheetLengthMm > 0) || !(sheetWidthMm > 0)) return 'Source sheet dimensions must be greater than zero.'
   if (!(cutLengthMm > 0) || !(cutWidthMm > 0)) return 'Cut-piece dimensions must be greater than zero.'
-  if (!(cutGapMm >= 0)) return 'Cutting gap cannot be negative.'
   return null
 }
 
@@ -82,8 +83,8 @@ export function calculateYield(input: YieldInput): YieldResult {
   const pieceArea = input.cutLengthMm * input.cutWidthMm
   const areaLimit = Math.floor((usableLengthMm * usableWidthMm + EPS) / pieceArea)
 
-  const alongA = fitCount(usableLengthMm, input.cutLengthMm, input.cutGapMm)
-  const acrossA = fitCount(usableWidthMm, input.cutWidthMm, input.cutGapMm)
+  const alongA = fitCount(usableLengthMm, input.cutLengthMm, 0)
+  const acrossA = fitCount(usableWidthMm, input.cutWidthMm, 0)
   let best: Pick<YieldResult, 'ups' | 'along' | 'across' | 'orientation'> = {
     ups: alongA * acrossA,
     along: alongA,
@@ -92,8 +93,8 @@ export function calculateYield(input: YieldInput): YieldResult {
   }
 
   if (input.rotationAllowed) {
-    const alongB = fitCount(usableLengthMm, input.cutWidthMm, input.cutGapMm)
-    const acrossB = fitCount(usableWidthMm, input.cutLengthMm, input.cutGapMm)
+    const alongB = fitCount(usableLengthMm, input.cutWidthMm, 0)
+    const acrossB = fitCount(usableWidthMm, input.cutLengthMm, 0)
     if (alongB * acrossB > best.ups) {
       best = { ups: alongB * acrossB, along: alongB, across: acrossB, orientation: 'rotated' }
     }
@@ -131,7 +132,7 @@ export function validateUpsOverride(
   if (!Number.isInteger(override) || override < 1) return 'Pieces per sheet must be a whole number of at least 1.'
   // A note on why is welcome but never required.
   void reason
-  const invalid = validateYieldInput({ ...input, cutGapMm: 0 })
+  const invalid = validateYieldInput(input)
   if (invalid) return invalid
   const usable = input.sheetLengthMm * input.sheetWidthMm
   const limit = Math.floor((usable + EPS) / (input.cutLengthMm * input.cutWidthMm))

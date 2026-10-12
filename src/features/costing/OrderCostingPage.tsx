@@ -545,7 +545,7 @@ function RateInput({ label, value, usual, onChange }: { label: string; value: nu
   )
 }
 
-function MaterialsTable({
+export function MaterialsTable({
   result,
   ownPrices = 0,
   edit,
@@ -639,7 +639,7 @@ function MaterialsTable({
   )
 }
 
-function ProcessesTable({ result, edit }: { result: CostingResult; edit?: { rates: Record<string, number>; usual: (processId: string) => number | null; onChange: (processId: string, v: number | null) => void } }) {
+export function ProcessesTable({ result, edit }: { result: CostingResult; edit?: { rates: Record<string, number>; usual: (processId: string) => number | null; onChange: (processId: string, v: number | null) => void } }) {
   return (
     <Card className="vx-anim-up overflow-hidden">
       <CardHead title="Processes & setup" subtitle={`${edit ? 'Tap a rate to change it for this order. ' : ''}Run ${moneyPaise(result.processRunCost)} · setup ${moneyPaise(result.setupCost)}`} />

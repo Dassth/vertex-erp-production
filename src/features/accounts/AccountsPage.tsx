@@ -14,7 +14,7 @@ import type { MoneyDraft } from '../../domain/cashbook'
 import { Badge, Button, Card, CardHead, ConfirmDialog, EmptyState, Field, IconButton, Input, Modal, Segmented, Select, Textarea } from '../../components/ui'
 import { CustomerInput } from '../../components/CustomerInput'
 import { SupplierInput } from '../../components/SupplierInput'
-import { NumberInput, PageHeader, StatStrip, StatTile, useDocumentTitle } from '../../components/page'
+import { NumberInput, PageHeader, StatStrip, StatTile, openRow, useDocumentTitle } from '../../components/page'
 import { DownloadButton, ExcelButton, moneyMonthDoc, useLatestDb } from '../../components/DocumentPreview'
 
 /* ---------------------------------------------------------------------------
@@ -385,7 +385,7 @@ function EntriesCard({ entries, month, monthLabel, onEdit, onDelete, onNew }: { 
             </thead>
             <tbody>
               {entries.map((m) => (
-                <tr key={m.id} className="border-t border-rule">
+                <tr key={m.id} {...openRow(() => onEdit(m))} className="vx-row cursor-pointer">
                   <td className="vx-td">{fmtDate(m.date)}</td>
                   <td className="vx-td">
                     <span className="vx-code font-semibold">{m.code}</span>
@@ -409,9 +409,9 @@ function EntriesCard({ entries, month, monthLabel, onEdit, onDelete, onNew }: { 
                   <td className={cx('vx-td font-semibold text-ink', amountClass)}>{m.direction === 'out' ? moneyPaise(m.amount) : ''}</td>
                   <td className="vx-td">
                     <span className="flex justify-end gap-1">
-                      <IconButton label={`Edit ${m.code}`} onClick={() => onEdit(m)}>
-                        <Pencil className="h-4 w-4" />
-                      </IconButton>
+                      <Button size="sm" variant="secondary" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => onEdit(m)} aria-label={`Edit ${m.code}`}>
+                        Edit
+                      </Button>
                       <IconButton label={`Delete ${m.code}`} onClick={() => onDelete(m)}>
                         <Trash2 className="h-4 w-4" />
                       </IconButton>

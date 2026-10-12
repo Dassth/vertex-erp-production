@@ -85,7 +85,7 @@ export function blankMaterialDraft(kind: MaterialKind = 'quantity'): MaterialDra
     sheetLengthMm: null,
     sheetWidthMm: null,
     edgeMarginMm: 0,
-    cutGapMm: kind === 'sheet' ? 3 : 0,
+    cutGapMm: 0,
     wastagePct: 0,
     purchaseMultiple: 1,
     supplier: '',
@@ -148,7 +148,6 @@ export function validateMaterialDraft(materials: Material[], products: Product[]
   if (d.thicknessMm !== undefined && !positiveOrNull(d.thicknessMm)) e.thicknessMm = 'Thickness must be greater than zero — or leave it blank.'
   if (!positiveOrNull(d.sheetLengthMm)) e.sheetLengthMm = 'Sheet length must be greater than zero.'
   if (!positiveOrNull(d.sheetWidthMm)) e.sheetWidthMm = 'Sheet width must be greater than zero.'
-  if (!(isFiniteNumber(d.cutGapMm) && d.cutGapMm >= 0)) e.cutGapMm = 'Cutting gap cannot be negative.'
   if (!(isFiniteNumber(d.wastagePct) && d.wastagePct >= 0 && d.wastagePct < 100)) e.wastagePct = 'Wastage must be between 0 and 99.99%.'
   if (!(isFiniteNumber(d.purchaseMultiple) && d.purchaseMultiple > 0)) e.purchaseMultiple = 'Purchase rounding must be greater than zero.'
   if (d.id) {

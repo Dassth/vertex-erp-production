@@ -30,12 +30,13 @@ describe('order costing totals', () => {
     const r = run()
     expect(r.valid).toBe(true)
     const sheet = r.materialLines.find((l) => l.kind === 'sheet')!
-    expect(sheet.sheet?.ups).toBe(18)
+    // 1000 × 700 sheet, 200 × 150 pieces edge to edge: 5 × 4 = 20 a sheet
+    expect(sheet.sheet?.ups).toBe(20)
     expect(sheet.piecesNeeded).toBe(2000)
-    expect(sheet.netQty).toBe(112) // ceil(2000/18)
-    expect(sheet.wastageQty).toBe(6) // ceil(112 × 5%) — applied once
-    expect(sheet.totalQty).toBe(118)
-    expect(sheet.amount).toBe(1416)
+    expect(sheet.netQty).toBe(100) // 2000 / 20
+    expect(sheet.wastageQty).toBe(5) // 100 × 5% — applied once
+    expect(sheet.totalQty).toBe(105)
+    expect(sheet.amount).toBe(1260)
 
     const glue = r.materialLines.find((l) => l.kind === 'quantity')!
     expect(glue.netQty).toBe(4)
@@ -47,32 +48,32 @@ describe('order costing totals', () => {
     expect(r.processRunCost).toBe(1250)
     expect(r.setupCost).toBe(250)
     expect(r.chargesCost).toBe(1000)
-    expect(r.totalCost).toBe(4816)
-    expect(r.costPerPiece).toBeCloseTo(4.816)
+    expect(r.totalCost).toBe(4660)
+    expect(r.costPerPiece).toBeCloseTo(4.66)
 
-    // markup 20 % → 5779.20 → 5.78 / pc → 5,780
-    expect(r.sellingPerPiece).toBe(5.78)
-    expect(r.totalSelling).toBe(5780)
-    expect(r.profitAmount).toBe(964)
-    expect(r.taxAmount).toBe(1040.4)
-    expect(r.grandTotal).toBe(6820.4)
+    // markup 20 % → 5592 → 5.59 / pc → 5,590
+    expect(r.sellingPerPiece).toBe(5.59)
+    expect(r.totalSelling).toBe(5590)
+    expect(r.profitAmount).toBe(930)
+    expect(r.taxAmount).toBe(1006.2)
+    expect(r.grandTotal).toBe(6596.2)
   })
 
   it('distinguishes margin on selling price from markup on cost', () => {
     const r = run({ profitMethod: 'margin', profitPct: 20 })
-    // 4816 ÷ 0.8 = 6020 → 6.02 / pc
-    expect(r.sellingPerPiece).toBe(6.02)
-    expect(r.totalSelling).toBe(6020)
-    expect(r.effectiveMarginPct).toBeCloseTo(20, 1)
+    // 4660 ÷ 0.8 = 5825 → 5.83 / pc (rounded to the paisa)
+    expect(r.sellingPerPiece).toBe(5.83)
+    expect(r.totalSelling).toBe(5830)
+    expect(r.effectiveMarginPct).toBeCloseTo(20.07, 2) // (5830 − 4660) ÷ 5830, after rounding to the paisa
     expect(run({ profitMethod: 'margin', profitPct: 100 }).valid).toBe(false)
   })
 
   it('applies discount before tax', () => {
     const r = run({ discountType: 'percent', discountValue: 10 })
-    expect(r.discountAmount).toBe(578)
-    expect(r.taxableValue).toBe(5202)
-    expect(r.taxAmount).toBe(936.36)
-    expect(r.grandTotal).toBe(6138.36)
+    expect(r.discountAmount).toBe(559)
+    expect(r.taxableValue).toBe(5031)
+    expect(r.taxAmount).toBe(905.58)
+    expect(r.grandTotal).toBe(5936.58)
   })
 
   it('never treats a missing price as zero', () => {
@@ -90,14 +91,14 @@ describe('order costing totals', () => {
     const pack = run({}, (ms) => ms.map((m) => (m.kind === 'sheet' ? { ...m, pricingBasis: 'per_pack', packSize: 100, price: 1100 } : m)))
     const packLine = pack.materialLines.find((l) => l.kind === 'sheet')!
     expect(packLine.purchaseQty).toBe(2)
-    expect(packLine.surplusQty).toBe(82)
+    expect(packLine.surplusQty).toBe(95)
     expect(packLine.amount).toBe(2200)
 
     const kg = run({}, (ms) => ms.map((m) => (m.kind === 'sheet' ? { ...m, pricingBasis: 'per_kg', gsm: 300, price: 80 } : m)))
     const kgLine = kg.materialLines.find((l) => l.kind === 'sheet')!
-    // 1 m × 0.7 m × 300 g = 0.21 kg/sheet × 118 = 24.78 → 25 kg
-    expect(kgLine.purchaseQty).toBe(25)
-    expect(kgLine.amount).toBe(2000)
+    // 1 m × 0.7 m × 300 g = 0.21 kg/sheet × 105 = 22.05 → 23 kg
+    expect(kgLine.purchaseQty).toBe(23)
+    expect(kgLine.amount).toBe(1840)
   })
 
   it('flags invalid quantities and missing charge amounts', () => {

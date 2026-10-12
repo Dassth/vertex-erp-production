@@ -343,6 +343,25 @@ export function ConflictNotice({ message, onReload }: { message: string; onReloa
   )
 }
 
+/* -------------------------------- Open row -------------------------------- */
+
+/**
+ * One way to open a record from any list: a tap anywhere on its row. Links,
+ * buttons and fields inside the row keep their own action, and selecting text
+ * does not open it. Keyboard users use the row's “Edit”/name control, so every
+ * row using this must also show one.
+ */
+export function openRow(open: () => void) {
+  return {
+    className: 'cursor-pointer',
+    onClick: (e: React.MouseEvent<HTMLElement>) => {
+      if ((e.target as HTMLElement).closest('a,button,input,select,textarea,label,summary,[role="button"],[role="combobox"]')) return
+      if (window.getSelection()?.toString()) return
+      open()
+    },
+  }
+}
+
 /* ------------------------------- Link button ------------------------------ */
 
 export function LinkButton({

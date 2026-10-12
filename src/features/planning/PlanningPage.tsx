@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { Activity, CalendarRange, CircleDashed, ClipboardList, Eye, Factory, FileClock, Pin, Plus, Search, XCircle } from 'lucide-react'
 import { useStore } from '../../store/store'
 import type { Plan, PlanStatus, Priority } from '../../lib/types'
 import { fmtDate, pieces } from '../../lib/format'
 import { Button, Card, CardHead, EmptyState, SearchInput, Select } from '../../components/ui'
-import { LinkButton, PageHeader, StatStrip, StatTile, useDocumentTitle } from '../../components/page'
+import { LinkButton, PageHeader, StatStrip, StatTile, openRow, useDocumentTitle } from '../../components/page'
 import { PlanStatusBadge, PriorityBadge } from '../../components/status'
 import { DocumentPreview, DownloadButton, ExcelButton, jobCardDoc, useLatestDb } from '../../components/DocumentPreview'
 import type { PreviewDoc } from '../../components/DocumentPreview'
@@ -20,6 +20,7 @@ import { setPlanPinned } from '../../domain/planning'
 const PRIORITIES: Priority[] = ['Urgent', 'High', 'Normal', 'Low']
 
 export function PlanningPage() {
+  const navigate = useNavigate()
   useDocumentTitle('Planning')
   const { db, run, pushToast } = useStore()
   const read = useLatestDb()
@@ -176,7 +177,7 @@ export function PlanningPage() {
                   // Allocation is per process; show the distinct units the plan spans.
                   const units = product ? [...new Set(product.stages.flatMap((s) => s.processes.map((pr) => plan.processUnits[pr.id])).filter(Boolean))] : []
                   return (
-                    <tr key={plan.id} className={cx('vx-row', plan.pinned && 'bg-accent-wash/40')}>
+                    <tr key={plan.id} {...openRow(() => navigate(`/planning/${plan.id}`))} className={cx('vx-row cursor-pointer', plan.pinned && 'bg-accent-wash/40')}>
                       <td className="vx-td">
                         <button
                           type="button"

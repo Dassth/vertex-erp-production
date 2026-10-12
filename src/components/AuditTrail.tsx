@@ -6,6 +6,7 @@ import type { Tone } from './ui'
 
 const ENTITY_TONE: Record<AuditEntry['entity'], Tone> = {
   Product: 'indigo',
+  Quotation: 'green',
   Material: 'violet',
   'Costing Config': 'violet',
   Customer: 'green',

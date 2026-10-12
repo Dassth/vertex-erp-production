@@ -40,6 +40,30 @@ export const invoiceDoc = (inv: Invoice, read: () => VertexDB): PreviewDoc => ({
   },
 })
 
+/** A quotation for the customer, from its latest saved version. */
+export const quotationDoc = (read: () => VertexDB, quotationId: string): PreviewDoc => {
+  const code = (read().quotations ?? []).find((q) => q.id === quotationId)?.code ?? quotationId
+  return {
+    title: `Quotation ${code}`,
+    fileName: `quotation-${code.replace(/[^A-Za-z0-9-]/g, '-')}.pdf`,
+    build: async () => {
+      const db = read()
+      const q = (db.quotations ?? []).find((x) => x.id === quotationId)
+      if (!q) throw new DocumentBlockedError('This quotation is not saved yet.')
+      const customer = db.customers.find((c) => c.id === q.customerId)
+      const product = db.products.find((p) => p.id === q.productId)
+      if (!customer || !product) throw new DocumentBlockedError('The customer or product of this quotation no longer exists.')
+      const { updatedAt: _u, updatedBy: _b, ...company } = db.company
+      void _u
+      void _b
+      const [{ quotationDefinition }, { renderPdf }, { customerSnapshot }, { sizeText }] = await Promise.all([import('../lib/pdfDocs'), import('../lib/pdfRender'), import('../domain/common'), import('../lib/sizeScale')])
+      return renderPdf(
+        quotationDefinition(q, { company, customer: customerSnapshot(customer), product: { name: product.name, hsn: product.hsn, uom: product.uom, description: product.description }, sizeLabel: sizeText(q.size) }, watermarkOn(db.company)),
+      )
+    },
+  }
+}
+
 /**
  * A purchase bill, always available. `read` supplies the latest saved version,
  * so a download right after an edit prints the edited bill.

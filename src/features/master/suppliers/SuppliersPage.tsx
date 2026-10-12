@@ -6,10 +6,10 @@ import { blankSupplier, saveSupplier, setSupplierActive, validateSupplier } from
 import type { SupplierDraft } from '../../../domain/suppliers'
 import { sameText } from '../../../domain/common'
 import { purchaseTotals } from '../../../lib/gst'
-import { moneyPaise } from '../../../lib/format'
+import { cx, moneyPaise } from '../../../lib/format'
 import type { ReportTable } from '../../../lib/reportTable'
-import { Badge, Button, Card, CardHead, EmptyState, Field, IconButton, Input, Modal, SearchInput, Textarea } from '../../../components/ui'
-import { PageHeader, StatStrip, StatTile, focusFirstInvalid, useDocumentTitle } from '../../../components/page'
+import { Badge, Button, Card, CardHead, EmptyState, Field, Input, Modal, SearchInput, Textarea } from '../../../components/ui'
+import { PageHeader, StatStrip, StatTile, focusFirstInvalid, openRow, useDocumentTitle } from '../../../components/page'
 import { DownloadButton, ExcelButton, reportTableDoc, useLatestDb } from '../../../components/DocumentPreview'
 
 /* ---------------------------------------------------------------------------
@@ -120,7 +120,7 @@ export function SuppliersPage() {
               </thead>
               <tbody>
                 {rows.map(({ s, materials, bills, bought }) => (
-                  <tr key={s.id} className="vx-row">
+                  <tr key={s.id} {...(can('master') ? openRow(() => setEditing(toDraft(s))) : {})} className={cx('vx-row', can('master') && 'cursor-pointer')}>
                     <td className="vx-td vx-td-wrap">
                       <span className="font-medium text-ink">{s.name}</span>
                       <span className="block text-2xs text-faint">
@@ -154,9 +154,9 @@ export function SuppliersPage() {
                     <td className="vx-td">
                       {can('master') ? (
                         <div className="flex justify-end gap-1">
-                          <IconButton label={`Edit ${s.name}`} onClick={() => setEditing(toDraft(s))}>
-                            <Pencil className="h-4 w-4" />
-                          </IconButton>
+                          <Button size="sm" variant="secondary" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => setEditing(toDraft(s))} aria-label={`Edit ${s.name}`}>
+                            Edit
+                          </Button>
                           <Button
                             size="sm"
                             variant="ghost"

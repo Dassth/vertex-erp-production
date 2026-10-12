@@ -15,6 +15,7 @@ import {
   Clock,
   Database,
   Factory,
+  FileText,
   FileStack,
   Info,
   ListChecks,
@@ -92,6 +93,7 @@ const NAV: NavItem[] = [
   // Every administrator tier holds billing, so this is Home for all administrators.
   { to: '/home', label: 'Home', hint: 'What needs you today', icon: Home, capabilities: ['billing'] },
   { to: '/master', label: 'Master', hint: 'Shared definitions', icon: Database, capabilities: ['master'], children: MASTER_SECTIONS },
+  { to: '/quotations', label: 'Quotations', hint: 'A price for a customer before an order', icon: FileText, capabilities: ['costing'] },
   { to: '/planning', label: 'Planning', hint: 'Allocate every process to a unit', icon: CalendarRange, capabilities: ['planning'] },
   { to: '/costing', label: 'Costing', hint: 'Cost and finalize a planned order', icon: Calculator, capabilities: ['costing'] },
   { to: '/production', label: 'Production', hint: 'Process progress by unit', icon: Factory, capabilities: ['production.monitor', 'production.work'] },

@@ -19,6 +19,8 @@ const ProductEditorPage = lazy(() => import('./features/master/products/ProductE
 const MasterCostingPage = lazy(() => import('./features/master/costing/MasterCostingPage').then((m) => ({ default: m.MasterCostingPage })))
 const SuppliersPage = lazy(() => import('./features/master/suppliers/SuppliersPage').then((m) => ({ default: m.SuppliersPage })))
 const CustomersPage = lazy(() => import('./features/master/customers/CustomersPage').then((m) => ({ default: m.CustomersPage })))
+const QuotationsPage = lazy(() => import('./features/quotations/QuotationsPage').then((m) => ({ default: m.QuotationsPage })))
+const QuotationEditorPage = lazy(() => import('./features/quotations/QuotationsPage').then((m) => ({ default: m.QuotationEditorPage })))
 const PlanningPage = lazy(() => import('./features/planning/PlanningPage').then((m) => ({ default: m.PlanningPage })))
 const PlanEditorPage = lazy(() => import('./features/planning/PlanEditor').then((m) => ({ default: m.PlanEditorPage })))
 const CostingListPage = lazy(() => import('./features/costing/CostingListPage').then((m) => ({ default: m.CostingListPage })))
@@ -109,6 +111,8 @@ export default function App() {
                     <Route path="suppliers" element={page(<SuppliersPage />)} />
                     <Route path="customers" element={page(<CustomersPage />)} />
                   </Route>
+                  <Route path="quotations" element={guarded('costing', <QuotationsPage />)} />
+                  <Route path="quotations/:quotationId" element={guarded('costing', <QuotationEditorPage />)} />
                   <Route path="planning" element={guarded('planning', <PlanningPage />)} />
                   <Route path="planning/:planId" element={guarded('planning', <PlanEditorPage />)} />
                   <Route path="costing" element={guarded('costing', <CostingListPage />)} />

@@ -7,7 +7,7 @@ import { allJobViews, unitSummaries, unitWork } from '../../lib/selectors'
 import type { ProcessWorkRow } from '../../lib/selectors'
 import { fmtDate, pieces, planWindow } from '../../lib/format'
 import { ResourceDrawer, since } from '../unit/ResourceDrawer'
-import { Badge, Button, Card, CardHead, EmptyState, IconButton, ProgressBar } from '../../components/ui'
+import { Badge, Button, Card, CardHead, EmptyState, ProgressBar } from '../../components/ui'
 import { UnitDialog } from './UnitDialog'
 import { Detail, LinkButton, PageHeader, StatStrip, StatTile, useDocumentTitle } from '../../components/page'
 import { DocumentPreview, DownloadButton, unitJobSheetDoc, unitTodayDoc, useLatestDb } from '../../components/DocumentPreview'
@@ -74,9 +74,9 @@ export function UnitsMonitorPage() {
                   {s.delayedProcesses ? `${s.delayedProcesses} late` : s.openProcesses ? 'Working' : 'Idle'}
                 </Badge>
                 {can('administration') ? (
-                  <IconButton label={`Edit ${s.unit.name}`} onClick={() => setEditing(s.unit)}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </IconButton>
+                  <Button size="sm" variant="secondary" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => setEditing(s.unit)} aria-label={`Edit ${s.unit.name}`}>
+                    Edit
+                  </Button>
                 ) : null}
               </div>
             </div>

@@ -387,6 +387,8 @@ export interface Plan extends Stamp {
   stageUnits?: Record<string, UnitId>
   /** This order's own price per material id, when it differs from Master (e.g. the price went up). */
   materialPrices?: Record<string, number>
+  /** The quotation this plan was made from; its prices start the costing. */
+  quotationId?: string | null
   status: PlanStatus
   submittedAt: string | null
   submittedBy: string | null
@@ -908,6 +910,7 @@ export interface Notification {
 
 export type AuditEntity =
   | 'Product'
+  | 'Quotation'
   | 'Material'
   | 'Costing Config'
   | 'Customer'
@@ -942,6 +945,46 @@ export interface AuditEntry {
   reason?: string
 }
 
+/* -------------------------------- Quotations ----------------------------- */
+
+export type QuotationStatus = 'Draft' | 'Sent' | 'Accepted' | 'Declined'
+
+/** The money side of a quotation, worked out when it is saved — what the customer was told. */
+export interface QuotationTotals {
+  costPerPiece: number
+  totalCost: number
+  sellingPerPiece: number
+  totalSelling: number
+  discountAmount: number
+  taxableValue: number
+  taxLabel: string
+  taxPct: number
+  taxAmount: number
+  grandTotal: number
+}
+
+/** A price given to a customer before anything is planned or made. */
+export interface Quotation extends Stamp {
+  id: string
+  /** QTN-0001 */
+  code: string
+  date: string
+  validUntil: string
+  customerId: string
+  productId: string
+  quantity: number
+  size?: ProductSize | null
+  /** Profit, GST, discount, charges and any rate changed for this quotation. */
+  inputs: CostingInputs
+  /** A round price per piece typed by hand; null = worked out from cost and profit. */
+  pricePerPiece: number | null
+  notes: string
+  status: QuotationStatus
+  totals: QuotationTotals
+  /** Set when the customer agreed and a plan was made from it. */
+  planId: string | null
+}
+
 /* --------------------------------- Database ------------------------------ */
 
 export type CounterKey =
@@ -960,6 +1003,7 @@ export type CounterKey =
   | 'payment'
   | 'debt'
   | 'supplier'
+  | 'quotation'
 
 export interface VertexDB {
   version: 2
@@ -988,6 +1032,8 @@ export interface VertexDB {
   debts: Debt[]
   /** Material suppliers. */
   suppliers: Supplier[]
+  /** Prices given to customers before an order is planned. */
+  quotations?: Quotation[]
   notifications: Notification[]
   audit: AuditEntry[]
   counters: Record<CounterKey, number>

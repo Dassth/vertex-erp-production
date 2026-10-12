@@ -77,6 +77,7 @@ export function landingPath(user: Principal): string {
 /** Capability required to open each route prefix, longest match first. */
 const ROUTE_CAPABILITIES: Array<[string, Capability]> = [
   ['/master', 'master'],
+  ['/quotations', 'costing'],
   ['/planning', 'planning'],
   ['/costing', 'costing'],
   ['/dispatch', 'dispatch'],

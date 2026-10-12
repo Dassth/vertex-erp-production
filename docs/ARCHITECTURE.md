@@ -20,8 +20,8 @@
 src/
   App.tsx            routes
   components/        shared UI (ui.tsx, page.tsx, AppShell, LicenceGate, DocumentPreview, SizeInput, Picker, SupplierInput, CustomerInput, GstRateSelect, Unfinished)
-  domain/            commands: master, suppliers, planning, orderCosting, production, dispatch, purchases, cashbook, imports, resources, system; registry.ts imports all
-  features/          pages: master/{products,costing(=Materials),suppliers,customers}, planning, costing, production, units, unit, dispatch, billing, invoices, accounts, reports, settings, home, customers
+  domain/            commands: master, suppliers, quotations, planning, orderCosting, production, dispatch, purchases, cashbook, imports, resources, system; registry.ts imports all
+  features/          pages: master/{products,costing(=Materials),suppliers,customers}, quotations, planning, costing, production, units, unit, dispatch, billing, invoices, accounts, reports, settings, home, customers
   lib/               pure helpers: types.ts, costing, yield, sizeScale, schedule, billing, gst, cashbook, fileTable, productSheet, drafts, unfinished, format, permissions, migrate
   store/             store.tsx (browser), serverStore.tsx + remote.ts (server mode), coordinator
   pages/LoginPage.tsx
@@ -39,6 +39,7 @@ One `VertexDB` document (stored in PostgreSQL by the server); `normalizeDB` fill
 - `users` (role `admin` with tier `full | operations | billing`, or `unit`)
 - `materials` (form sheet/roll/ready-made/other, price, `supplier` name)
 - `suppliers` (name, contact person, phone, email…)
+- `quotations` (QTN code, customer, product, quantity, size, costing inputs, hand price, totals, status, planId) — optional; plans carry `quotationId`
 - `products` (`baseSize?`, `materials[]` with `wastagePct?`, `stages[] → processes[]` with time, rate, per-process materials)
 - `customers` (`unregistered?` = URD)
 - `plans` (customer, product, quantity, `size?`, `processUnits`, `processPeople?`, `processMachines?`)
@@ -63,7 +64,7 @@ One `VertexDB` document (stored in PostgreSQL by the server); `normalizeDB` fill
 | POST | /api/replica/backup | Second-copy backup | server |
 | GET | /api/health | Health check | public |
 
-UI routes: `/login`, `/home`, `/master/{products,products/:productId,costing,suppliers,customers}`, `/planning`, `/planning/:planId`, `/costing`, `/costing/:planId`, `/production`, `/units`, `/units/:unitId`, `/dispatch`, `/billing`, `/invoices`, `/accounts`, `/reports`, `/settings`, `/customers`, `/admin1`, `/admin2`.
+UI routes: `/login`, `/home`, `/master/{products,products/:productId,costing,suppliers,customers}`, `/quotations`, `/quotations/:quotationId`, `/planning`, `/planning/:planId`, `/costing`, `/costing/:planId`, `/production`, `/units`, `/units/:unitId`, `/dispatch`, `/billing`, `/invoices`, `/accounts`, `/reports`, `/settings`, `/customers`, `/admin1`, `/admin2`.
 
 ## External services & env vars
 - Licence Worker (Cloudflare): secrets `ADMIN_KEY`, `LICENCE_SIGNING_KEY` (never in the repo).

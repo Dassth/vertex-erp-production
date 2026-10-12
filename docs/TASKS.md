@@ -9,6 +9,7 @@
 - [ ] Fix the 3 pre-existing failing UI tests (invoices ×2, login)
 
 ## Backlog
+- [ ] Settings → People / Machines lists have no edit from the row yet (edit is in the unit's page) (assumed - confirm)
 - [ ] Same picker for smaller lists if the owner wants it: Planning unit/person/machine, order-charge templates, loan lender, HSN codes (assumed - confirm)
 - [ ] Update the stale Playwright acceptance spec (`e2e/acceptance.spec.ts`) to the new product/material flows
 - [ ] Supplier reports: purchases per supplier over a period (assumed - confirm)
@@ -42,6 +43,9 @@
 - [x] 2026-10-12 - Planning: “Material prices for this order” — type a new price for this order (costing and the finalize snapshot use it), or “Save to Master too”
 - [x] 2026-10-12 - Costing: tap any material or process rate to change it for this order — also while revising a released order; issues are listed while revising
 - [x] 2026-10-12 - Edge allowance removed: the whole sheet is used for pieces per sheet; the field is gone from the forms (stored values kept, not counted)
+- [x] 2026-10-12 - Cutting gap removed too: pieces sit edge to edge on the whole sheet (stored values kept, not counted)
+- [x] 2026-10-12 - Quotations (QTN-0001…): price a product for a customer before planning — worked out from Master, round price by hand, PDF, Sent/Declined, “Customer agreed — make a plan” (costing starts at the quoted price)
+- [x] 2026-10-12 - Lists: tap a row to open/edit it (suppliers, money entries, loans, purchase bills, products, materials, plans, costings, quotations); icon-only pencils became “Edit” buttons
 
 ## Blocked
 - [ ] Cloud stored backups on Cloudflare - R2 is not enabled on the account

@@ -88,8 +88,8 @@ const SYNONYMS: Record<string, string[]> = {
   paid: ['invoice'],
   cost: ['costing'],
   rate: ['costing'],
-  quotation: ['costing'],
-  quote: ['costing'],
+  quotation: ['quotations'],
+  quote: ['quotations'],
   stock: ['material'],
   paper: ['material'],
   board: ['material'],
@@ -180,6 +180,8 @@ export function places(): QuickTarget[] {
 
     // Go to
     { id: 'go.home', title: 'Home', hint: 'What needs you today', to: '/home', group: 'Go to', need: 'billing', keywords: ['home', 'dashboard', 'start', 'overview'] },
+    { id: 'go.quotations', title: 'Quotations', hint: 'A price for a customer before an order', to: '/quotations', group: 'Go to', need: 'costing', keywords: ['quotations', 'quotation', 'quote', 'estimate', 'price', 'offer', 'vilai'] },
+    { id: 'go.quotations.new', title: 'New quotation', hint: 'Price a product for a customer', to: '/quotations/new', group: 'Do', need: 'costing', keywords: ['new', 'quotation', 'quote', 'estimate', 'price'] },
     { id: 'go.planning', title: 'Planning', hint: 'All plans', to: '/planning', group: 'Go to', need: 'planning', keywords: ['planning', 'plans', 'schedule', 'allocate'] },
     { id: 'go.costing', title: 'Costing', hint: 'Cost and finalize a planned order', to: '/costing', group: 'Go to', need: 'costing', keywords: ['costing', 'cost', 'price', 'quote', 'rate', 'profit', 'finalize'] },
     { id: 'go.production', title: 'Production', hint: 'Process progress by unit', to: '/production', group: 'Go to', need: 'production.monitor', keywords: ['production', 'progress', 'jobs', 'work', 'board', 'timeline'] },

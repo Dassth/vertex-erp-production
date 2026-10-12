@@ -118,3 +118,19 @@ Append-only log. Newest at the bottom.
 - **Impact:** `src/lib/yield.ts`, `src/domain/master.ts`, `MaterialDrawer.tsx`, `AddMaterialDialog.tsx`, `MasterCostingPage.tsx`, `src/lib/costing.ts`
 - **Note:** pieces per sheet can go up for existing products; finalized costings keep their snapshot.
 
+## 2026-10-12 - Cutting gap dropped as well
+- **Context:** Right after the edge allowance, the owner asked to remove the cutting gap.
+- **Decision / finding:** `calculateYield` places pieces edge to edge; `cutGapMm` is optional and ignored. Fields removed. Test fixtures now give 20 pieces a sheet (was 18) and the costing test totals were re-worked by hand.
+- **Impact:** `src/lib/yield.ts`, `src/domain/master.ts`, material forms, `src/lib/costing.test.ts`, `src/lib/yield.test.ts`
+
+## 2026-10-12 - Quotations before planning
+- **Context:** The owner wanted to give a price without planning or production.
+- **Decision / finding:** New `quotations` collection (optional on `VertexDB`, counter `quotation`, `QTN-0001`). Price = `computeOrderCosting` on Master (`quoteCosting`), optional hand-typed `pricePerPiece` (`quoteTotals`). `quotationToPlan` makes a Draft plan (`Plan.quotationId`, customerRef = quotation code); `openCosting` starts from the quotation's inputs, turning a hand price into the matching markup. PDF prints no cost or profit. Route `/quotations` needs `costing`.
+- **Impact:** `src/domain/quotations.ts`, `src/features/quotations/QuotationsPage.tsx`, `src/lib/pdfDocs.ts` (`quotationDefinition`), `DocumentPreview.tsx` (`quotationDoc`), `orderCosting.ts`, `App.tsx`, `AppShell.tsx`, `permissions.ts`, `quickAccess.ts`
+
+## 2026-10-12 - Tap a row to open it, everywhere
+- **Context:** The owner couldn't find how to edit a supplier — only a small pencil did it.
+- **Decision / finding:** `openRow(open)` (components/page.tsx) makes the whole table row open its record; links/buttons/fields inside keep their own action. Every such row also keeps a visible “Edit” text button (keyboard + clarity); icon-only pencils were replaced.
+- **Why:** “If it looks clickable, it must be clickable” (AGENTS.md) and one pattern everywhere.
+- **Impact:** Suppliers, Accounts entries, Debts, Purchase bills, Products, Materials, Planning, Costing list, Quotations, Units cards
+

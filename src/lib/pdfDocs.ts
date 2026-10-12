@@ -18,7 +18,7 @@
 
 import type { Content, ContentTable, CustomTableLayout, TDocumentDefinitions, TableCell } from 'pdfmake/interfaces'
 import { format } from 'date-fns'
-import type { CompanySnapshot, Dispatch, Invoice, ProductionOrder, PurchaseBill } from './types'
+import type { CompanySnapshot, CustomerSnapshot, Dispatch, Invoice, ProductionOrder, PurchaseBill, Quotation } from './types'
 import type { ConsolidatedStatement } from './billing'
 import { rupeesInWords } from './billing'
 import { POWERED_BY } from './brand'
@@ -300,6 +300,88 @@ export function invoiceDefinition(inv: Invoice): TDocumentDefinitions {
           { text: 'Authorised signatory', style: 'muted', alignment: 'right', margin: [0, 3, 0, 0] },
         ],
       },
+      ] as Array<Content | null>
+    ).filter(present),
+  }
+}
+
+/* --------------------------------- Quotation ------------------------------ */
+
+/** What a quotation prints besides its own record: who it is for and what is quoted. */
+export interface QuotationPrint {
+  company: CompanySnapshot
+  customer: CustomerSnapshot
+  product: { name: string; hsn: string; uom: string; description: string }
+  sizeLabel: string
+}
+
+/** A price for the customer — no internal cost is printed. */
+export function quotationDefinition(q: Quotation, p: QuotationPrint, mark = false): TDocumentDefinitions {
+  const t = q.totals
+  const header: TableCell[] = ['#', 'Description', 'HSN', 'Qty', 'Unit', 'Rate', 'Amount'].map((h, i) => ({
+    text: h,
+    style: 'th',
+    alignment: i >= 3 && i !== 4 ? 'right' : 'left',
+  }))
+  const description = [p.product.name, p.sizeLabel ? `Size ${p.sizeLabel}` : '', p.product.description].filter(Boolean).join('\n')
+  return {
+    ...base(`Quotation ${q.code}`, `${p.customer.company} — ${p.product.name}`, q.createdAt),
+    footer: footer(`${q.code} · Quotation · valid until ${day(q.validUntil)}`, A4_WIDTH, mark),
+    content: (
+      [
+        ...companyHeader(p.company, 'QUOTATION', [
+          ['Quotation No.', q.code],
+          ['Date', day(q.date)],
+          ['Valid until', day(q.validUntil)],
+        ]),
+        partyBoxes(
+          {
+            title: 'To',
+            lines: [
+              p.customer.company,
+              p.customer.contactPerson ? `Attn: ${p.customer.contactPerson}` : '',
+              p.customer.billingAddress,
+              p.customer.gstin ? `GSTIN ${p.customer.gstin}` : '',
+              [p.customer.phone, p.customer.email].filter(Boolean).join('   '),
+            ],
+          },
+          { title: 'For', lines: [p.product.name, p.sizeLabel ? `Size ${p.sizeLabel}` : '', `Quantity ${qty(q.quantity)} ${p.product.uom}`] },
+        ),
+        {
+          layout: rules,
+          table: {
+            headerRows: 1,
+            dontBreakRows: true,
+            widths: [14, '*', 40, 46, 30, 58, 70],
+            body: [
+              header,
+              ['1', { text: description }, p.product.hsn, { text: qty(q.quantity), alignment: 'right' }, p.product.uom, { text: rs(t.sellingPerPiece), alignment: 'right' }, { text: rs(t.totalSelling), alignment: 'right' }],
+            ],
+          },
+        },
+        totals(
+          [
+            ['Subtotal', rs(t.totalSelling)],
+            ...(t.discountAmount > 0 ? ([['Less: discount', `− ${rs(t.discountAmount)}`]] as Array<[string, string]>) : []),
+            ['Taxable value', rs(t.taxableValue)],
+            [`${t.taxLabel} @ ${t.taxPct}%`, rs(t.taxAmount)],
+            ['Total', rs(t.grandTotal), true],
+          ],
+          { stack: [{ text: 'AMOUNT IN WORDS', style: 'label' }, { text: rupeesInWords(t.grandTotal) }] },
+        ),
+        labelled('Notes', q.notes),
+        labelled('Payment terms', p.customer.paymentTerms),
+        labelled('Bank details', p.company.bankDetails),
+        labelled('Terms', p.company.invoiceTerms),
+        {
+          unbreakable: true,
+          margin: [0, 22, 0, 0],
+          stack: [
+            { text: `For ${p.company.name}`, bold: true, alignment: 'right' },
+            { canvas: [{ type: 'line', x1: A4_WIDTH - 170, y1: 36, x2: A4_WIDTH, y2: 36, lineWidth: 0.6, lineColor: RULE }] },
+            { text: 'Authorised signatory', style: 'muted', alignment: 'right', margin: [0, 3, 0, 0] },
+          ],
+        },
       ] as Array<Content | null>
     ).filter(present),
   }

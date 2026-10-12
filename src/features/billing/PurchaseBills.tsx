@@ -8,7 +8,7 @@ import { GST_RATES, HSN_SUGGESTIONS, SUPPLY_CHOICES, SUPPLY_LABEL, purchaseTotal
 import { deletePurchaseBill, savePurchaseBill, validatePurchase } from '../../domain/purchases'
 import type { PurchaseDraft } from '../../domain/purchases'
 import { Button, Card, CardHead, ConfirmDialog, EmptyState, Field, IconButton, Input, Modal, SearchInput, Select, Textarea } from '../../components/ui'
-import { NumberInput, StatStrip, StatTile } from '../../components/page'
+import { NumberInput, StatStrip, StatTile, openRow } from '../../components/page'
 import { DownloadButton, ExcelButton, purchaseDoc, useLatestDb } from '../../components/DocumentPreview'
 import type { PreviewDoc } from '../../components/DocumentPreview'
 import { SupplierInput } from '../../components/SupplierInput'
@@ -138,7 +138,7 @@ export function PurchaseBills({ q, onSearch, onPreview, openNew, onOpenedNew }: 
               </thead>
               <tbody>
                 {filtered.map(({ bill: b, t }) => (
-                  <tr key={b.id} className="border-t border-rule">
+                  <tr key={b.id} {...openRow(() => setEditing(b))} className="vx-row cursor-pointer">
                     <td className="vx-td vx-code font-semibold">{b.code}</td>
                     <td className="vx-td">{fmtDate(b.date)}</td>
                     <td className="vx-td">

@@ -8,7 +8,7 @@ import { deleteDebt, saveDebt, validateDebt } from '../../domain/cashbook'
 import type { DebtDraft } from '../../domain/cashbook'
 import { fmtDate, moneyPaise } from '../../lib/format'
 import { Button, Card, CardHead, ConfirmDialog, EmptyState, Field, IconButton, Input, Modal, Select, Textarea } from '../../components/ui'
-import { NumberInput, focusFirstInvalid } from '../../components/page'
+import { NumberInput, focusFirstInvalid, openRow } from '../../components/page'
 import { DownloadButton, ExcelButton, reportTableDoc, useLatestDb } from '../../components/DocumentPreview'
 
 /* ---------------------------------------------------------------------------
@@ -72,7 +72,7 @@ export function DebtsCard() {
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.debt.id} className="vx-row">
+                <tr key={r.debt.id} {...openRow(() => setEditing(toDraft(r.debt)))} className="vx-row cursor-pointer">
                   <td className="vx-td">
                     {fmtDate(r.debt.date)}
                     <span className="vx-code block text-2xs text-faint">{r.debt.code}</span>
@@ -85,9 +85,9 @@ export function DebtsCard() {
                   <td className={`vx-td text-right font-medium tabular-nums ${r.outstanding > 0 ? 'text-warn' : 'text-ok'}`}>{r.outstanding > 0 ? moneyPaise(r.outstanding) : 'Cleared'}</td>
                   <td className="vx-td">
                     <div className="flex justify-end gap-1">
-                      <IconButton label={`Edit loan ${r.debt.code}`} onClick={() => setEditing(toDraft(r.debt))}>
-                        <Pencil className="h-4 w-4" />
-                      </IconButton>
+                      <Button size="sm" variant="secondary" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => setEditing(toDraft(r.debt))} aria-label={`Edit loan ${r.debt.code}`}>
+                        Edit
+                      </Button>
                       <IconButton label={`Delete loan ${r.debt.code}`} className="hover:text-risk" onClick={() => setDeleting(r.debt)}>
                         <Trash2 className="h-4 w-4" />
                       </IconButton>
