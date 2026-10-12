@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ProductStage, VertexDB } from '../lib/types'
 import { ADMIN, UNIT, ctxFor, must, seedResources } from '../test/fixtures'
 import { buildEmptyDB } from '../lib/defaults'
-import { blankMaterialDraft, saveCustomer, saveMaterial, saveProduct } from './master'
+import { blankMaterialDraft, saveCustomer, saveMaterial, saveProduct, setMaterialPrice } from './master'
 import { savePlan, submitPlan } from './planning'
 import { finalizeCosting, openCosting } from './orderCosting'
 import { assignProcessResources, completeProcess, startProcess } from './production'
@@ -149,5 +149,34 @@ describe('three processes in one stage, allocated to three units', () => {
     expect(done.value.stageCompleted).toBe(true)
     expect(done.value.orderCompleted).toBe(true)
     expect(done.db.orders[0].status).toBe('Completed')
+  })
+})
+
+describe('a material price changed while planning', () => {
+  it('is used for that order only, kept in the snapshot, and can be saved to Master', () => {
+    const base = oneStageThreeProcesses()
+    const materialId = base.db.materials[0].id
+    const units = { 'PRC-001': 'U1', 'PRC-002': 'U2', 'PRC-003': 'U1' }
+    const plain = must(savePlan(planDraft(base.customerId, base.productId, units))(base.db, admin()))
+    const priced = must(savePlan({ ...planDraft(base.customerId, base.productId, units), materialPrices: { [materialId]: 25, 'not-used': 9 } })(plain.db, admin()))
+    expect(priced.value.materialPrices).toEqual({ [materialId]: 25 })
+    expect(savePlan({ ...planDraft(base.customerId, base.productId, units), materialPrices: { [materialId]: -1 } })(plain.db, admin()).ok).toBe(false)
+
+    const cost = (db: VertexDB, planId: string) => {
+      const submitted = must(submitPlan(planId)(db, admin()))
+      const c = must(openCosting(planId)(submitted.db, admin()))
+      return must(finalizeCosting(c.value.id)(c.db, admin()))
+    }
+    const usual = cost(priced.db, plain.value.id).value.costing.snapshot!
+    const own = cost(priced.db, priced.value.id).value.costing.snapshot!
+    // Same sheets, 25 instead of 20 a sheet.
+    expect(own.result.materialCost).toBeCloseTo((usual.result.materialCost * 25) / 20, 2)
+    expect(own.product.materials[0].material.price).toBe(25)
+    expect(priced.db.materials[0].price).toBe(20)
+
+    const master = must(setMaterialPrice(materialId, 25)(priced.db, admin()))
+    expect(master.value.price).toBe(25)
+    expect(master.db.audit[0]).toMatchObject({ action: 'Material price changed', oldValue: '20', newValue: '25' })
+    expect(setMaterialPrice(materialId, -5)(priced.db, admin()).ok).toBe(false)
   })
 })

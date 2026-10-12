@@ -1,7 +1,7 @@
 # Tasks
 
 ## In progress
-- [ ] Customer trial of the 2026-10-12 build (`VertexERP-Setup-VPP-2026-01-v2026.10.12.1126.exe`) at Vertex Print Pack — one picker everywhere, month-end entries
+- [ ] Customer trial of the 2026-10-12 build (`VertexERP-Setup-VPP-2026-01-v2026.10.12.1255.exe` or newer) at Vertex Print Pack — one picker everywhere, month-end entries, outside units
 
 ## Next up (priority order)
 - [ ] Collect feedback on size-based pricing, loans, suppliers, process allocation and price revision from the customer
@@ -39,6 +39,7 @@
 - [x] 2026-10-12 - Income & Expenses: “Add <month> sales & purchases…” — one confirmation adds each unpaid sales invoice and purchase bill of the month as its own entry
 - [x] 2026-10-12 - Units: “Add unit…” for own units and outside units (job work), with contact, phone and address for every unit; Planning lists outside units separately and can add one from the unit list
 - [x] 2026-10-12 - Product “For exact costing” panel: long material links wrap; a cut piece that doesn't fit now names both sizes and flags a sheet typed in inches as mm
+- [x] 2026-10-12 - Planning: “Material prices for this order” — type a new price for this order (costing and the finalize snapshot use it), or “Save to Master too”
 
 ## Blocked
 - [ ] Cloud stored backups on Cloudflare - R2 is not enabled on the account

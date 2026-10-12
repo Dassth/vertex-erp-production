@@ -2,6 +2,7 @@ import type {
   CostingInputs,
   CostingResult,
   CostingSnapshot,
+  Material,
   OrderCosting,
   Plan,
   Product,
@@ -66,6 +67,16 @@ export function planCostingSource(db: Pick<VertexDB, 'materials'>, plan: { size?
   }
 }
 
+/**
+ * Master materials with this order's own prices applied — every costing of a
+ * plan reads materials through here, so a price changed while planning is used.
+ */
+export function planMaterials(db: Pick<VertexDB, 'materials'>, plan: { materialPrices?: Plan['materialPrices'] }): Material[] {
+  const own = plan.materialPrices ?? {}
+  if (!Object.keys(own).length) return db.materials
+  return db.materials.map((m) => (own[m.id] !== undefined && Number.isFinite(own[m.id]) ? { ...m, price: own[m.id] } : m))
+}
+
 /** Live calculation against current Master data (used while the costing is a draft). */
 export function previewCosting(db: VertexDB, costing: OrderCosting): CostingResult | null {
   if (costing.snapshot) return costing.snapshot.result
@@ -75,7 +86,7 @@ export function previewCosting(db: VertexDB, costing: OrderCosting): CostingResu
   return computeOrderCosting({
     quantity: plan.quantity,
     product: planCostingSource(db, plan, product),
-    materials: db.materials,
+    materials: planMaterials(db, plan),
     settings: db.settings,
     inputs: costing.inputs,
   })
@@ -244,10 +255,11 @@ export const finalizeCosting = command(
     const customer = db.customers.find((c) => c.id === plan.customerId)!
     const useInputs = deepClone(inputs ?? costing.inputs)
     const source = planCostingSource(db, plan, product)
+    const priced = planMaterials(db, plan)
     const result = computeOrderCosting({
       quantity: plan.quantity,
       product: source,
-      materials: db.materials,
+      materials: priced,
       settings: db.settings,
       inputs: useInputs,
     })
@@ -276,8 +288,8 @@ export const finalizeCosting = command(
         stages: product.stages,
         // The uses at this order's size — what the job card and units cut.
         materials: source.materials
-          .filter((l) => db.materials.some((m) => m.id === l.materialId))
-          .map((l) => ({ ...l, material: db.materials.find((m) => m.id === l.materialId)! })),
+          .filter((l) => priced.some((m) => m.id === l.materialId))
+          .map((l) => ({ ...l, material: priced.find((m) => m.id === l.materialId)! })),
       },
       processCharges: db.settings.processCharges.filter((c) => usedChargeIds.has(c.id)),
       plan: {

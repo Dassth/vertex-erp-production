@@ -98,3 +98,10 @@ Append-only log. Newest at the bottom.
 - **Why:** A 31.5 × 41.5 sheet is inches; saved as mm, no box piece can fit.
 - **Impact:** `src/lib/costing.ts`, `src/components/page.tsx` (`IssueList`)
 
+## 2026-10-12 - Material prices per order
+- **Context:** Material prices move between setting up Master and planning an order.
+- **Decision / finding:** `Plan.materialPrices` (material id → price) overrides Master for that plan only. All plan costing reads materials through `planMaterials(db, plan)` (preview, readiness, costing page, finalize + snapshot). “Save to Master too” calls `setMaterialPrice` and clears the order's own price.
+- **Why:** The owner wants to correct a changed price at planning time without editing Master for every case.
+- **Impact:** `src/lib/types.ts`, `src/domain/orderCosting.ts`, `src/domain/planning.ts`, `src/domain/master.ts`, `PlanEditor.tsx` (`MaterialPricesCard`), `OrderCostingPage.tsx`
+- **Gotcha:** building the EXE writes into `release/`, which the Vite dev server watches — it crashed with EBUSY. Stop the preview before `installer/build.mjs`.
+

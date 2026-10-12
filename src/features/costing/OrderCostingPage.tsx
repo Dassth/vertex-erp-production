@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Calculator, CheckCircle2, Download, Eye, Factory, Lock, Plus, Save, Trash2, Pencil } from 'lucide-react'
 import { useStore } from '../../store/store'
 import type { ChargeBasis, CostingInputs, CostingResult, OrderCosting, Plan, ProfitMethod } from '../../lib/types'
-import { finalizeCosting, openCosting, planCostingSource, reviseCosting, revisedResult, saveCostingInputs } from '../../domain/orderCosting'
+import { finalizeCosting, openCosting, planCostingSource, planMaterials, reviseCosting, revisedResult, saveCostingInputs } from '../../domain/orderCosting'
 import { COST_BASIS_LABEL, computeOrderCosting } from '../../lib/costing'
 import { cx, fmtDate, fmtDateTime, moneyPaise, moneyPrecise, pct, pieces, qty, uid } from '../../lib/format'
 import { Badge, Button, Card, CardHead, ConfirmDialog, EmptyState, Field, IconButton, Input, Select, Skeleton } from '../../components/ui'
@@ -99,11 +99,13 @@ function CostingWorkspace({ plan, costing, back }: { plan: Plan; costing: OrderC
     return computeOrderCosting({
       quantity: plan.quantity,
       product: planCostingSource(db, plan, product),
-      materials: db.materials,
+      // This order's own material prices (set while planning) apply.
+      materials: planMaterials(db, plan),
       settings: db.settings,
       inputs,
     })
-  }, [finalized, released, costing.snapshot, product, plan.quantity, db.materials, db.settings, inputs])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finalized, released, costing.snapshot, product, plan.quantity, plan.materialPrices, db.materials, db.settings, inputs])
 
   const set = (patch: Partial<CostingInputs>) => setInputs((i) => ({ ...i, ...patch }))
   const allErrors = result?.issues.filter((i) => i.level === 'error') ?? []
@@ -235,7 +237,7 @@ function CostingWorkspace({ plan, costing, back }: { plan: Plan; costing: OrderC
                 </Card>
               ) : null}
 
-              <MaterialsTable result={result} />
+              <MaterialsTable result={result} ownPrices={finalized || released ? 0 : Object.keys(plan.materialPrices ?? {}).length} />
               <ProcessesTable result={result} />
 
               <Card className="vx-anim-up">
@@ -503,10 +505,13 @@ function Mini({ label, value, tone }: { label: string; value: string; tone?: str
   )
 }
 
-function MaterialsTable({ result }: { result: CostingResult }) {
+function MaterialsTable({ result, ownPrices = 0 }: { result: CostingResult; ownPrices?: number }) {
   return (
     <Card className="vx-anim-up overflow-hidden">
-      <CardHead title="Materials" subtitle={`Wastage is applied once to the net requirement; purchase quantities are rounded up. Total ${moneyPaise(result.materialCost)}`} />
+      <CardHead
+        title="Materials"
+        subtitle={`${ownPrices ? `${ownPrices} material price(s) were changed for this order in the plan. ` : ''}Wastage is applied once to the net requirement; purchase quantities are rounded up. Total ${moneyPaise(result.materialCost)}`}
+      />
       {result.materialLines.length === 0 ? (
         <p className="px-5 py-6 text-sm text-muted">No materials on this product.</p>
       ) : (

@@ -255,6 +255,30 @@ export const saveMaterial = command(
   },
 )
 
+/** Only the price of a material changes (e.g. from a plan when the market price moved). */
+export const setMaterialPrice = command(
+  'setMaterialPrice',
+  (id: string, price: number): Op<Material> =>
+  (db, ctx) => {
+    const denied = requireCapability(ctx, 'master')
+    if (denied) return denied
+    const m = db.materials.find((x) => x.id === id)
+    if (!m) return fail('Material not found.')
+    if (!Number.isFinite(price) || price < 0) return fail('Enter a price of 0 or more.')
+    const updated = stampUpdate({ ...m, price: Math.round(price * 10000) / 10000 }, ctx)
+    const next = audit({ ...db, materials: db.materials.map((x) => (x.id === id ? updated : x)) }, ctx, {
+      action: 'Material price changed',
+      entity: 'Material',
+      entityId: id,
+      entityLabel: `${m.code} — ${m.name}`,
+      field: 'Price',
+      oldValue: m.price === null ? '' : String(m.price),
+      newValue: String(updated.price),
+    })
+    return ok(next, updated)
+  },
+)
+
 export const setMaterialActive = command(
   'setMaterialActive',
   (id: string, active: boolean): Op<Material> =>

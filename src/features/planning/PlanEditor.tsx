@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { addDays, format } from 'date-fns'
 import { Activity, ArrowLeft, ArrowRight, CalendarRange, ClipboardList, Eye, Lock, Pin, Save, Undo2, XCircle } from 'lucide-react'
 import { useStore } from '../../store/store'
-import type { Plan, Priority } from '../../lib/types'
+import type { Material, Plan, Priority, Product } from '../../lib/types'
 import type { PlanDraft } from '../../domain/planning'
 import { cancelPlan, planHasContent, planReadiness, returnPlanToDraft, savePlan, setPlanPinned, submitPlan } from '../../domain/planning'
 import { PRIORITIES, processHours, stageHours } from '../../lib/schedule'
@@ -20,9 +20,10 @@ import { Picker } from '../../components/Picker'
 import { UnitDialog } from '../units/UnitDialog'
 import type { ProductionUnit } from '../../lib/types'
 import { hasSize, sameSize, sizeFactors, sizeText } from '../../lib/sizeScale'
-import { computeOrderCosting } from '../../lib/costing'
-import { defaultCostingInputs, planCostingSource } from '../../domain/orderCosting'
+import { computeOrderCosting, pricedUnitLabel } from '../../lib/costing'
+import { defaultCostingInputs, planCostingSource, planMaterials } from '../../domain/orderCosting'
 import { useFormDraft } from '../../lib/useFormDraft'
+import { setMaterialPrice } from '../../domain/master'
 
 export function PlanEditorPage() {
   const { planId } = useParams()
@@ -60,6 +61,7 @@ function toDraft(p?: Plan): PlanDraft {
       processUnits: {},
       processPeople: {},
       processMachines: {},
+      materialPrices: {},
     }
   return {
     id: p.id,
@@ -77,6 +79,7 @@ function toDraft(p?: Plan): PlanDraft {
     processUnits: { ...p.processUnits },
     processPeople: { ...(p.processPeople ?? {}) },
     processMachines: { ...(p.processMachines ?? {}) },
+    materialPrices: { ...(p.materialPrices ?? {}) },
     expectedUpdatedAt: p.updatedAt,
   }
 }
@@ -196,11 +199,11 @@ function PlanEditor({ plan, scopeId }: { plan?: Plan; scopeId: string }) {
     if (!f.scaled) return `Usual size — materials and price as set up in Master.`
     const inputs = defaultCostingInputs(db, product, () => 'size')
     const at = (size: Plan['size']) =>
-      computeOrderCosting({ quantity: q, product: planCostingSource(db, { size }, product), materials: db.materials, settings: db.settings, inputs })
+      computeOrderCosting({ quantity: q, product: planCostingSource(db, { size }, product), materials: planMaterials(db, draft), settings: db.settings, inputs })
     const now = at(draft.size)
     const usual = at(product.baseSize)
     return `Cut pieces × ${f.length.toFixed(2)} (length) and × ${f.breadth.toFixed(2)} (breadth). About ${moneyPaise(now.sellingPerPiece)} per piece for this size (usual size ${moneyPaise(usual.sellingPerPiece)}) — costing uses this size.`
-  }, [db, product, draft.size, q])
+  }, [db, product, draft, q])
 
   const products = db.products.filter((p) => p.active || p.id === draft.productId)
   const totalHours = product ? product.stages.reduce((s, st) => s + stageHours(st, q), 0) : 0
@@ -364,6 +367,10 @@ function PlanEditor({ plan, scopeId }: { plan?: Plan; scopeId: string }) {
                 <Detail label="Payment terms">{customer.paymentTerms || '—'}</Detail>
               </dl>
             </Card>
+          ) : null}
+
+          {product?.materials.length ? (
+            <MaterialPricesCard product={product} prices={draft.materialPrices ?? {}} onChange={(materialPrices) => set({ materialPrices })} readOnly={readOnly} error={errors.materialPrices} />
           ) : null}
         </div>
 
@@ -701,5 +708,79 @@ function UnitOptions({ units, canAdd = false }: { units: ProductionUnit[]; canAd
       {outside.length ? <optgroup label="Outside (job work)">{list(outside)}</optgroup> : null}
       {canAdd ? <option value={NEW_UNIT}>+ Add unit…</option> : null}
     </>
+  )
+}
+
+/**
+ * The prices of this product's materials for THIS order. Prices move (board
+ * went up last week); a new price here is used for this order's costing, and
+ * can also be saved to Master so every later order gets it.
+ */
+function MaterialPricesCard({ product, prices, onChange, readOnly, error }: { product: Product; prices: Record<string, number>; onChange: (p: Record<string, number>) => void; readOnly: boolean; error?: string }) {
+  const { db, can, run, pushToast } = useStore()
+  const [saving, setSaving] = useState<string | null>(null)
+  const materials = [...new Set(product.materials.map((l) => l.materialId))].map((id) => db.materials.find((m) => m.id === id)).filter((m): m is Material => !!m)
+  const changed = materials.filter((m) => prices[m.id] !== undefined && prices[m.id] !== m.price).length
+  const setPrice = (id: string, v: number | null) => {
+    const { [id]: _old, ...rest } = prices
+    void _old
+    onChange(v === null ? rest : { ...rest, [id]: v })
+  }
+  const toMaster = async (m: Material) => {
+    const v = prices[m.id]
+    if (saving || v === undefined || !Number.isFinite(v)) return
+    setSaving(m.id)
+    try {
+      const r = await run(setMaterialPrice(m.id, v))
+      if (!r.ok) return pushToast({ title: 'Price not saved', message: r.error, level: 'danger' })
+      // Master now has this price: the order no longer needs its own.
+      setPrice(m.id, null)
+      pushToast({ title: `${m.name}: ₹${v} saved in Master`, message: 'Every new order and costing now uses this price.', level: 'success' })
+    } finally {
+      setSaving(null)
+    }
+  }
+  return (
+    <Card className="vx-anim-up overflow-hidden">
+      <CardHead
+        title="Material prices for this order"
+        subtitle={changed ? `${changed} price(s) changed for this order — costing uses them` : 'Price changed since Master was set up? Type the new price — costing of this order uses it.'}
+      />
+      <ul className="divide-y divide-rule">
+        {materials.map((m) => {
+          const own = prices[m.id]
+          const differs = own !== undefined && own !== m.price
+          return (
+            <li key={m.id} className={cx('flex flex-wrap items-center gap-x-3 gap-y-2 px-5 py-3', differs && 'bg-accent-wash/50')}>
+              <div className="min-w-[10rem] flex-1">
+                <span className="block break-words font-medium text-ink">{m.name}</span>
+                <span className="block text-2xs text-faint">
+                  Master {m.price === null ? 'price not set' : `₹${m.price}`} per {pricedUnitLabel(m)}
+                </span>
+              </div>
+              <NumberInput
+                aria-label={`${m.name} price for this order`}
+                className="w-28 text-right"
+                value={own ?? null}
+                placeholder={m.price === null ? 'Price' : String(m.price)}
+                disabled={readOnly}
+                invalid={own !== undefined && (!Number.isFinite(own) || own < 0)}
+                onChange={(v) => setPrice(m.id, v)}
+              />
+              {differs && !readOnly && can('master') ? (
+                <Button type="button" size="sm" variant="secondary" loading={saving === m.id} onClick={() => void toMaster(m)}>
+                  Save to Master too
+                </Button>
+              ) : differs ? (
+                <span className="text-xs text-accent-text">This order only</span>
+              ) : null}
+            </li>
+          )
+        })}
+      </ul>
+      <p className={cx('px-5 py-3 text-xs', error ? 'font-medium text-risk' : 'text-muted')} aria-live="polite">
+        {error ?? 'Blank = Master price. A price typed here changes only this order; “Save to Master too” makes it the price for every new order.'}
+      </p>
+    </Card>
   )
 }

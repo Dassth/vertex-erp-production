@@ -385,6 +385,8 @@ export interface Plan extends Stamp {
   processMachines?: Record<string, string>
   /** Legacy stage-level allocation kept for plans created before process allocation. */
   stageUnits?: Record<string, UnitId>
+  /** This order's own price per material id, when it differs from Master (e.g. the price went up). */
+  materialPrices?: Record<string, number>
   status: PlanStatus
   submittedAt: string | null
   submittedBy: string | null

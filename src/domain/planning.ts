@@ -1,4 +1,4 @@
-import type { CostingIssue, Plan, Priority, ProductSize, VertexDB } from '../lib/types'
+import type { CostingIssue, Plan, Priority, Product, ProductSize, VertexDB } from '../lib/types'
 import { computeOrderCosting } from '../lib/costing'
 import {
   audit,
@@ -16,7 +16,7 @@ import {
   command,
 } from './common'
 import type { Op } from './common'
-import { defaultCostingInputs, planCostingSource } from './orderCosting'
+import { defaultCostingInputs, planCostingSource, planMaterials } from './orderCosting'
 import { cleanSize } from './master'
 
 /* ---------------------------------------------------------------------------
@@ -53,6 +53,8 @@ export interface PlanDraft {
   processPeople?: Record<string, string>
   /** Machine for each process (optional; 'manual' = none needed). */
   processMachines?: Record<string, string>
+  /** This order's own material prices (material id → price); omitted = keep the stored ones. */
+  materialPrices?: Record<string, number>
   expectedUpdatedAt?: string
 }
 
@@ -72,6 +74,7 @@ export function validatePlanDraft(db: VertexDB, d: PlanDraft, existing?: Plan): 
   if (!isIsoDate(d.orderDate)) e.orderDate = 'Enter the order date.'
   if (!isIsoDate(d.deliveryDate)) e.deliveryDate = 'Enter the required delivery date.'
   else if (isIsoDate(d.orderDate) && d.deliveryDate < d.orderDate) e.deliveryDate = 'Delivery cannot be before the order date.'
+  if (Object.values(d.materialPrices ?? {}).some((v) => !Number.isFinite(v) || v < 0)) e.materialPrices = 'A material price must be a number, 0 or more.'
   if (product) {
     for (const unitId of Object.values(d.processUnits)) {
       if (unitId && !db.units.some((u) => u.id === unitId)) e.processUnits = 'An allocated production unit no longer exists.'
@@ -86,7 +89,7 @@ export interface PlanReadiness {
 }
 
 /** Everything that must be true before a plan can move to costing, plus advisory master gaps. */
-export function planReadiness(db: VertexDB, plan: Pick<Plan, 'customerId' | 'productId' | 'productVersion' | 'quantity' | 'processUnits'> & { size?: Plan['size'] }): PlanReadiness {
+export function planReadiness(db: VertexDB, plan: Pick<Plan, 'customerId' | 'productId' | 'productVersion' | 'quantity' | 'processUnits'> & { size?: Plan['size']; materialPrices?: Plan['materialPrices'] }): PlanReadiness {
   const blocking: CostingIssue[] = []
   const warnings: CostingIssue[] = []
   const product = db.products.find((p) => p.id === plan.productId)
@@ -130,7 +133,7 @@ export function planReadiness(db: VertexDB, plan: Pick<Plan, 'customerId' | 'pro
     const preview = computeOrderCosting({
       quantity: plan.quantity,
       product: planCostingSource(db, plan, product),
-      materials: db.materials,
+      materials: planMaterials(db, plan),
       settings: db.settings,
       inputs: defaultCostingInputs(db, product, () => 'preview'),
     })
@@ -145,6 +148,12 @@ export function planReadiness(db: VertexDB, plan: Pick<Plan, 'customerId' | 'pro
 }
 
 /** Person and machine per process: kept only when they belong to the unit the process is allocated to. */
+/** Only prices of materials this product uses, and only real numbers. */
+function cleanMaterialPrices(product: Product, prices: Record<string, number>): Record<string, number> {
+  const used = new Set(product.materials.map((l) => l.materialId))
+  return Object.fromEntries(Object.entries(prices).filter(([id, v]) => used.has(id) && Number.isFinite(v) && v >= 0).map(([id, v]) => [id, Math.round(v * 10000) / 10000]))
+}
+
 function cleanProcessResources(db: VertexDB, draft: PlanDraft): { processPeople: Record<string, string>; processMachines: Record<string, string> } {
   const units = cleanProcessUnits(db, draft.productId, draft.processUnits)
   const processPeople: Record<string, string> = {}
@@ -198,6 +207,7 @@ export const savePlan = command(
       instructions: draft.instructions.trim(),
       processUnits: cleanProcessUnits(db, draft.productId, draft.processUnits),
       ...cleanProcessResources(db, draft),
+      ...(draft.materialPrices !== undefined ? { materialPrices: cleanMaterialPrices(product, draft.materialPrices) } : {}),
     }
     if (!existing) {
       let next = db
