@@ -220,12 +220,38 @@ export const setMachineActive = command(
 )
 
 export interface UnitDraft {
+  /** Empty for a new unit. */
   id: UnitId
   name: string
   shortName: string
   speciality: string
   dailyCapacityJobs: number
+  /** Work given out to another firm (job work). */
+  outside?: boolean
+  contactPerson?: string
+  phone?: string
+  address?: string
 }
+
+function validateUnit(draft: UnitDraft, units: ProductionUnit[]): Record<string, string> {
+  const errors: Record<string, string> = {}
+  if (!draft.name.trim()) errors.name = draft.outside ? 'Enter who does the work (firm or person).' : 'Enter the unit name.'
+  else if (units.some((u) => u.id !== draft.id && u.name.trim().toLowerCase() === draft.name.trim().toLowerCase())) errors.name = 'A unit with this name already exists.'
+  if (!Number.isFinite(draft.dailyCapacityJobs) || draft.dailyCapacityJobs < 1) errors.dailyCapacityJobs = 'Capacity must be at least 1 job.'
+  if (draft.phone?.trim() && !/^[+0-9 ()-]{6,20}$/.test(draft.phone.trim())) errors.phone = 'Use digits, spaces, +, - or brackets only.'
+  return errors
+}
+
+const unitFields = (draft: UnitDraft) => ({
+  name: draft.name.trim(),
+  shortName: draft.shortName.trim() || draft.name.trim(),
+  speciality: draft.speciality.trim(),
+  dailyCapacityJobs: Math.round(draft.dailyCapacityJobs),
+  outside: !!draft.outside,
+  contactPerson: (draft.contactPerson ?? '').trim(),
+  phone: (draft.phone ?? '').trim(),
+  address: (draft.address ?? '').trim(),
+})
 
 /** Rename or re-describe a unit. Existing allocations keep pointing at the same id. */
 export const saveUnit = command(
@@ -236,17 +262,9 @@ export const saveUnit = command(
     if (denied) return denied
     const unit = db.units.find((u) => u.id === draft.id)
     if (!unit) return fail('Unit not found.')
-    const errors: Record<string, string> = {}
-    if (!draft.name.trim()) errors.name = 'Enter the unit name.'
-    if (!Number.isFinite(draft.dailyCapacityJobs) || draft.dailyCapacityJobs < 1) errors.dailyCapacityJobs = 'Capacity must be at least 1 job.'
+    const errors = validateUnit(draft, db.units)
     if (Object.keys(errors).length) return validationFailure(errors)
-    const updated: ProductionUnit = {
-      ...unit,
-      name: draft.name.trim(),
-      shortName: draft.shortName.trim() || draft.name.trim(),
-      speciality: draft.speciality.trim(),
-      dailyCapacityJobs: Math.round(draft.dailyCapacityJobs),
-    }
+    const updated: ProductionUnit = { ...unit, ...unitFields(draft) }
     return ok(
       audit({ ...db, units: db.units.map((u) => (u.id === unit.id ? updated : u)) }, ctx, {
         action: 'Unit updated',
@@ -257,6 +275,34 @@ export const saveUnit = command(
         newValue: updated.name,
       }),
       updated,
+    )
+  },
+)
+
+/**
+ * A new unit — another unit of our own, or an outside one (job work given to
+ * another firm). It can be chosen in planning like the others. Ids continue
+ * the U1, U2… series and are never reused.
+ */
+export const addUnit = command(
+  'addUnit',
+  (draft: UnitDraft): Op<ProductionUnit> =>
+  (db, ctx) => {
+    const denied = requireCapability(ctx, 'administration')
+    if (denied) return denied
+    const errors = validateUnit({ ...draft, id: '' }, db.units)
+    if (Object.keys(errors).length) return validationFailure(errors)
+    const used = db.units.map((u) => Number(/^U(\d+)$/.exec(u.id)?.[1] ?? 0))
+    const unit: ProductionUnit = { id: `U${Math.max(0, ...used) + 1}`, ...unitFields(draft) }
+    return ok(
+      audit({ ...db, units: [...db.units, unit] }, ctx, {
+        action: unit.outside ? 'Outside unit added' : 'Unit added',
+        entity: 'Resource',
+        entityId: unit.id,
+        entityLabel: unit.name,
+        newValue: unit.name,
+      }),
+      unit,
     )
   },
 )

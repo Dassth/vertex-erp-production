@@ -53,7 +53,7 @@ import type {
   ProductSpec,
   ProductStage,
 } from './types'
-import { calculateYield, ceilSafe, roundUpToMultiple, validateUpsOverride } from './yield'
+import { calculateYield, ceilSafe, fromMm, roundUpToMultiple, validateUpsOverride } from './yield'
 
 export const round2 = (value: number): number => Math.round((value + Number.EPSILON) * 100) / 100
 export const toPaise = (value: number): number => Math.round((value + Number.EPSILON) * 100)
@@ -120,7 +120,7 @@ export function usageConfigIssues(line: ProductMaterial, m: Material): string[] 
       if (overrideError) out.push(overrideError)
       else if (line.upsOverride === null) {
         const y = calculateYield(input)
-        if (y.ups === 0) out.push(y.error ?? 'Piece does not fit on the sheet')
+        if (y.ups === 0) out.push(doesNotFit(m, line))
       }
     }
   } else if (line.qtyPerPiece === null) {
@@ -129,6 +129,18 @@ export function usageConfigIssues(line: ProductMaterial, m: Material): string[] 
     out.push('Consumption per piece must be greater than zero')
   }
   return out
+}
+
+/** Says which sizes clash, in the material's own unit — and flags a sheet that looks like inches typed as mm. */
+function doesNotFit(m: Material, line: ProductMaterial): string {
+  const u = m.sizeUnit ?? 'mm'
+  const size = (a: number | null, b: number | null) => `${fromMm(a, u)} × ${fromMm(b, u)} ${u === 'in' ? 'inch' : u}`
+  const edge = m.edgeMarginMm ? `, less ${fromMm(m.edgeMarginMm, u)} ${u === 'in' ? 'inch' : u} edge allowance` : ''
+  const tiny = (m.sheetLengthMm ?? 0) < 120 && (m.sheetWidthMm ?? 0) < 120
+  return (
+    `the cut piece ${size(line.cutLengthMm, line.cutWidthMm)} does not fit on the sheet ${size(m.sheetLengthMm, m.sheetWidthMm)}${edge}` +
+    (tiny ? ' — the sheet size looks very small; was it typed in inches with the unit set to mm?' : ' — check the sheet size or the cut size')
+  )
 }
 
 export interface CostingSource {
@@ -185,7 +197,7 @@ export function computeOrderCosting(args: {
       gap('A material used by this product no longer exists in the registry.', productFix)
       continue
     }
-    const materialFix = { label: `Configure ${m.name}`, to: `/master/costing?material=${m.id}` }
+    const materialFix = { label: `Open ${m.name} in Materials`, to: `/master/costing?material=${m.id}` }
     if (!m.active) warn(`${m.name} is deactivated in Master but still used by this product.`, materialFix)
     for (const problem of materialConfigIssues(m)) (isMissing(problem) ? gap : error)(`${m.name}: ${problem}.`, materialFix)
     for (const problem of usageConfigIssues(bom, m)) (isMissing(problem) ? gap : error)(`${m.name}: ${problem}.`, materialFix)

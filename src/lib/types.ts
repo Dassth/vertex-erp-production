@@ -50,6 +50,12 @@ export interface ProductionUnit {
   shortName: string
   speciality: string
   dailyCapacityJobs: number
+  /** Outside unit: work given out (job work) to another firm, not done in our own units. */
+  outside?: boolean
+  /** Whom to call there (the unit in-charge, or the outside firm's person). */
+  contactPerson?: string
+  phone?: string
+  address?: string
 }
 
 /** Someone who performs or takes responsibility for process work in one unit.

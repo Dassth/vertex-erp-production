@@ -1,13 +1,14 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Building2, CalendarClock, CheckCircle2, Cog, Download, Eye, Factory, TriangleAlert, Users } from 'lucide-react'
+import { ArrowLeft, Building2, CalendarClock, CheckCircle2, Cog, Download, Eye, Factory, MapPin, Pencil, Phone, Plus, TriangleAlert, Users } from 'lucide-react'
 import { useStore } from '../../store/store'
-import type { UnitId, UnitMachine, UnitPerson } from '../../lib/types'
+import type { ProductionUnit, UnitId, UnitMachine, UnitPerson } from '../../lib/types'
 import { allJobViews, unitSummaries, unitWork } from '../../lib/selectors'
 import type { ProcessWorkRow } from '../../lib/selectors'
 import { fmtDate, pieces, planWindow } from '../../lib/format'
 import { ResourceDrawer, since } from '../unit/ResourceDrawer'
-import { Badge, Card, CardHead, EmptyState, ProgressBar } from '../../components/ui'
+import { Badge, Button, Card, CardHead, EmptyState, IconButton, ProgressBar } from '../../components/ui'
+import { UnitDialog } from './UnitDialog'
 import { Detail, LinkButton, PageHeader, StatStrip, StatTile, useDocumentTitle } from '../../components/page'
 import { DocumentPreview, DownloadButton, unitJobSheetDoc, unitTodayDoc, useLatestDb } from '../../components/DocumentPreview'
 import type { PreviewDoc } from '../../components/DocumentPreview'
@@ -22,7 +23,9 @@ import { onDay } from '../../lib/unitDay'
 
 export function UnitsMonitorPage() {
   useDocumentTitle('Units')
-  const { db } = useStore()
+  const { db, can } = useStore()
+  // undefined = closed, null = new unit, a unit = edit it.
+  const [editing, setEditing] = useState<ProductionUnit | null | undefined>(undefined)
   const summaries = useMemo(() => unitSummaries(allJobViews(db), db.units), [db])
   const staffOf = (id: UnitId) => db.people.filter((p) => p.unitId === id && p.active).length
   const machinesOf = (id: UnitId) => db.machines.filter((m) => m.unitId === id && m.active).length
@@ -33,12 +36,19 @@ export function UnitsMonitorPage() {
       <PageHeader
         eyebrow="Production · Units"
         title="Units"
-        subtitle="Open a unit to see the work it has been given and download today’s work or a job’s sheet to send to the unit’s in-charge."
+        subtitle="Open a unit to see the work it has been given and download today’s work or a job’s sheet to send to the unit’s in-charge. Work given outside (job work) is an outside unit."
         icon={<Building2 className="h-4 w-4" />}
+        actions={
+          can('administration') ? (
+            <Button icon={<Plus className="h-4 w-4" />} onClick={() => setEditing(null)}>
+              Add unit…
+            </Button>
+          ) : undefined
+        }
       />
 
       <StatStrip className="grid-cols-2 lg:grid-cols-4">
-        <StatTile label="Units" value={String(db.units.length)} icon={<Building2 className="h-4 w-4" />} tone="indigo" hint="Production units" />
+        <StatTile label="Units" value={String(db.units.length)} icon={<Building2 className="h-4 w-4" />} tone="indigo" hint={db.units.some((u) => u.outside) ? `${db.units.filter((u) => !u.outside).length} own · ${db.units.filter((u) => u.outside).length} outside` : 'Production units'} />
         <StatTile label="Open processes" value={String(busiest)} icon={<Factory className="h-4 w-4" />} tone="blue" hint="Across all units" />
         <StatTile label="Running late" value={String(summaries.reduce((n, s) => n + s.delayedProcesses, 0))} icon={<TriangleAlert className="h-4 w-4" />} tone="amber" hint="Past planned time or blocked" />
         <StatTile label="Completed" value={String(summaries.reduce((n, s) => n + s.completedProcesses, 0))} icon={<CheckCircle2 className="h-4 w-4" />} tone="green" hint="Processes finished" />
@@ -52,12 +62,25 @@ export function UnitsMonitorPage() {
                 <Link to={`/units/${s.unit.id}`} className="vx-focus rounded-xs text-lg font-semibold text-ink hover:text-accent-text hover:underline">
                   {s.unit.name}
                 </Link>
-                <p className="text-sm text-muted">{s.unit.speciality || 'Production unit'}</p>
+                <p className="text-sm text-muted">{s.unit.speciality || (s.unit.outside ? 'Outside unit (job work)' : 'Production unit')}</p>
               </div>
-              <Badge tone={s.delayedProcesses ? 'amber' : s.openProcesses ? 'blue' : 'slate'} dot>
-                {s.delayedProcesses ? `${s.delayedProcesses} late` : s.openProcesses ? 'Working' : 'Idle'}
-              </Badge>
+              <div className="flex shrink-0 items-center gap-1.5">
+                {s.unit.outside ? (
+                  <Badge tone="violet" dot>
+                    Outside
+                  </Badge>
+                ) : null}
+                <Badge tone={s.delayedProcesses ? 'amber' : s.openProcesses ? 'blue' : 'slate'} dot>
+                  {s.delayedProcesses ? `${s.delayedProcesses} late` : s.openProcesses ? 'Working' : 'Idle'}
+                </Badge>
+                {can('administration') ? (
+                  <IconButton label={`Edit ${s.unit.name}`} onClick={() => setEditing(s.unit)}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </IconButton>
+                ) : null}
+              </div>
             </div>
+            <UnitContact unit={s.unit} />
 
             <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
               <Detail label="Jobs here">{s.jobsHere}</Detail>
@@ -67,7 +90,7 @@ export function UnitsMonitorPage() {
             </dl>
             <ProgressBar value={s.loadPct} tone={s.loadPct > 90 ? 'amber' : 'indigo'} className="mt-3" />
             <p className="mt-1 text-2xs text-faint">
-              {s.loadPct}% of the unit’s daily capacity · {staffOf(s.unit.id)} staff · {machinesOf(s.unit.id)} machines
+              {s.loadPct}% of the unit’s daily capacity{s.unit.outside ? '' : ` · ${staffOf(s.unit.id)} staff · ${machinesOf(s.unit.id)} machines`}
             </p>
 
             <LinkButton to={`/units/${s.unit.id}`} size="sm" variant="secondary" icon={<Eye className="h-3.5 w-3.5" />} className="mt-4">
@@ -76,6 +99,30 @@ export function UnitsMonitorPage() {
           </Card>
         ))}
       </div>
+      {editing !== undefined ? <UnitDialog unit={editing ?? undefined} onClose={() => setEditing(undefined)} /> : null}
+    </div>
+  )
+}
+
+/** Phone, contact and address of a unit, when known. */
+function UnitContact({ unit }: { unit: ProductionUnit }) {
+  if (!unit.contactPerson && !unit.phone && !unit.address) return null
+  return (
+    <div className="mt-2 space-y-0.5 text-xs text-muted">
+      {unit.contactPerson || unit.phone ? (
+        <p className="flex min-w-0 items-center gap-1.5">
+          <Phone className="h-3.5 w-3.5 shrink-0 text-faint" aria-hidden="true" />
+          <span className="min-w-0 truncate">
+            {[unit.contactPerson, unit.phone].filter(Boolean).join(' · ')}
+          </span>
+        </p>
+      ) : null}
+      {unit.address ? (
+        <p className="flex min-w-0 items-start gap-1.5">
+          <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-faint" aria-hidden="true" />
+          <span className="min-w-0 break-words line-clamp-2">{unit.address}</span>
+        </p>
+      ) : null}
     </div>
   )
 }
@@ -116,7 +163,7 @@ export function UnitMonitorDetailPage() {
       </LinkButton>
 
       <PageHeader
-        eyebrow="Units · View"
+        eyebrow={unit.outside ? 'Units · Outside (job work)' : 'Units · View'}
         title={unit.name}
         subtitle={`The work ${unit.shortName} has been given in plans. Download today’s work, or open a job number for its sheet, and send it to the unit’s in-charge. When the unit says a job is done, mark it finished in Dispatch.`}
         icon={<Factory className="h-4 w-4" />}
@@ -126,6 +173,8 @@ export function UnitMonitorDetailPage() {
           </DownloadButton>
         }
       />
+
+      <UnitContact unit={unit} />
 
       <StatStrip className="grid-cols-1 sm:grid-cols-3">
         <StatTile label="Today" value={String(today.length)} icon={<CalendarClock className="h-4 w-4" />} tone="indigo" hint="Processes planned for today" />
@@ -143,6 +192,9 @@ export function UnitMonitorDetailPage() {
         <WorkTable rows={open} onOpen={openSheet} empty="This unit has no open work." />
       </Card>
 
+      {/* An outside firm has its own people and machines; only ours are listed. */}
+      {unit.outside ? null : (
+        <>
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="vx-anim-up overflow-hidden">
           <CardHead title="Staff" subtitle={`${staff.length} in this unit`} actions={manage} />
@@ -180,6 +232,8 @@ export function UnitMonitorDetailPage() {
           )}
         </Card>
       </div>
+        </>
+      )}
 
       <DocumentPreview doc={preview} onClose={() => setPreview(null)} />
       <ResourceDrawer

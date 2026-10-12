@@ -37,6 +37,8 @@
 - [x] 2026-10-11 - Project docs created (`docs/` PRD, ARCHITECTURE, RULES, DESIGN, TASKS, MEMORY)
 - [x] 2026-10-12 - One picker everywhere (supplier, customer, product, material): click for the list, type to search, “+ New …” beside it — Materials, Add material, product processes, Purchase bills (supplier + items), Planning (customer + product), Money in/out (Received from / Paid to)
 - [x] 2026-10-12 - Income & Expenses: “Add <month> sales & purchases…” — one confirmation adds each unpaid sales invoice and purchase bill of the month as its own entry
+- [x] 2026-10-12 - Units: “Add unit…” for own units and outside units (job work), with contact, phone and address for every unit; Planning lists outside units separately and can add one from the unit list
+- [x] 2026-10-12 - Product “For exact costing” panel: long material links wrap; a cut piece that doesn't fit now names both sizes and flags a sheet typed in inches as mm
 
 ## Blocked
 - [ ] Cloud stored backups on Cloudflare - R2 is not enabled on the account

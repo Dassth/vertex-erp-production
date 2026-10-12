@@ -86,3 +86,15 @@ Append-only log. Newest at the bottom.
 - **Why:** The details already exist on the documents; only what is still due is added, so pressing again never doubles anything.
 - **Impact:** `src/lib/cashbook.ts` (`monthDocsToRecord`), `src/domain/cashbook.ts`, `src/features/accounts/MonthEndDialog.tsx`, `AccountsPage.tsx`
 
+## 2026-10-12 - Outside units (job work)
+- **Context:** Some processes are given to other firms; units were fixed at U1–U4 with no way to add one.
+- **Decision / finding:** `addUnit` creates `U5`, `U6`… (never reused). `ProductionUnit.outside` marks job work; `contactPerson`, `phone`, `address` are optional on every unit. Outside units need no people/machines in Planning; Units shows an “Outside” badge and their contact.
+- **Why:** Planning must record who does every process, including work done outside.
+- **Impact:** `src/lib/types.ts`, `src/domain/resources.ts`, `src/features/units/UnitDialog.tsx`, `UnitsMonitorPage.tsx`, `SettingsPage.tsx`, `PlanEditor.tsx`
+
+## 2026-10-12 - "Cut piece does not fit" usually means a unit mix-up
+- **Context:** The owner saw “TNPL Auro Graphic Board 280gsm 31.5x41.5: the cut piece does not fit…” with a link running off the panel.
+- **Decision / finding:** The message now shows the cut size and sheet size in the material's unit and asks whether a very small sheet (<120 mm) was typed in inches with the unit set to mm. Fix links wrap. Label “Configure X” → “Open X in Materials”.
+- **Why:** A 31.5 × 41.5 sheet is inches; saved as mm, no box piece can fit.
+- **Impact:** `src/lib/costing.ts`, `src/components/page.tsx` (`IssueList`)
+

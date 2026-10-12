@@ -17,6 +17,8 @@ import { ResumedNotice, useNewDraftId } from '../../components/Unfinished'
 import { SizeInput } from '../../components/SizeInput'
 import { CustomerInput } from '../../components/CustomerInput'
 import { Picker } from '../../components/Picker'
+import { UnitDialog } from '../units/UnitDialog'
+import type { ProductionUnit } from '../../lib/types'
 import { hasSize, sameSize, sizeFactors, sizeText } from '../../lib/sizeScale'
 import { computeOrderCosting } from '../../lib/costing'
 import { defaultCostingInputs, planCostingSource } from '../../domain/orderCosting'
@@ -82,6 +84,8 @@ function toDraft(p?: Plan): PlanDraft {
 function PlanEditor({ plan, scopeId }: { plan?: Plan; scopeId: string }) {
   useDocumentTitle(plan ? `Planning · ${plan.code}` : 'Planning · New plan')
   const { db, can, run, pushToast } = useStore()
+  // A process whose unit list chose “+ Add unit…”: the new unit is given to it.
+  const [newUnitFor, setNewUnitFor] = useState<string | null>(null)
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const editable = !plan || plan.status === 'Draft'
@@ -393,11 +397,7 @@ function PlanEditor({ plan, scopeId }: { plan?: Plan; scopeId: string }) {
                     <Field label="Allocate every process to" className="w-56">
                       <Select value={bulkUnit} onChange={(e) => setBulkUnit(e.target.value)}>
                         <option value="">Select a unit…</option>
-                        {db.units.map((u) => (
-                          <option key={u.id} value={u.id}>
-                            {u.name}
-                          </option>
-                        ))}
+                        <UnitOptions units={db.units} />
                       </Select>
                     </Field>
                     <Button
@@ -445,6 +445,7 @@ function PlanEditor({ plan, scopeId }: { plan?: Plan; scopeId: string }) {
                           <tbody>
                             {stage.processes.map((process, pi) => {
                               const unitId = draft.processUnits[process.id] ?? ""
+                              const outsideUnit = !!db.units.find((u) => u.id === unitId)?.outside
                               return (
                                 <tr key={process.id} className={cx('vx-row', !unitId && 'bg-warn-wash/40')}>
                                   <td className="vx-td">
@@ -466,6 +467,7 @@ function PlanEditor({ plan, scopeId }: { plan?: Plan; scopeId: string }) {
                                         disabled={readOnly}
                                         aria-invalid={!unitId && Object.keys(errors).length > 0 ? true : undefined}
                                         onChange={(e) => {
+                                          if (e.target.value === NEW_UNIT) return setNewUnitFor(process.id)
                                           // Another unit: its own people and machines are chosen again.
                                           const { [process.id]: _p, ...people } = draft.processPeople ?? {}
                                           const { [process.id]: _m, ...machines } = draft.processMachines ?? {}
@@ -475,14 +477,16 @@ function PlanEditor({ plan, scopeId }: { plan?: Plan; scopeId: string }) {
                                         }}
                                       >
                                         <option value="">Select unit…</option>
-                                        {db.units.map((u) => (
-                                          <option key={u.id} value={u.id}>
-                                            {u.name}
-                                          </option>
-                                        ))}
+                                        <UnitOptions units={db.units} canAdd={can('administration')} />
                                       </Select>
                                     </label>
                                   </td>
+                                  {outsideUnit ? (
+                                    <td className="vx-td text-sm text-muted" colSpan={2}>
+                                      Given out (job work) — they use their own people and machines.
+                                    </td>
+                                  ) : (
+                                    <>
                                   <td className="vx-td">
                                     <Select
                                       aria-label={`Who handles ${process.name}`}
@@ -518,6 +522,8 @@ function PlanEditor({ plan, scopeId }: { plan?: Plan; scopeId: string }) {
                                       {process.requiresMachine ? null : <option value="manual">No machine (manual work)</option>}
                                     </Select>
                                   </td>
+                                    </>
+                                  )}
                                 </tr>
                               )
                             })}
@@ -622,6 +628,13 @@ function PlanEditor({ plan, scopeId }: { plan?: Plan; scopeId: string }) {
         </p>
       ) : null}
       {guard.dialog}
+      {newUnitFor ? (
+        <UnitDialog
+          outside
+          onClose={() => setNewUnitFor(null)}
+          onSaved={(u) => set({ processUnits: { ...draft.processUnits, [newUnitFor]: u.id } })}
+        />
+      ) : null}
     </div>
   )
 }
@@ -666,6 +679,27 @@ function PlanHeaderActions({ plan }: { plan: Plan }) {
         </ExcelButton>
       ))}
       <DocumentPreview doc={preview} onClose={() => setPreview(null)} />
+    </>
+  )
+}
+
+const NEW_UNIT = '__new-unit'
+
+/** Our own units first, then outside (job work) units; optionally “+ Add unit…”. */
+function UnitOptions({ units, canAdd = false }: { units: ProductionUnit[]; canAdd?: boolean }) {
+  const own = units.filter((u) => !u.outside)
+  const outside = units.filter((u) => u.outside)
+  const list = (us: ProductionUnit[]) =>
+    us.map((u) => (
+      <option key={u.id} value={u.id}>
+        {u.name}
+      </option>
+    ))
+  return (
+    <>
+      {outside.length ? <optgroup label="Our units">{list(own)}</optgroup> : list(own)}
+      {outside.length ? <optgroup label="Outside (job work)">{list(outside)}</optgroup> : null}
+      {canAdd ? <option value={NEW_UNIT}>+ Add unit…</option> : null}
     </>
   )
 }

@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Factory, Plus, Save, UserCog, Wrench } from 'lucide-react'
+import { Factory, Plus, UserCog, Wrench } from 'lucide-react'
 import { useStore } from '../../store/store'
-import type { UnitId, UnitMachine, UnitPerson } from '../../lib/types'
-import { saveMachine, savePerson, saveUnit, setMachineActive, setPersonActive } from '../../domain/resources'
+import type { ProductionUnit, UnitMachine, UnitPerson } from '../../lib/types'
+import { saveMachine, savePerson, setMachineActive, setPersonActive } from '../../domain/resources'
 import { Badge, Button, Card, CardHead, EmptyState, Field, Input, Segmented, Select } from '../../components/ui'
-import { NumberInput, PageHeader, StatStrip, StatTile, useDocumentTitle } from '../../components/page'
+import { PageHeader, StatStrip, StatTile, useDocumentTitle } from '../../components/page'
 import { BackupPanel } from './BackupPanel'
+import { UnitDialog } from '../units/UnitDialog'
 
 /* Execution resources — units, the people who take responsibility for process
    work and the machines they run. Administration only (Administrator 1).
@@ -277,88 +278,58 @@ function MachinePanel({ machines, defaultUnit }: { machines: UnitMachine[]; defa
 /* ---------------------------------- Units --------------------------------- */
 
 function UnitPanel() {
-  const { db, run, pushToast } = useStore()
-  const [editing, setEditing] = useState<UnitId | null>(null)
-  const [draft, setDraft] = useState({ name: '', shortName: '', speciality: '', dailyCapacityJobs: 5 })
-  const [errors, setErrors] = useState<Record<string, string>>({})
-
-  const start = (unitId: UnitId) => {
-    const unit = db.units.find((u) => u.id === unitId)!
-    setEditing(unitId)
-    setErrors({})
-    setDraft({ name: unit.name, shortName: unit.shortName, speciality: unit.speciality, dailyCapacityJobs: unit.dailyCapacityJobs })
-  }
-
-  const save = async () => {
-    if (!editing) return
-    const r = await run(saveUnit({ id: editing, ...draft }))
-    if (!r.ok) {
-      setErrors(r.fieldErrors ?? { name: r.error })
-      return
-    }
-    setEditing(null)
-    pushToast({ title: `${r.value.name} updated`, message: 'Existing allocations keep pointing at this unit.', level: 'success' })
-  }
+  const { db } = useStore()
+  // undefined = closed, null = new unit, a unit = edit it.
+  const [editing, setEditing] = useState<ProductionUnit | null | undefined>(undefined)
 
   return (
     <Card className="vx-anim-up overflow-hidden">
-      <CardHead title="Production units" subtitle="Renaming a unit never rewrites confirmed history" icon={<Factory className="h-4 w-4" />} />
+      <CardHead
+        title="Production units"
+        subtitle="Our own units and outside units (job work). Renaming a unit never rewrites confirmed history."
+        icon={<Factory className="h-4 w-4" />}
+        actions={
+          <Button size="sm" icon={<Plus className="h-3.5 w-3.5" />} onClick={() => setEditing(null)}>
+            Add unit…
+          </Button>
+        }
+      />
       <div className="divide-y divide-rule">
         {db.units.map((unit) => {
-          const isEditing = editing === unit.id
           const people = db.people.filter((p) => p.unitId === unit.id && p.active).length
           const machines = db.machines.filter((m) => m.unitId === unit.id && m.active).length
           return (
-            <div key={unit.id} className="p-5">
-              {isEditing ? (
-                <form
-                  className="grid gap-x-4 sm:grid-cols-4"
-                  noValidate
-                  onSubmit={(e) => {
-                    e.preventDefault()
-                    void save()
-                  }}
-                >
-                  <Field label="Unit name" required error={errors.name}>
-                    <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-                  </Field>
-                  <Field label="Short name">
-                    <Input value={draft.shortName} onChange={(e) => setDraft({ ...draft, shortName: e.target.value })} />
-                  </Field>
-                  <Field label="Speciality">
-                    <Input value={draft.speciality} onChange={(e) => setDraft({ ...draft, speciality: e.target.value })} />
-                  </Field>
-                  <Field label="Daily capacity (jobs)" error={errors.dailyCapacityJobs}>
-                    <NumberInput value={draft.dailyCapacityJobs} onChange={(v) => setDraft({ ...draft, dailyCapacityJobs: v ?? 0 })} />
-                  </Field>
-                  <div className="flex flex-wrap gap-2 sm:col-span-4">
-                    <Button type="submit" icon={<Save className="h-4 w-4" />}>
-                      Save unit
-                    </Button>
-                    <Button type="button" variant="secondary" onClick={() => setEditing(null)}>
-                      Cancel
-                    </Button>
-                  </div>
-                </form>
-              ) : (
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="font-semibold text-ink">
-                      {unit.name} <span className="vx-code text-xs text-faint">{unit.id}</span>
-                    </p>
-                    <p className="text-sm text-muted">
-                      {unit.speciality || 'No speciality recorded'} · {people} person(s) · {machines} machine(s) · capacity {unit.dailyCapacityJobs} jobs/day
-                    </p>
-                  </div>
-                  <Button size="sm" variant="secondary" onClick={() => start(unit.id)}>
-                    Edit…
-                  </Button>
-                </div>
-              )}
+            <div key={unit.id} className="flex flex-wrap items-center justify-between gap-3 p-5">
+              <div className="min-w-0">
+                <p className="font-semibold text-ink">
+                  {unit.name} <span className="vx-code text-xs text-faint">{unit.id}</span>
+                  {unit.outside ? (
+                    <Badge tone="violet" dot className="ml-2 align-middle">
+                      Outside
+                    </Badge>
+                  ) : null}
+                </p>
+                <p className="text-sm text-muted">
+                  {[
+                    unit.speciality || (unit.outside ? 'Job work' : 'No speciality recorded'),
+                    unit.outside ? '' : `${people} person(s) · ${machines} machine(s)`,
+                    `capacity ${unit.dailyCapacityJobs} jobs/day`,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </p>
+                {unit.contactPerson || unit.phone || unit.address ? (
+                  <p className="break-words text-xs text-faint">{[unit.contactPerson, unit.phone, unit.address].filter(Boolean).join(' · ')}</p>
+                ) : null}
+              </div>
+              <Button size="sm" variant="secondary" onClick={() => setEditing(unit)}>
+                Edit…
+              </Button>
             </div>
           )
         })}
       </div>
+      {editing !== undefined ? <UnitDialog unit={editing ?? undefined} onClose={() => setEditing(undefined)} /> : null}
     </Card>
   )
 }

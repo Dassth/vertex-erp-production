@@ -148,9 +148,10 @@ export function IssueList({
                 <li key={`${i.message}-${idx}`} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm text-ink-2">
                   <span className="min-w-0 break-words">{i.message}</span>
                   {i.fix ? (
-                    <Link to={i.fix.to} className="vx-focus inline-flex shrink-0 items-center gap-1 rounded-xs font-medium text-accent-text hover:underline">
+                    // A long material name wraps inside the panel instead of running off its edge.
+                    <Link to={i.fix.to} className="vx-focus min-w-0 max-w-full break-words rounded-xs font-medium text-accent-text hover:underline">
                       {i.fix.label}
-                      <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                      <ArrowRight className="ml-1 inline h-3.5 w-3.5 align-[-2px]" aria-hidden="true" />
                     </Link>
                   ) : null}
                 </li>

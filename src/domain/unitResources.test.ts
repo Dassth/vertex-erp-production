@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildEmptyDB } from '../lib/defaults'
 import { ADMIN, BILLING_ONLY, RETIRED_UNIT, ctxFor, must } from '../test/fixtures'
-import { savePerson, saveMachine, setMachineActive, setPersonActive } from './resources'
+import { addUnit, savePerson, saveMachine, saveUnit, setMachineActive, setPersonActive } from './resources'
 
 /* Units have no accounts: Administrator 1 keeps every unit's staff and machines. */
 
@@ -48,5 +48,25 @@ describe('unit staff and machine removal', () => {
   const r = setPersonActive(p.value.id, false)(db, ctx)
   expect(r.ok).toBe(false)
   if (!r.ok) expect(r.error).toMatch(/JOB-1 Print/)
+ })
+})
+
+describe('adding units', () => {
+ const outside = { id: '', name: ' Sri Lamination Works ', shortName: '', speciality: 'Lamination', dailyCapacityJobs: 3, outside: true, contactPerson: 'Mani', phone: '98400 12345', address: ' 4 Mill Road, Sivakasi ' }
+ it('adds an outside unit with the next id, its contact and address, and keeps names unique', () => {
+  const ctx = ctxFor(ADMIN[0])
+  const r = must(addUnit(outside)(buildEmptyDB(), ctx))
+  expect(r.value).toMatchObject({ id: 'U5', name: 'Sri Lamination Works', shortName: 'Sri Lamination Works', outside: true, contactPerson: 'Mani', address: '4 Mill Road, Sivakasi' })
+  expect(r.db.units).toHaveLength(5)
+  expect(r.db.audit[0].action).toBe('Outside unit added')
+  expect(addUnit({ ...outside, name: 'sri lamination works' })(r.db, ctx).ok).toBe(false)
+  const own = must(addUnit({ ...outside, name: 'Unit 5', outside: false })(r.db, ctx))
+  expect(own.value).toMatchObject({ id: 'U6', outside: false })
+ })
+ it('gives our own units an address too, and only administrators may add units', () => {
+  const db = buildEmptyDB()
+  const r = must(saveUnit({ id: 'U1', name: 'Unit 1', shortName: '', speciality: '', dailyCapacityJobs: 5, address: 'Main road' })(db, ctxFor(ADMIN[0])))
+  expect(r.value.address).toBe('Main road')
+  for (const actor of [RETIRED_UNIT, ADMIN[1], BILLING_ONLY]) expect(addUnit(outside)(db, ctxFor(actor)).ok).toBe(false)
  })
 })
