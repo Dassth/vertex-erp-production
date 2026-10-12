@@ -1,16 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { addMonths, format, parse } from 'date-fns'
-import { ArrowDownLeft, ArrowUpRight, ChevronLeft, ChevronRight, Download, HandCoins, Landmark, Pencil, Plus, Scale, Trash2, Wallet } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, CalendarCheck, ChevronLeft, ChevronRight, Download, HandCoins, Landmark, Pencil, Plus, Scale, Trash2, Wallet } from 'lucide-react'
 import { useStore } from '../../store/store'
 import type { MoneyDirection, MoneyEntry, MoneyMode } from '../../lib/types'
 import { CATEGORIES, CUSTOMER_PAYMENT, MODE_LABEL, MODES, SUPPLIER_PAYMENT, balances, debtRows, entriesOfMonth, monthReportTable, summarise, sumDue, toCollect, toPay } from '../../lib/cashbook'
 import { DebtEditor, DebtsCard, blankDebt } from './DebtsCard'
+import { MonthEndDialog } from './MonthEndDialog'
 import type { DebtDraft } from '../../domain/cashbook'
 import { cx, fmtDate, moneyPaise } from '../../lib/format'
 import { deleteMoneyEntry, saveMoneyEntry, validateMoney } from '../../domain/cashbook'
 import type { MoneyDraft } from '../../domain/cashbook'
 import { Badge, Button, Card, CardHead, ConfirmDialog, EmptyState, Field, IconButton, Input, Modal, Segmented, Select, Textarea } from '../../components/ui'
+import { CustomerInput } from '../../components/CustomerInput'
+import { SupplierInput } from '../../components/SupplierInput'
 import { NumberInput, PageHeader, StatStrip, StatTile, useDocumentTitle } from '../../components/page'
 import { DownloadButton, ExcelButton, moneyMonthDoc, useLatestDb } from '../../components/DocumentPreview'
 
@@ -65,6 +68,7 @@ export function AccountsPage() {
   const [editing, setEditing] = useState<MoneyDraft | null>(null)
   const [deleting, setDeleting] = useState<MoneyEntry | null>(null)
   const [loan, setLoan] = useState<DebtDraft | null>(null)
+  const [monthEnd, setMonthEnd] = useState(false)
 
   const set = (patch: Record<string, string | null>) => {
     const next = new URLSearchParams(params)
@@ -124,6 +128,9 @@ export function AccountsPage() {
           <ChevronRight className="h-4 w-4" />
         </IconButton>
         <span className="text-sm text-muted">{monthLabel}</span>
+        <Button size="sm" variant="secondary" icon={<CalendarCheck className="h-3.5 w-3.5" />} onClick={() => setMonthEnd(true)} className="sm:ml-auto">
+          Add {monthLabel} sales & purchases…
+        </Button>
       </div>
 
       <StatStrip className="grid-cols-2 lg:grid-cols-4">
@@ -148,6 +155,7 @@ export function AccountsPage() {
       {tab === 'entries' ? <EntriesCard entries={entries} monthLabel={monthLabel} month={month} onEdit={(m) => setEditing(toDraft(m))} onDelete={setDeleting} onNew={(d) => setEditing(blank(d))} /> : null}
 
       {tab === 'debts' ? <DebtsCard /> : null}
+      {monthEnd ? <MonthEndDialog month={month} monthLabel={monthLabel} onClose={() => setMonthEnd(false)} /> : null}
 
       {tab === 'collect' ? (
         <Card className="vx-anim-up overflow-hidden">
@@ -632,8 +640,12 @@ function MoneyEditor({ draft, onClose, onLoan }: { draft: MoneyDraft; onClose: (
           <Input type="date" name="date" value={d.date} onChange={(e) => set({ date: e.target.value })} />
         </Field>
 
-        <Field label={isIn ? 'Received from' : 'Paid to'} error={errors.party}>
-          <Input name="party" value={d.party} autoComplete="off" onChange={(e) => set({ party: e.target.value })} placeholder={isIn ? 'Customer or person…' : 'Supplier, person or office…'} />
+        <Field label={isIn ? 'Received from' : 'Paid to'} error={errors.party} as="div" hint={isIn ? 'A customer, or type any name.' : 'A supplier, or type any name (person, office…).'}>
+          {isIn ? (
+            <CustomerInput aria-label="Received from" name="party" value={d.party} onText={(v) => set({ party: v })} onPick={(c) => set({ party: c.company })} placeholder="Customer or person…" invalid={!!errors.party} />
+          ) : (
+            <SupplierInput aria-label="Paid to" name="party" value={d.party} onChange={(v) => set({ party: v })} placeholder="Supplier, person or office…" aria-invalid={!!errors.party || undefined} />
+          )}
         </Field>
         <Field label="Mode" required error={errors.mode}>
           <Select value={d.mode} onChange={(e) => set({ mode: e.target.value as MoneyMode })}>

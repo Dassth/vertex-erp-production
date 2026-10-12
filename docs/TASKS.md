@@ -9,6 +9,7 @@
 - [ ] Fix the 3 pre-existing failing UI tests (invoices ×2, login)
 
 ## Backlog
+- [ ] Same picker for smaller lists if the owner wants it: Planning unit/person/machine, order-charge templates, loan lender, HSN codes (assumed - confirm)
 - [ ] Update the stale Playwright acceptance spec (`e2e/acceptance.spec.ts`) to the new product/material flows
 - [ ] Supplier reports: purchases per supplier over a period (assumed - confirm)
 - [ ] Loan interest / EMI schedule (today only notes) (assumed - confirm)
@@ -34,6 +35,8 @@
 - [x] 2026-10-11 - Planning: unit → person → machine per process
 - [x] 2026-10-11 - Visibility fixes (Loan taken… button, "Bought from" section, No supplier filter); all five features cross-checked
 - [x] 2026-10-11 - Project docs created (`docs/` PRD, ARCHITECTURE, RULES, DESIGN, TASKS, MEMORY)
+- [x] 2026-10-12 - One picker everywhere (supplier, customer, product, material): click for the list, type to search, “+ New …” beside it — Materials, Add material, product processes, Purchase bills (supplier + items), Planning (customer + product), Money in/out (Received from / Paid to)
+- [x] 2026-10-12 - Income & Expenses: “Add <month> sales & purchases…” — one confirmation adds each unpaid sales invoice and purchase bill of the month as its own entry
 
 ## Blocked
 - [ ] Cloud stored backups on Cloudflare - R2 is not enabled on the account

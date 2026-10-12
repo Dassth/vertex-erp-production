@@ -1,6 +1,6 @@
 import type { Debt, MoneyDirection, MoneyEntry, MoneyMode, VertexDB } from '../lib/types'
 import { toPaise } from '../lib/costing'
-import { CUSTOMER_PAYMENT, MODES, SUPPLIER_PAYMENT, paidFor, receivedFor, repaidFor } from '../lib/cashbook'
+import { CUSTOMER_PAYMENT, MODES, SUPPLIER_PAYMENT, monthDocsToRecord, paidFor, receivedFor, repaidFor } from '../lib/cashbook'
 import { purchaseTotals } from '../lib/gst'
 import { audit, command, docCode, fail, hasFieldErrors, isIsoDate, nextSeq, ok, requireCapability, stampNew, stampUpdate, staleRecord, validationFailure } from './common'
 import type { Op } from './common'
@@ -168,6 +168,43 @@ export const deleteMoneyEntry = command(
         oldValue: `${entry.date}, ${entry.amount.toFixed(2)}`,
       })
       return ok(next, null)
+    },
+)
+
+/**
+ * Month end in one press: every sales invoice and purchase bill of `month`
+ * that still has money due becomes its own receipt / payment — customer or
+ * supplier, invoice or bill, date and amount taken from the document — so the
+ * month's report lists each one. Amounts already recorded are skipped.
+ */
+export const recordMonthDocuments = command(
+  'recordMonthDocuments',
+  (args: { month: string; mode: MoneyMode; sales: boolean; purchases: boolean }): Op<{ sales: number; purchases: number; moneyIn: number; moneyOut: number }> =>
+    (db, ctx) => {
+      const denied = requireCapability(ctx, 'billing')
+      if (denied) return denied
+      if (!/^\d{4}-\d{2}$/.test(args.month)) return fail('Choose a month.')
+      if (!MODES.includes(args.mode)) return fail('Choose cash, UPI, bank transfer or cheque.')
+      const docs = monthDocsToRecord(db, args.month)
+      const base = { id: '', mode: args.mode, reference: '', paidFromDebtId: null, repaysDebtId: null }
+      let next = db
+      const done = { sales: 0, purchases: 0, moneyIn: 0, moneyOut: 0 }
+      for (const d of args.sales ? docs.sales : []) {
+        const r = saveMoneyEntry({ ...base, direction: 'in', date: d.date, amount: d.due, category: CUSTOMER_PAYMENT, party: d.party, invoiceId: d.id, purchaseId: null, notes: `Added at month end for ${d.number}` })(next, ctx)
+        if (!r.ok) return fail(`${d.number}: ${r.error}`)
+        next = r.db
+        done.sales += 1
+        done.moneyIn += toPaise(d.due)
+      }
+      for (const d of args.purchases ? docs.purchases : []) {
+        const r = saveMoneyEntry({ ...base, direction: 'out', date: d.date, amount: d.due, category: SUPPLIER_PAYMENT, party: d.party, invoiceId: null, purchaseId: d.id, notes: `Added at month end for ${d.number}` })(next, ctx)
+        if (!r.ok) return fail(`${d.number}: ${r.error}`)
+        next = r.db
+        done.purchases += 1
+        done.moneyOut += toPaise(d.due)
+      }
+      if (!done.sales && !done.purchases) return fail('Nothing left to add — every sale and purchase bill of this month is already recorded.')
+      return ok(next, { ...done, moneyIn: done.moneyIn / 100, moneyOut: done.moneyOut / 100 })
     },
 )
 

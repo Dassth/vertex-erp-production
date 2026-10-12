@@ -40,6 +40,7 @@ Light theme only today (no dark tokens in `index.css`) (assumed - confirm whethe
 - **Button:** primary / secondary / ghost / danger; sizes sm / md; a `loading` spinner keeps the label; the `icon` prop.
 - **IconButton:** must have a `label` (aria-label).
 - **Field + Input / Select / Textarea / NumberInput:** label, hint, required, inline `error`, `aria-invalid`.
+- **Picker (`components/Picker.tsx`):** the one way to choose a supplier, customer, product or material. Click → the whole list drops down (floats on `<body>`, never clipped or mixed with the form), type to narrow, arrows + Enter to pick; a **“+ New …”** button sits beside the box and creates one on the spot. Use `SupplierInput` / `CustomerInput` for those two; never a plain `<select>` or `<datalist>` for master records.
 - **Card + CardHead:** title, subtitle, icon, actions.
 - **Modal / Drawer:** title, subtitle, icon, footer actions; focus trapped; overscroll contained.
 - **ConfirmDialog:** `tone="danger"` for deletes.

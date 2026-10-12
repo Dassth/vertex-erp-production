@@ -130,8 +130,8 @@ function MaterialEditor({ material, onDirty, onDeleted }: { material: Material; 
         <section>
           <h3 className="vx-smallcaps text-ink">Bought from</h3>
           <div className="mt-3 grid gap-x-4 sm:grid-cols-2">
-            <Field label="Supplier" hint="Choose from your suppliers, or type a new one — it is added to Master → Suppliers.">
-              <SupplierInput value={draft.supplier} onChange={(v) => set({ supplier: v })} placeholder="Choose or type a supplier…" aria-invalid={!draft.supplier.trim() || undefined} />
+            <Field label="Supplier" as="div" hint="Choose from your suppliers, or press “New supplier” to add one with its phone and GSTIN.">
+              <SupplierInput aria-label="Supplier" value={draft.supplier} onChange={(v) => set({ supplier: v })} placeholder="Choose or type a supplier…" aria-invalid={!draft.supplier.trim() || undefined} />
             </Field>
             {(() => {
               const sup = (db.suppliers ?? []).find((x) => x.name.trim().toLowerCase() === draft.supplier.trim().toLowerCase())

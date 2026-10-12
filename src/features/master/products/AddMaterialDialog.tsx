@@ -1,5 +1,5 @@
-import { useId, useMemo, useRef, useState } from 'react'
-import { Boxes, Check, Plus, Search } from 'lucide-react'
+import { useMemo, useRef, useState } from 'react'
+import { Boxes, Check } from 'lucide-react'
 import { useStore } from '../../../store/store'
 import type { LengthUnit, Material, MaterialForm, MaterialKind, ProductMaterial, ProductStage, PricingBasis } from '../../../lib/types'
 import type { MaterialDraft } from '../../../domain/master'
@@ -10,6 +10,7 @@ import { cx } from '../../../lib/format'
 import { Button, Field, Input, Modal, Select } from '../../../components/ui'
 import { NumberInput, focusFirstInvalid } from '../../../components/page'
 import { SupplierInput } from '../../../components/SupplierInput'
+import { Picker } from '../../../components/Picker'
 
 /* ---------------------------------------------------------------------------
  * Add a material to a product, in one place:
@@ -42,10 +43,13 @@ export function AddMaterialDialog({
   open,
   stages = [],
   mode = 'product',
+  initialName = '',
   onClose,
   onAdd,
 }: {
   open: boolean
+  /** Starts a new material with this name (what was typed in a material box). */
+  initialName?: string
   stages?: ProductStage[]
   mode?: 'product' | 'pick' | 'registry'
   onClose: () => void
@@ -54,31 +58,27 @@ export function AddMaterialDialog({
   const registry = mode === 'registry'
   const askUsage = mode === 'product'
   const { db, run, pushToast } = useStore()
-  const listId = useId()
-  const searchRef = useRef<HTMLInputElement>(null)
-  const [query, setQuery] = useState('')
-  const [listOpen, setListOpen] = useState(false)
-  const [active, setActive] = useState(0)
+  const backRef = useRef<HTMLDivElement>(null)
   const [picked, setPicked] = useState<Material | null>(null)
   const [creating, setCreating] = useState(registry)
-  const [mat, setMat] = useState<MaterialDraft>(() => ({ ...blankMaterialDraft('sheet'), form: 'sheet' }))
+  const [mat, setMat] = useState<MaterialDraft>(() => ({ ...blankMaterialDraft('sheet'), form: 'sheet', name: initialName }))
   const [usage, setUsage] = useState<UsageInput>(blankUsage)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
 
-  const term = query.trim().toLowerCase()
   const options = useMemo(
-    () => db.materials.filter((m) => m.active && (!term || m.name.toLowerCase().includes(term) || m.code.toLowerCase().includes(term))).slice(0, 60),
-    [db.materials, term],
+    () =>
+      db.materials
+        .filter((m) => m.active)
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((m) => ({ id: m.id, label: m.name, detail: `${m.kind === 'sheet' ? 'sheet' : m.uom} · ${m.price === null ? 'no price yet' : `₹${m.price}`}`, keywords: m.code, item: m })),
+    [db.materials],
   )
 
   const reset = () => {
-    setQuery('')
-    setListOpen(false)
-    setActive(0)
     setPicked(null)
     setCreating(registry)
-    setMat({ ...blankMaterialDraft('sheet'), form: 'sheet' })
+    setMat({ ...blankMaterialDraft('sheet'), form: 'sheet', name: initialName })
     setUsage(blankUsage())
     setErrors({})
   }
@@ -89,14 +89,11 @@ export function AddMaterialDialog({
   const choose = (m: Material) => {
     setPicked(m)
     setCreating(false)
-    setQuery(m.name)
-    setListOpen(false)
   }
-  const startNew = () => {
+  const startNew = (name: string) => {
     setPicked(null)
     setCreating(true)
-    setListOpen(false)
-    setMat({ ...blankMaterialDraft('sheet'), form: 'sheet', name: query.trim() })
+    setMat({ ...blankMaterialDraft('sheet'), form: 'sheet', name })
   }
 
   const kind: MaterialKind | null = picked ? picked.kind : creating ? mat.kind : null
@@ -122,7 +119,7 @@ export function AddMaterialDialog({
       pushToast({ title: `${picked.name} added`, level: 'success' })
       return close()
     }
-    if (!creating) return void searchRef.current?.focus()
+    if (!creating) return void backRef.current?.querySelector<HTMLInputElement>('[role="combobox"]')?.focus()
     setBusy(true)
     try {
       const r = await run(saveMaterial({ ...mat, name: mat.name.trim() }))
@@ -164,7 +161,7 @@ export function AddMaterialDialog({
         </>
       }
     >
-      <div className="space-y-5 text-sm">
+      <div ref={backRef} className="space-y-5 text-sm">
         {/* 1. Which material */}
         {registry ? null : creating ? (
           <button
@@ -172,91 +169,25 @@ export function AddMaterialDialog({
             className="vx-focus rounded-xs text-sm font-medium text-accent-text hover:underline"
             onClick={() => {
               setCreating(false)
-              setListOpen(true)
-              searchRef.current?.focus()
+              // The material box appears again; put the cursor in it.
+              requestAnimationFrame(() => backRef.current?.querySelector<HTMLInputElement>('[role="combobox"]')?.focus())
             }}
           >
             ← Choose an existing material instead
           </button>
         ) : (
-        <div className="relative">
-          <div className="flex flex-wrap items-start gap-3">
-          <Field label="Choose an existing material" required hint="Type to search, or click to see the whole list." className="min-w-[14rem] flex-1">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" aria-hidden="true" />
-              <Input
-                ref={searchRef}
-                role="combobox"
-                aria-expanded={listOpen}
-                aria-controls={listId}
-                aria-autocomplete="list"
-                autoComplete="off"
-                spellCheck={false}
-                className="pl-9"
-                value={query}
-                placeholder="e.g. Duplex board 350…"
-                onFocus={() => setListOpen(true)}
-                onClick={() => setListOpen(true)}
-                onBlur={() => setListOpen(false)}
-                onChange={(e) => {
-                  setQuery(e.target.value)
-                  setListOpen(true)
-                  setActive(0)
-                  if (picked) setPicked(null)
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'ArrowDown') {
-                    e.preventDefault()
-                    setListOpen(true)
-                    setActive((i) => Math.min(i + 1, Math.max(0, options.length - 1)))
-                  } else if (e.key === 'ArrowUp') {
-                    e.preventDefault()
-                    setActive((i) => Math.max(i - 1, 0))
-                  } else if (e.key === 'Enter' && listOpen) {
-                    e.preventDefault()
-                    if (options[active]) choose(options[active])
-                  } else if (e.key === 'Escape' && listOpen) {
-                    e.stopPropagation()
-                    setListOpen(false)
-                  }
-                }}
-              />
-            </div>
-          </Field>
-          <div className="flex flex-col">
-            <span className="vx-mono-label mb-1.5" aria-hidden="true">
-              Or
-            </span>
-            <Button variant="secondary" icon={<Plus className="h-4 w-4" />} onClick={startNew} className="h-10">
-              Create new material
-            </Button>
-          </div>
-          </div>
-          {listOpen ? (
-            <ul id={listId} role="listbox" className="-mt-2 mb-1 max-h-64 overflow-y-auto overscroll-contain rounded-md border border-rule-2 bg-surface shadow-sm">
-              {options.map((m, i) => (
-                <li
-                  key={m.id}
-                  role="option"
-                  aria-selected={i === active}
-                  className={cx('flex cursor-pointer items-center justify-between gap-3 px-3 py-2', i === active ? 'bg-accent-wash' : 'hover:bg-surface-2')}
-                  onMouseEnter={() => setActive(i)}
-                  onMouseDown={(e) => {
-                    e.preventDefault()
-                    choose(m)
-                  }}
-                >
-                  <span className="min-w-0 truncate text-ink">{m.name}</span>
-                  <span className="shrink-0 text-xs text-muted">
-                    {m.kind === 'sheet' ? 'sheet' : m.uom} · {m.price === null ? 'no price yet' : `₹${m.price}`}
-                  </span>
-                </li>
-              ))}
-              {!options.length ? <li className="px-3 py-2 text-muted">{query.trim() ? 'No material by this name — use “Create new material”.' : 'No materials yet — use “Create new material”.'}</li> : null}
-            </ul>
-          ) : null}
-        </div>
-
+        <Field label="Material" required as="div" hint="Click to see all materials, type to search — or press “New material”.">
+          <Picker
+            noun="material"
+            aria-label="Material"
+            value={picked?.name ?? ''}
+            options={options}
+            onPick={(o) => choose(o.item)}
+            onNew={(typed) => startNew(typed)}
+            placeholder="e.g. Duplex board 350…"
+            emptyHint="No materials yet."
+          />
+        </Field>
         )}
 
 
@@ -351,8 +282,8 @@ export function AddMaterialDialog({
                   </Field>
                 </>
               ) : null}
-              <Field label="Supplier" className="sm:col-span-2">
-                <SupplierInput value={mat.supplier} onChange={(v) => setM({ supplier: v })} placeholder="Choose or type a new one…" />
+              <Field label="Supplier" className="sm:col-span-2" as="div">
+                <SupplierInput aria-label="Supplier" value={mat.supplier} onChange={(v) => setM({ supplier: v })} placeholder="Choose or type a new one…" />
               </Field>
             </div>
           </fieldset>
@@ -410,7 +341,7 @@ export function AddMaterialDialog({
             </div>
           </fieldset>
         ) : (
-          <p className="text-muted">Choose a material from the list, or press “Create new material”.</p>
+          <p className="text-muted">Choose a material from the list, or press “New material”.</p>
         )}
       </div>
     </Modal>

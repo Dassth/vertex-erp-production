@@ -19,7 +19,7 @@
 ```
 src/
   App.tsx            routes
-  components/        shared UI (ui.tsx, page.tsx, AppShell, LicenceGate, DocumentPreview, SizeInput, SupplierInput, GstRateSelect, Unfinished)
+  components/        shared UI (ui.tsx, page.tsx, AppShell, LicenceGate, DocumentPreview, SizeInput, Picker, SupplierInput, CustomerInput, GstRateSelect, Unfinished)
   domain/            commands: master, suppliers, planning, orderCosting, production, dispatch, purchases, cashbook, imports, resources, system; registry.ts imports all
   features/          pages: master/{products,costing(=Materials),suppliers,customers}, planning, costing, production, units, unit, dispatch, billing, invoices, accounts, reports, settings, home, customers
   lib/               pure helpers: types.ts, costing, yield, sizeScale, schedule, billing, gst, cashbook, fileTable, productSheet, drafts, unfinished, format, permissions, migrate

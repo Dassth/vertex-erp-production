@@ -9,7 +9,7 @@ import { normalizeDB } from '../lib/db'
 import { balances, entriesOfMonth, monthReportTable, summarise, sumDue, toCollect, toPay } from '../lib/cashbook'
 import { ADMIN, RETIRED_UNIT, ctxFor, must } from '../test/fixtures'
 import { savePurchaseBill } from './purchases'
-import { deleteMoneyEntry, saveMoneyEntry } from './cashbook'
+import { deleteMoneyEntry, recordMonthDocuments, saveMoneyEntry } from './cashbook'
 import type { MoneyDraft } from './cashbook'
 
 /* Income & expenses: money in, money out, and what is still due either way. */
@@ -196,3 +196,30 @@ interface PdfMake {
   setLocalAccessPolicy(cb: (p: string) => boolean): void
   createPdf(def: TDocumentDefinitions): { getBuffer(): Promise<Buffer> }
 }
+
+describe('adding the month’s sales and purchases in one press', () => {
+  it('records each invoice and bill as its own entry, only what is still due, and never twice', () => {
+    const { db: start, invoiceId, billId } = books()
+    const part = must(saveMoneyEntry(draft({ amount: 1800, invoiceId }))(start, admin()))
+
+    const r = must(recordMonthDocuments({ month: '2026-09', mode: 'bank', sales: true, purchases: true })(part.db, admin()))
+    expect(r.value).toMatchObject({ sales: 1, purchases: 1, moneyIn: 10000, moneyOut: 5900 })
+    const added = entriesOfMonth(r.db, '2026-09').filter((e) => e.notes.startsWith('Added at month end'))
+    expect(added).toHaveLength(2)
+    expect(added.find((e) => e.direction === 'in')).toMatchObject({ invoiceId, party: 'Apex Industries', amount: 10000, date: '2026-09-10', mode: 'bank', category: 'Customer payment' })
+    expect(added.find((e) => e.direction === 'out')).toMatchObject({ purchaseId: billId, party: 'Paper Corporation', amount: 5900, date: '2026-09-05', category: 'Supplier payment' })
+    expect(toCollect(r.db)).toEqual([])
+    expect(toPay(r.db)).toEqual([])
+
+    const again = recordMonthDocuments({ month: '2026-09', mode: 'bank', sales: true, purchases: true })(r.db, admin())
+    expect(again.ok).toBe(false)
+  })
+
+  it('can add only the sales, and leaves other months alone', () => {
+    const { db: start } = books()
+    const r = must(recordMonthDocuments({ month: '2026-09', mode: 'cash', sales: true, purchases: false })(start, admin()))
+    expect(r.value).toMatchObject({ sales: 1, purchases: 0 })
+    expect(sumDue(toPay(r.db))).toBe(5900)
+    expect(recordMonthDocuments({ month: '2026-10', mode: 'cash', sales: true, purchases: true })(start, admin()).ok).toBe(false)
+  })
+})

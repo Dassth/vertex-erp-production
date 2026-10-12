@@ -122,6 +122,33 @@ export function toPay(db: Pick<VertexDB, 'cashbook' | 'purchases' | 'company'>, 
 
 export const sumDue = <T,>(list: Array<Due<T>>) => fromPaise(list.reduce((s, d) => s + toPaise(d.due), 0))
 
+/** A sale or purchase of a month whose money is not recorded in full yet. */
+export interface MonthDoc {
+  id: string
+  /** Invoice number or purchase bill code. */
+  number: string
+  date: string
+  party: string
+  /** Rupees still not recorded against it. */
+  due: number
+}
+
+/**
+ * The month's sales invoices and purchase bills that still have money due —
+ * what "Add this month's sales & purchases" records, one entry each. Anything
+ * already recorded is left out, so pressing it again adds nothing twice.
+ */
+export function monthDocsToRecord(db: Pick<VertexDB, 'cashbook' | 'invoices' | 'purchases' | 'company'>, month: string): { sales: MonthDoc[]; purchases: MonthDoc[] } {
+  return {
+    sales: toCollect(db)
+      .filter((d) => monthOf(d.record.issueDate) === month)
+      .map((d) => ({ id: d.record.id, number: d.record.number, date: d.record.issueDate, party: d.record.customer.company, due: d.due })),
+    purchases: toPay(db)
+      .filter((d) => monthOf(d.record.date) === month)
+      .map((d) => ({ id: d.record.id, number: d.record.supplierInvoiceNo ? `${d.record.code} (${d.record.supplierInvoiceNo})` : d.record.code, date: d.record.date, party: d.record.supplierName, due: d.due })),
+  }
+}
+
 /** The month's report — the same rows in the Excel file and the PDF: balance brought forward, every entry oldest first, totals and month-end balance. */
 export function monthReportTable(db: Pick<VertexDB, 'cashbook' | 'invoices' | 'purchases' | 'company'>, month: string): ReportTable {
   const entries = [...entriesOfMonth(db, month)].reverse()

@@ -72,3 +72,17 @@ Append-only log. Newest at the bottom.
 - **Decision / finding:** `node installer/build.mjs --work <dir on C:>` stages the ~300 MB build elsewhere; IExpress is retried once. Run tests with `--maxWorkers=2`.
 - **Why:** IExpress failed with a full disk; Vitest ran out of memory.
 - **Impact:** `installer/build.mjs`, `vite.desktop.config.ts`
+
+## 2026-10-12 - One picker for every master record
+- **Context:** The owner found supplier boxes (plain datalist), customer/product selects and the material search all behaving differently; the material list sat inside the form and mixed with the fields below.
+- **Decision / finding:** `components/Picker.tsx` is the only chooser: list on focus/click, type to filter, “+ New …” button beside it. The list is portalled to `<body>` with fixed position (flips up near the bottom), so tables with `overflow-x-auto` and scrolling dialogs can't clip it. Free-text mode (`onText`) keeps names not in the list (suppliers, “Paid to”).
+- **Why:** One behaviour everywhere so a non-technical user isn't confused.
+- **Impact:** `Picker.tsx`, `SupplierInput.tsx`, `CustomerInput.tsx`, `AddMaterialDialog.tsx`, `ProductEditor.tsx`, `PurchaseBills.tsx`, `PlanEditor.tsx`, `AccountsPage.tsx`, `MaterialDrawer.tsx`
+- **Gotcha:** after a “New …” dialog closes, focus returns to the box; the list must not pop open then (React StrictMode runs overlay effects twice in dev, so a one-shot flag is not enough — it is cleared only by a click or typing).
+
+## 2026-10-12 - Month-end entries in one press
+- **Context:** The owner wants each month's sales and purchases in Income & Expenses as separate lines (for printing and the government reports) without typing each one.
+- **Decision / finding:** `recordMonthDocuments({ month, mode, sales, purchases })` turns every invoice / purchase bill of that month with money still due into its own receipt / payment (amount = what is still due, date = document date, note “Added at month end for …”). One confirmation dialog lists them first; one payment mode for all, editable later.
+- **Why:** The details already exist on the documents; only what is still due is added, so pressing again never doubles anything.
+- **Impact:** `src/lib/cashbook.ts` (`monthDocsToRecord`), `src/domain/cashbook.ts`, `src/features/accounts/MonthEndDialog.tsx`, `AccountsPage.tsx`
+

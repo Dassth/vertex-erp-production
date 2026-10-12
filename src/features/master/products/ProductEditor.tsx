@@ -30,6 +30,7 @@ import { productIssues } from '../masterSelectors'
 import { GstRateSelect } from '../../../components/GstRateSelect'
 import { SizeInput } from '../../../components/SizeInput'
 import { AddMaterialDialog } from './AddMaterialDialog'
+import { Picker } from '../../../components/Picker'
 import type { UsageInput } from './AddMaterialDialog'
 import { FillFromFileButton } from './FillFromFileButton'
 import { Badge, Button, Card, CardHead, ConfirmDialog, EmptyState, Field, IconButton, Input, Select, Textarea } from '../../../components/ui'
@@ -166,7 +167,8 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
   const [stageCount, setStageCount] = useState<number | null>(3)
   const [confirm, setConfirm] = useState<PendingConfirm | null>(null)
   // Where a material picked in the dialog goes: the product (section 2) or one process.
-  const [materialTarget, setMaterialTarget] = useState<{ stageId: string | null; processId: string | null } | null>(null)
+  // `name` set: start a new material straight away (from a material box's “New material”).
+  const [materialTarget, setMaterialTarget] = useState<{ stageId: string | null; processId: string | null; name?: string } | null>(null)
   const [conflict, setConflict] = useState('')
   const saving = useRef(false)
   const [savePhase, setSavePhase] = useState<'idle' | 'saving' | 'saving-product'>('idle')
@@ -811,7 +813,7 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
                               stages={draft.stages}
                               errors={errors}
                               onUse={(materialId) => putInProcess(stage.id, proc.id, materialId)}
-                              onNew={() => setMaterialTarget({ stageId: stage.id, processId: proc.id })}
+                              onNew={(name) => setMaterialTarget({ stageId: stage.id, processId: proc.id, name })}
                               onChange={updateLine}
                               onRemove={(lineId) => setLines((l) => l.filter((x) => x.id !== lineId))}
                             />
@@ -903,8 +905,10 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
       </div>
 
       <AddMaterialDialog
+        key={materialTarget ? `${materialTarget.processId}:${materialTarget.name ?? ''}` : 'closed'}
         open={!!materialTarget}
-        mode="pick"
+        mode={materialTarget?.name !== undefined ? 'registry' : 'pick'}
+        initialName={materialTarget?.name}
         onClose={() => setMaterialTarget(null)}
         onAdd={(m) => {
           if (materialTarget?.processId && materialTarget.stageId) putInProcess(materialTarget.stageId, materialTarget.processId, m.id)
@@ -1236,11 +1240,19 @@ function ProcessMaterials({
   stages: ProductStage[]
   errors: Record<string, string>
   onUse: (materialId: string) => void
-  onNew: () => void
+  onNew: (name: string) => void
   onChange: (lineId: string, patch: Partial<ProductMaterial>) => void
   onRemove: (lineId: string) => void
 }) {
   const { db } = useStore()
+  // This product's own materials first, then every other material.
+  const materialOptions = useMemo(() => {
+    const own = new Set(productMaterialIds)
+    return db.materials
+      .filter((m) => m.active || own.has(m.id))
+      .sort((a, b) => Number(own.has(b.id)) - Number(own.has(a.id)) || a.name.localeCompare(b.name))
+      .map((m) => ({ id: m.id, label: m.name, detail: own.has(m.id) ? 'in this product' : m.kind === 'sheet' ? 'sheet' : m.uom, keywords: m.code, item: m }))
+  }, [db.materials, productMaterialIds])
   return (
     <div className="mt-2 rounded-md bg-surface-2 p-3">
       <p className="vx-mono-label">Materials used in this process</p>
@@ -1262,27 +1274,16 @@ function ProcessMaterials({
       ) : (
         <p className="mt-1 text-xs text-muted">None yet.</p>
       )}
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <Select
+      <div className="mt-2 max-w-xl">
+        <Picker
+          noun="material"
           aria-label={`Use a material in ${proc.name || 'this process'}`}
           value=""
-          onChange={(e) => e.target.value && onUse(e.target.value)}
-          className="w-auto min-w-[14rem]"
-          disabled={!productMaterialIds.length}
-        >
-          <option value="">{productMaterialIds.length ? 'Use a material of this product…' : 'Add materials in section 2 first'}</option>
-          {productMaterialIds.map((id) => {
-            const m = db.materials.find((x) => x.id === id)
-            return m ? (
-              <option key={id} value={id}>
-                {m.name}
-              </option>
-            ) : null
-          })}
-        </Select>
-        <Button type="button" size="sm" variant="ghost" icon={<Plus className="h-3.5 w-3.5" />} onClick={onNew}>
-          Other material…
-        </Button>
+          options={materialOptions}
+          onPick={(o) => onUse(o.id)}
+          onNew={onNew}
+          placeholder="Use a material in this process…"
+        />
       </div>
     </div>
   )

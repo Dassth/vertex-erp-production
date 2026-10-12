@@ -15,6 +15,8 @@ import { DocumentPreview, DownloadButton, ExcelButton, jobCardDoc, useLatestDb }
 import type { PreviewDoc } from '../../components/DocumentPreview'
 import { ResumedNotice, useNewDraftId } from '../../components/Unfinished'
 import { SizeInput } from '../../components/SizeInput'
+import { CustomerInput } from '../../components/CustomerInput'
+import { Picker } from '../../components/Picker'
 import { hasSize, sameSize, sizeFactors, sizeText } from '../../lib/sizeScale'
 import { computeOrderCosting } from '../../lib/costing'
 import { defaultCostingInputs, planCostingSource } from '../../domain/orderCosting'
@@ -79,7 +81,7 @@ function toDraft(p?: Plan): PlanDraft {
 
 function PlanEditor({ plan, scopeId }: { plan?: Plan; scopeId: string }) {
   useDocumentTitle(plan ? `Planning · ${plan.code}` : 'Planning · New plan')
-  const { db, run, pushToast } = useStore()
+  const { db, can, run, pushToast } = useStore()
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const editable = !plan || plan.status === 'Draft'
@@ -196,7 +198,6 @@ function PlanEditor({ plan, scopeId }: { plan?: Plan; scopeId: string }) {
     return `Cut pieces × ${f.length.toFixed(2)} (length) and × ${f.breadth.toFixed(2)} (breadth). About ${moneyPaise(now.sellingPerPiece)} per piece for this size (usual size ${moneyPaise(usual.sellingPerPiece)}) — costing uses this size.`
   }, [db, product, draft.size, q])
 
-  const customers = db.customers.filter((c) => c.active || c.id === draft.customerId)
   const products = db.products.filter((p) => p.active || p.id === draft.productId)
   const totalHours = product ? product.stages.reduce((s, st) => s + stageHours(st, q), 0) : 0
   const processCount = product ? product.stages.reduce((s, st) => s + st.processes.length, 0) : 0
@@ -283,29 +284,22 @@ function PlanEditor({ plan, scopeId }: { plan?: Plan; scopeId: string }) {
           <Card className="vx-anim-up">
             <CardHead title="Order details" />
             <fieldset disabled={readOnly} className="grid gap-x-4 p-5 sm:grid-cols-2">
-              <Field label="Customer" required error={errors.customerId} className="sm:col-span-2">
-                <Select value={draft.customerId} onChange={(e) => set({ customerId: e.target.value })} aria-invalid={!!errors.customerId || undefined}>
-                  <option value="">Select a customer…</option>
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.company} ({c.code}){c.active ? '' : ' — inactive'}
-                    </option>
-                  ))}
-                </Select>
+              <Field label="Customer" required error={errors.customerId} className="sm:col-span-2" as="div">
+                <CustomerInput aria-label="Customer" selectedId={draft.customerId} onPick={(c) => set({ customerId: c.id })} invalid={!!errors.customerId} disabled={readOnly} />
               </Field>
-              <Field label="Product" required error={errors.productId} className="sm:col-span-2">
-                <Select
-                  value={draft.productId}
-                  onChange={(e) => set({ productId: e.target.value, processUnits: {} })}
-                  aria-invalid={!!errors.productId || undefined}
-                >
-                  <option value="">Select a product…</option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} ({p.code}) · {p.stages.length} stages{p.active ? '' : ' — inactive'}
-                    </option>
-                  ))}
-                </Select>
+              <Field label="Product" required error={errors.productId} className="sm:col-span-2" as="div">
+                <Picker
+                  noun="product"
+                  aria-label="Product"
+                  value={products.find((p) => p.id === draft.productId)?.name ?? ''}
+                  options={products.map((p) => ({ id: p.id, label: p.name, detail: `${p.code} · ${p.stages.length} stages${p.active ? '' : ' · inactive'}`, item: p }))}
+                  onPick={(o) => o.id !== draft.productId && set({ productId: o.id, processUnits: {} })}
+                  // A product is a full page: the plan stays as a draft and resumes on return.
+                  onNew={can('master') ? () => navigate('/master/products/new?fresh=1') : undefined}
+                  placeholder="Choose a product…"
+                  invalid={!!errors.productId}
+                  disabled={readOnly}
+                />
               </Field>
               <Field label={`Quantity (${product?.uom ?? 'pcs'})`} required error={errors.quantity}>
                 <NumberInput value={draft.quantity} onChange={(v) => set({ quantity: v ?? NaN })} invalid={!!errors.quantity} />

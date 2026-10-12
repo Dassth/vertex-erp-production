@@ -12,9 +12,10 @@ import { NumberInput, StatStrip, StatTile } from '../../components/page'
 import { DownloadButton, ExcelButton, purchaseDoc, useLatestDb } from '../../components/DocumentPreview'
 import type { PreviewDoc } from '../../components/DocumentPreview'
 import { SupplierInput } from '../../components/SupplierInput'
+import { Picker } from '../../components/Picker'
+import { AddMaterialDialog } from '../master/products/AddMaterialDialog'
 
 export const HSN_LIST_ID = 'vx-hsn-suggestions'
-const MATERIAL_LIST_ID = 'vx-material-suggestions'
 
 /** HSN suggestions shared by the purchase editor and the invoice GST editor. */
 export function HsnDatalist() {
@@ -219,9 +220,18 @@ function DeletePurchase({ bill, onClose }: { bill: PurchaseBill | null; onClose:
 /* --------------------------------- Editor --------------------------------- */
 
 export function PurchaseEditor({ bill, onClose, onPreview }: { bill: PurchaseBill | null; onClose: () => void; onPreview: (d: PreviewDoc) => void }) {
-  const { db, run, pushToast } = useStore()
+  const { db, can, run, pushToast } = useStore()
   const read = useLatestDb()
   const [d, setD] = useState<PurchaseDraft>(() => toDraft(bill))
+  const [newMaterial, setNewMaterial] = useState<{ line: number; name: string } | null>(null)
+  const materialOptions = useMemo(
+    () =>
+      db.materials
+        .filter((m) => m.active)
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((m) => ({ id: m.id, label: m.name, detail: `${m.kind === 'sheet' ? 'sheet' : m.uom}${m.supplier ? ` · ${m.supplier}` : ''}`, keywords: m.code, item: m })),
+    [db.materials],
+  )
   const [touched, setTouched] = useState(false)
   const [saving, setSaving] = useState(false)
   const [serverError, setServerError] = useState<string | null>(null)
@@ -282,8 +292,10 @@ export function PurchaseEditor({ bill, onClose, onPreview }: { bill: PurchaseBil
       }
     >
       <div className="grid gap-x-4 gap-y-1 sm:grid-cols-2 lg:grid-cols-4">
-        <Field label="Supplier name" required error={errors.supplierName} className="lg:col-span-2">
+        <Field label="Supplier name" required error={errors.supplierName} className="lg:col-span-2" as="div">
           <SupplierInput
+            aria-label="Supplier name"
+            aria-invalid={!!errors.supplierName || undefined}
             name="supplierName"
             value={d.supplierName}
             onChange={(v) => set({ supplierName: v })}
@@ -315,13 +327,6 @@ export function PurchaseEditor({ bill, onClose, onPreview }: { bill: PurchaseBil
         </Field>
       </div>
 
-      <datalist id={MATERIAL_LIST_ID}>
-        {db.materials
-          .filter((m) => m.active)
-          .map((m) => (
-            <option key={m.id} value={m.name} />
-          ))}
-      </datalist>
       <div className="mt-3 overflow-x-auto rounded-md border border-rule">
         <table className="w-full min-w-[960px]">
           <thead>
@@ -342,7 +347,19 @@ export function PurchaseEditor({ bill, onClose, onPreview }: { bill: PurchaseBil
               <tr key={l.id} className="border-t border-rule align-top">
                 <td className="vx-td text-muted">{i + 1}</td>
                 <td className="vx-td">
-                  <Input list={MATERIAL_LIST_ID} aria-label={`Item ${i + 1} description`} aria-invalid={!!errors[`line.${i}.description`] || undefined} value={l.description} onChange={(e) => setLine(i, { description: e.target.value })} placeholder="e.g. 300GSM Gold Coin board…" />
+                  <Picker
+                    noun="material"
+                    compact
+                    aria-label={`Item ${i + 1} description`}
+                    invalid={!!errors[`line.${i}.description`]}
+                    value={l.description}
+                    options={materialOptions}
+                    onText={(v) => setLine(i, { description: v })}
+                    // A known material brings its unit when the unit is still the default.
+                    onPick={(o) => setLine(i, { description: o.label, ...(!l.uom.trim() || l.uom === 'Nos' ? { uom: o.item.kind === 'sheet' ? 'Sheet' : o.item.uom || l.uom } : {}) })}
+                    onNew={can('master') ? (typed) => setNewMaterial({ line: i, name: typed }) : undefined}
+                    placeholder="e.g. 300GSM Gold Coin board…"
+                  />
                   {errors[`line.${i}.description`] ? <span className="vx-help text-risk">{errors[`line.${i}.description`]}</span> : null}
                 </td>
                 <td className="vx-td">
@@ -384,6 +401,15 @@ export function PurchaseEditor({ bill, onClose, onPreview }: { bill: PurchaseBil
           </tbody>
         </table>
       </div>
+      {newMaterial ? (
+        <AddMaterialDialog
+          open
+          mode="registry"
+          initialName={newMaterial.name}
+          onClose={() => setNewMaterial(null)}
+          onAdd={(m) => setLine(newMaterial.line, { description: m.name, uom: m.kind === 'sheet' ? 'Sheet' : m.uom || 'Nos' })}
+        />
+      ) : null}
       <div className="mt-2 flex items-center justify-between gap-2">
         <Button size="sm" variant="secondary" icon={<Plus className="h-3.5 w-3.5" />} onClick={() => set({ lines: [...d.lines, blankLine()] })}>
           Add item
