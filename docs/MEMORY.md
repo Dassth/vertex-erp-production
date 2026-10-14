@@ -134,3 +134,10 @@ Append-only log. Newest at the bottom.
 - **Why:** “If it looks clickable, it must be clickable” (AGENTS.md) and one pattern everywhere.
 - **Impact:** Suppliers, Accounts entries, Debts, Purchase bills, Products, Materials, Planning, Costing list, Quotations, Units cards
 
+## 2026-10-14 - New product/plan opens blank; drafts resume from their card (replaces part of 2026-10-11 "Drafts live on the server and resume")
+- **Context:** At the customer, “Add manually” kept showing a Sweet Box product that was already saved and complete.
+- **Decision / finding:** Two causes. (1) “Add manually” / “New plan” resumed the latest unfinished draft by design — now they link with `?fresh=1`; unfinished work is resumed only from the “Unfinished …” card. (2) Server-mode race in `ProductEditor`: the pre-save autosave `putDraft` could reach the server after the post-save `deleteDraft`, re-creating the draft. Server draft writes now go through one ordered queue, and saving/discarding closes the copy so waiting autosaves are dropped (plans' `useFormDraft` already had a generation guard).
+- **Why:** A finished product must never come back as unfinished; a “new” button must start new.
+- **Impact:** `ProductEditor.tsx`, `ProductsPage.tsx`, `PlanningPage.tsx`, `MasterCostingPage.tsx`
+- **Note:** copies already left on a customer's server are not deleted automatically (never delete data); the card labels them “already saved as PRD-…” so the owner can Discard them.
+

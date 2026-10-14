@@ -87,7 +87,7 @@ export function ProductsPage() {
                 Add or fill from file…
               </Button>
             ) : null}
-            <LinkButton to="/master/products/new" icon={<Plus className="h-4 w-4" />}>
+            <LinkButton to="/master/products/new?fresh=1" icon={<Plus className="h-4 w-4" />}>
               Add manually
             </LinkButton>
           </div>
@@ -106,7 +106,14 @@ export function ProductsPage() {
           scope="product"
           title="Unfinished new products"
           hasContent={productHasContent}
-          describe={(d) => ({ name: d.name?.trim() ?? '', detail: `${d.stages?.length ?? 0} stage(s) · ${d.materials?.length ?? 0} material(s)` })}
+          describe={(d) => {
+            // A copy left behind by an older version after the product was saved: say so, so it can be discarded.
+            const saved = d.name?.trim() ? db.products.find((p) => p.name.trim().toLowerCase() === d.name.trim().toLowerCase()) : undefined
+            return {
+              name: d.name?.trim() ?? '',
+              detail: `${d.stages?.length ?? 0} stage(s) · ${d.materials?.length ?? 0} material(s)${saved ? ` · already saved as ${saved.code} — Discard this copy if it is not needed` : ''}`,
+            }
+          }}
           hrefFor={(id) => `/master/products/new?draft=${encodeURIComponent(id)}`}
         />
       ) : null}
@@ -133,7 +140,7 @@ export function ProductsPage() {
             title="No products yet"
             message="Start with a product: give it a name, choose how many stages it passes through, then add processes and materials to each stage."
             action={
-              <LinkButton to="/master/products/new" icon={<Plus className="h-4 w-4" />}>
+              <LinkButton to="/master/products/new?fresh=1" icon={<Plus className="h-4 w-4" />}>
                 Create the first product
               </LinkButton>
             }

@@ -166,7 +166,7 @@ export function MasterCostingPage() {
               icon={<Boxes className="h-6 w-6" />}
               title="No materials yet"
               message="Materials are defined while building a product. Add a product with its materials, then return here to set prices and yield."
-              action={<LinkButton to="/master/products/new">Create a product</LinkButton>}
+              action={<LinkButton to="/master/products/new?fresh=1">Create a product</LinkButton>}
             />
           ) : filtered.length === 0 ? (
             <EmptyState icon={<Boxes className="h-6 w-6" />} title="Nothing matches" message="Clear the search or pick another filter." action={<Button variant="secondary" onClick={() => setParams(new URLSearchParams(), { replace: true })}>Clear filters</Button>} />

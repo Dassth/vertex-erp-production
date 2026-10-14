@@ -69,7 +69,7 @@ export function PlanningPage() {
         icon={<CalendarRange className="h-4 w-4" />}
         actions={
           canPlan ? (
-            <LinkButton to="/planning/new" icon={<Plus className="h-4 w-4" />}>
+            <LinkButton to="/planning/new?fresh=1" icon={<Plus className="h-4 w-4" />}>
               New plan
             </LinkButton>
           ) : null
@@ -148,7 +148,7 @@ export function PlanningPage() {
             icon={<CalendarRange className="h-6 w-6" />}
             title="No plans yet"
             message="Create the first plan to send an order to costing."
-            action={<LinkButton to="/planning/new" icon={<Plus className="h-4 w-4" />}>New plan</LinkButton>}
+            action={<LinkButton to="/planning/new?fresh=1" icon={<Plus className="h-4 w-4" />}>New plan</LinkButton>}
           />
         ) : rows.length === 0 ? (
           <EmptyState icon={<Search className="h-6 w-6" />} title="No plans match" message="Choose another status or clear the search." action={<Button variant="secondary" onClick={() => setParams(new URLSearchParams({ status: 'all' }), { replace: true })}>Show all plans</Button>} />

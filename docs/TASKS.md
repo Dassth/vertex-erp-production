@@ -46,6 +46,7 @@
 - [x] 2026-10-12 - Cutting gap removed too: pieces sit edge to edge on the whole sheet (stored values kept, not counted)
 - [x] 2026-10-12 - Quotations (QTN-0001…): price a product for a customer before planning — worked out from Master, round price by hand, PDF, Sent/Declined, “Customer agreed — make a plan” (costing starts at the quoted price)
 - [x] 2026-10-12 - Lists: tap a row to open/edit it (suppliers, money entries, loans, purchase bills, products, materials, plans, costings, quotations); icon-only pencils became “Edit” buttons
+- [x] 2026-10-14 - “Add manually” / “New plan” open a blank form (unfinished drafts are resumed from their card); a saved product no longer leaves an unfinished copy on the server; leftover copies say “already saved as PRD-…”
 
 ## Blocked
 - [ ] Cloud stored backups on Cloudflare - R2 is not enabled on the account

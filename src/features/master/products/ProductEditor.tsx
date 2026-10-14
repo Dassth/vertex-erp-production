@@ -185,7 +185,7 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
     if (r.ok) {
       knownRev.current = r.rev
       setAutosave({ state: 'saved', at: r.savedAt })
-      if (storageMode === 'server') void syncServerDraft(value)
+      if (storageMode === 'server') syncServerDraft(value)
       return true
     }
     if (r.reason === 'newer') setAutosave({ state: 'newer', newer: r.current as StoredDraft<ProductDraft> })
@@ -193,8 +193,33 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
     return false
   }
 
+  /*
+   * Server copies go out one at a time, in order. Once the product is saved (or the draft
+   * discarded) the copy is closed: an autosave still waiting is dropped, so it can never
+   * arrive after the delete and bring the finished product back as an "unfinished" draft.
+   */
+  const serverQueue = useRef<Promise<unknown>>(Promise.resolve())
+  const draftClosed = useRef(false)
+  useEffect(() => {
+    draftClosed.current = false
+  }, [recoveryKey])
+  const closeServerDraft = () => {
+    draftClosed.current = true
+    const key = recoveryKey
+    serverQueue.current = serverQueue.current
+      .then(() => remote.deleteDraft(key).catch(() => {}))
+      // Edits made after this (e.g. after "Save as draft") are kept on the server again.
+      .then(() => {
+        draftClosed.current = false
+      })
+  }
+
   /** Server mode: the recovery copy is also kept on the server, so it survives losing this browser. */
-  const syncServerDraft = async (value: ProductDraft) => {
+  const syncServerDraft = (value: ProductDraft) => {
+    const key = recoveryKey
+    serverQueue.current = serverQueue.current.then(() => (draftClosed.current ? undefined : putServerDraft(key, value)))
+  }
+  const putServerDraft = async (recoveryKey: string, value: ProductDraft) => {
     try {
       const r = await remote.putDraft(recoveryKey, serverRev.current, value)
       if (r.body.ok) serverRev.current = r.body.rev
@@ -284,7 +309,7 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
   }
   const discardDraft = () => {
     if (storage) removeDraft(storage, recoveryKey)
-    if (storageMode === 'server') void remote.deleteDraft(recoveryKey).catch(() => {})
+    if (storageMode === 'server') closeServerDraft()
     knownRev.current = 0
     const fresh = toDraft(product)
     setDraft(fresh)
@@ -439,7 +464,7 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
     setErrors({})
     // Only a saved record makes the recovery copy redundant.
     if (storage) removeDraft(storage, recoveryKey)
-    if (storageMode === 'server') void remote.deleteDraft(recoveryKey).catch(() => {})
+    if (storageMode === 'server') closeServerDraft()
     knownRev.current = 0
     dirtyRef.current = false
     setRestoredNotice(null)
