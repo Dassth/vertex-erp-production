@@ -529,7 +529,8 @@ function Mini({ label, value, tone }: { label: string; value: string; tone?: str
   return (
     <div className="min-w-0 px-4 py-3">
       <dt className="vx-mono-label !mb-0 truncate">{label}</dt>
-      <dd className={cx('vx-code mt-1 truncate font-display text-md font-semibold text-ink', tone)}>{value}</dd>
+      {/* Money is never cut short: the amount wraps before it is ever truncated. */}
+      <dd className={cx('vx-code mt-1 font-display text-md font-semibold text-ink [overflow-wrap:anywhere]', tone)}>{value}</dd>
     </div>
   )
 }

@@ -53,6 +53,7 @@ function safeSession(): Storage | null {
 }
 
 /** React.lazy with the retry above. */
-export function lazyRetry<T extends ComponentType<never>>(load: () => Promise<{ default: T }>) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function lazyRetry<T extends ComponentType<any>>(load: () => Promise<{ default: T }>) {
   return lazy(() => loadWithRetry(load))
 }

@@ -82,7 +82,8 @@ export function StatTile({
       onClick={onClick}
       aria-pressed={onClick ? !!active : undefined}
       className={cx(
-        'vx-tile relative flex min-w-0 flex-col gap-2 px-4 py-3 text-left',
+        // The tile is a size container: the amount scales with the tile, never with an ellipsis.
+        'vx-tile relative flex min-w-0 flex-col gap-2 px-4 py-3 text-left [container-type:inline-size]',
         span && 'sm:col-span-2',
         onClick && 'vx-tile-interactive vx-press vx-focus',
         active && '!border-accent-edge !bg-accent-wash',
@@ -95,10 +96,10 @@ export function StatTile({
           {icon}
         </span>
       </span>
-      <span className="vx-code block truncate font-display text-2xl font-semibold leading-none tracking-[-0.02em] text-ink">
+      <span className="vx-code block font-display font-semibold leading-tight tracking-[-0.02em] text-ink [font-size:clamp(1rem,10.5cqi,1.5rem)] [overflow-wrap:anywhere]">
         {value}
       </span>
-      {hint ? <span className="block truncate text-xs leading-snug text-muted">{hint}</span> : null}
+      {hint ? <span className="block text-xs leading-snug text-muted [overflow-wrap:anywhere]">{hint}</span> : null}
       {active ? <span className="absolute inset-x-0 bottom-0 h-0.5 bg-accent" aria-hidden="true" /> : null}
     </Tag>
   )
