@@ -183,10 +183,12 @@ export function NumberInput({
   const show = (v: number | null) => (v === null || Number.isNaN(v) ? '' : String(v))
   const [text, setText] = useState(() => show(value))
   const emitted = useRef<number | null>(value)
+  const focused = useRef(false)
 
   useEffect(() => {
     const same = value === emitted.current || (Number.isNaN(value as number) && Number.isNaN(emitted.current as number))
-    if (!same) {
+    // A value from elsewhere is shown, but never over what is being typed (see typingSafe).
+    if (!same && !focused.current) {
       emitted.current = value
       setText(show(value))
     }
@@ -202,6 +204,17 @@ export function NumberInput({
       aria-invalid={invalid || undefined}
       className={cx('vx-input tabular-nums', className)}
       value={text}
+      onFocus={(e) => {
+        focused.current = true
+        rest.onFocus?.(e)
+      }}
+      onBlur={(e) => {
+        focused.current = false
+        // The typed number stays; the form gets it again if something else changed it meanwhile.
+        const same = value === emitted.current || (Number.isNaN(value as number) && Number.isNaN(emitted.current as number))
+        if (!same) onChange(emitted.current)
+        rest.onBlur?.(e)
+      }}
       onChange={(e) => {
         const t = e.target.value
         setText(t)

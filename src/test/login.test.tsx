@@ -119,8 +119,9 @@ describe('sign-in through the real UI', () => {
     // Reload: unmount everything and mount a fresh app with the same browser storage.
     cleanup()
     const second = mount('/billing')
-    await screen.findByRole('heading', { name: 'Billing' }, { timeout: 5000 })
-    expect(second.router.state.location.pathname).toBe('/home')
+    // The session survives the reload and the page asked for opens (Billing's heading is "Sales invoices").
+    await screen.findByRole('heading', { name: 'Sales invoices' }, { timeout: 5000 })
+    expect(second.router.state.location.pathname).toBe('/billing')
     expect(screen.getByRole('button', { name: 'Account — Administrator 1' })).toBeTruthy()
   }, 30000)
 

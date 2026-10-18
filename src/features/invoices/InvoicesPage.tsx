@@ -8,7 +8,7 @@ import { DELIVERY_PENDING_MESSAGE, isReceived, orderInvoiceSummary } from '../..
 import { confirmDispatchReceived } from '../../domain/dispatch'
 import type { OrderInvoiceStatus, OrderInvoiceSummary } from '../../lib/billing'
 import { Badge, Button, Card, CardHead, EmptyState, ProgressBar, SearchInput, Select } from '../../components/ui'
-import { Detail, LinkButton, PageHeader, StatStrip, StatTile, useDocumentTitle } from '../../components/page'
+import { Detail, LinkButton, PageHeader, StatStrip, StatTile, useDocumentTitle, openRow } from '../../components/page'
 import { DocumentPreview, DownloadButton, ExcelButton, InvoiceDocActions, summaryDoc, useDeliveryPendingMessage } from '../../components/DocumentPreview'
 import type { PreviewDoc } from '../../components/DocumentPreview'
 
@@ -135,11 +135,12 @@ export function InvoicesPage() {
                   </thead>
                   <tbody>
                     {filtered.map((r) => (
-                      <tr key={r.order.id} onClick={() => set({ order: r.order.id }, true)} className="border-t border-rule hover:bg-surface-2 cursor-pointer transition-colors group">
+                      <tr key={r.order.id} {...openRow(() => set({ order: r.order.id }, true))} className="vx-row group cursor-pointer">
                         <td className="vx-td">
-                          <span className="vx-code font-semibold text-accent-text group-hover:underline">
+                          {/* The order code is the keyboard way in; the whole row opens it by mouse or touch. */}
+                          <button type="button" onClick={() => set({ order: r.order.id }, true)} className="vx-focus vx-code rounded-xs font-semibold text-accent-text group-hover:underline">
                             {r.order.code}
-                          </span>
+                          </button>
                         </td>
                         <td className="vx-td">{r.order.customer.company}</td>
                         <td className="vx-td">{r.order.productName}</td>

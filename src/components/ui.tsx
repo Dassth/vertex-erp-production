@@ -4,6 +4,7 @@ import type { ButtonHTMLAttributes, ComponentProps, ReactNode } from 'react'
 import { AlertTriangle, Check, ChevronLeft, ChevronRight, Info, Loader2, Search, X, XCircle } from 'lucide-react'
 import { cx } from '../lib/format'
 import { useStore } from '../store/store'
+import { useTypingSafe } from './typingSafe'
 
 /* --------------------------------- Button --------------------------------- */
 
@@ -313,8 +314,10 @@ export function Field({
   )
 }
 
+/** A text field whose typed text is never overwritten from outside while it has focus (see typingSafe). */
 export function Input({ className, ...rest }: ComponentProps<'input'>) {
-  return <input {...rest} className={cx('vx-input', className)} />
+  const safe = useTypingSafe<HTMLInputElement, ComponentProps<'input'>>(rest)
+  return <input {...safe} className={cx('vx-input', className)} />
 }
 
 export function Select({
@@ -336,7 +339,8 @@ export function Select({
 }
 
 export function Textarea({ className, ...rest }: ComponentProps<'textarea'>) {
-  return <textarea {...rest} className={cx('vx-input h-auto py-2.5 leading-relaxed', className)} />
+  const safe = useTypingSafe<HTMLTextAreaElement, ComponentProps<'textarea'>>(rest)
+  return <textarea {...safe} className={cx('vx-input h-auto py-2.5 leading-relaxed', className)} />
 }
 
 export function SearchInput({

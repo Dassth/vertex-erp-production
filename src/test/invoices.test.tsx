@@ -96,9 +96,8 @@ describe('Invoices page', () => {
     expect(screen.getByText(/5,000 pcs dispatched but awaiting receipt are not included yet/)).toBeTruthy()
     const [first, second] = stored().invoices
     expect((screen.getByRole('button', { name: `Download this dispatch invoice — invoice ${first.number}` }) as HTMLButtonElement).disabled).toBe(false)
-    expect((screen.getByRole('button', { name: `Download this dispatch invoice — invoice ${second.number}` }) as HTMLButtonElement).disabled).toBe(true)
-    expect(screen.getByText(PENDING)).toBeTruthy()
-    expect(screen.queryAllByRole('link', { name: /Confirm received/ })).toHaveLength(1)
+    // Owner's decision (2026-10-11): an invoice downloads without waiting for the delivery confirmation.
+    expect((screen.getByRole('button', { name: `Download this dispatch invoice — invoice ${second.number}` }) as HTMLButtonElement).disabled).toBe(false)
 
     // Survives a reload.
     const url = `${router.state.location.pathname}${router.state.location.search}`
