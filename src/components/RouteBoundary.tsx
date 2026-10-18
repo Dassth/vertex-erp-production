@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 import { RotateCcw } from 'lucide-react'
 import { Button } from './ui'
+import { isChunkError } from '../lib/lazyRetry'
 
 /* ---------------------------------------------------------------------------
  * Screens are code-split, so opening one fetches a file at that moment. That
@@ -16,11 +17,12 @@ import { Button } from './ui'
  * persisted when it is made.
  * ------------------------------------------------------------------------- */
 
-class Boundary extends Component<{ children: ReactNode }, { failed: boolean }> {
-  state = { failed: false }
+class Boundary extends Component<{ children: ReactNode }, { failed: boolean; chunk: boolean; message: string }> {
+  state = { failed: false, chunk: false, message: '' }
 
-  static getDerivedStateFromError() {
-    return { failed: true }
+  static getDerivedStateFromError(error: unknown) {
+    // A screen file that could not be downloaded is told apart from a fault inside the screen.
+    return { failed: true, chunk: isChunkError(error), message: error instanceof Error ? error.message : String(error) }
   }
 
   componentDidCatch(error: unknown) {
@@ -35,9 +37,11 @@ class Boundary extends Component<{ children: ReactNode }, { failed: boolean }> {
           <p className="vx-eyebrow">Screen not loaded</p>
           <h2 className="mt-2 font-display text-lg font-semibold text-ink">This screen could not be loaded</h2>
           <p className="mt-2 text-base text-muted">
-            Part of the application could not be downloaded. Your saved records are safe — every change is stored as soon as it is made.
-            Reload the page to try again; if it keeps happening, check your connection.
+            {this.state.chunk
+              ? 'Part of the application could not be downloaded, even after trying again. Your saved records are safe — every change is stored as soon as it is made. Reload the page; if it keeps happening, check that the Vertex server is running.'
+              : 'Something on this screen went wrong. Your saved records are safe — every change is stored as soon as it is made. Reload the page to try again.'}
           </p>
+          {!this.state.chunk && this.state.message ? <p className="vx-code mt-3 break-words rounded-md bg-surface-2 px-3 py-2 text-left text-xs text-ink-2">{this.state.message}</p> : null}
           <Button className="mt-5" icon={<RotateCcw className="h-4 w-4" />} onClick={() => window.location.reload()}>
             Reload page
           </Button>

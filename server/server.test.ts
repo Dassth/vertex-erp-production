@@ -414,3 +414,28 @@ describe('data migrations on the first start of a new version', () => {
     expect((await readState(db))!.revision).toBe(saved.revision)
   }, 120000)
 })
+
+describe('serving the app files', () => {
+  it('answers a missing screen file with 404 (not the app page), and never caches the app page', async () => {
+    const { mkdir, writeFile } = await import('node:fs/promises')
+    const web = join(dir, 'web')
+    await mkdir(join(web, 'assets'), { recursive: true })
+    await writeFile(join(web, 'index.html'), '<!doctype html><title>Vertex</title>')
+    await writeFile(join(web, 'assets', 'Units-abc123.js'), 'export default 1')
+    const http = createHttpServer(service, { staticDir: web })
+    await new Promise<void>((resolve) => http.listen(0, resolve))
+    const base = `http://localhost:${(http.address() as AddressInfo).port}`
+    try {
+      const page = await fetch(`${base}/units`)
+      expect(page.status).toBe(200)
+      expect(page.headers.get('cache-control')).toBe('no-cache')
+      const asset = await fetch(`${base}/assets/Units-abc123.js`)
+      expect(asset.headers.get('cache-control')).toContain('immutable')
+      const old = await fetch(`${base}/assets/Units-oldhash.js`)
+      expect(old.status).toBe(404)
+      expect(await old.text()).not.toContain('<!doctype')
+    } finally {
+      await new Promise<void>((resolve) => http.close(() => resolve()))
+    }
+  }, 60000)
+})

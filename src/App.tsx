@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
-import { Suspense, lazy } from 'react'
+import { Suspense } from 'react'
+import { lazyRetry } from './lib/lazyRetry'
 import type { ReactNode } from 'react'
 import { useStore } from './store/store'
 import { AppShell } from './components/AppShell'
@@ -14,27 +15,35 @@ import type { Capability } from './lib/permissions'
 import { canOpenPath, landingPath } from './lib/permissions'
 
 /* Administrator modules are split into their own chunks and fetched on first visit. */
-const ProductsPage = lazy(() => import('./features/master/products/ProductsPage').then((m) => ({ default: m.ProductsPage })))
-const ProductEditorPage = lazy(() => import('./features/master/products/ProductEditor').then((m) => ({ default: m.ProductEditorPage })))
-const MasterCostingPage = lazy(() => import('./features/master/costing/MasterCostingPage').then((m) => ({ default: m.MasterCostingPage })))
-const SuppliersPage = lazy(() => import('./features/master/suppliers/SuppliersPage').then((m) => ({ default: m.SuppliersPage })))
-const CustomersPage = lazy(() => import('./features/master/customers/CustomersPage').then((m) => ({ default: m.CustomersPage })))
-const QuotationsPage = lazy(() => import('./features/quotations/QuotationsPage').then((m) => ({ default: m.QuotationsPage })))
-const QuotationEditorPage = lazy(() => import('./features/quotations/QuotationsPage').then((m) => ({ default: m.QuotationEditorPage })))
-const PlanningPage = lazy(() => import('./features/planning/PlanningPage').then((m) => ({ default: m.PlanningPage })))
-const PlanEditorPage = lazy(() => import('./features/planning/PlanEditor').then((m) => ({ default: m.PlanEditorPage })))
-const CostingListPage = lazy(() => import('./features/costing/CostingListPage').then((m) => ({ default: m.CostingListPage })))
-const OrderCostingPage = lazy(() => import('./features/costing/OrderCostingPage').then((m) => ({ default: m.OrderCostingPage })))
-const DispatchPage = lazy(() => import('./features/dispatch/DispatchPage').then((m) => ({ default: m.DispatchPage })))
-const InvoicesPage = lazy(() => import('./features/invoices/InvoicesPage').then((m) => ({ default: m.InvoicesPage })))
-const UnitsMonitorPage = lazy(() => import('./features/units/UnitsMonitorPage').then((m) => ({ default: m.UnitsMonitorPage })))
-const UnitMonitorDetailPage = lazy(() => import('./features/units/UnitsMonitorPage').then((m) => ({ default: m.UnitMonitorDetailPage })))
-const AdminHomePage = lazy(() => import('./features/home/AdminHomePage').then((m) => ({ default: m.AdminHomePage })))
-const CustomerHistoryPage = lazy(() => import('./features/customers/CustomerHistoryPage').then((m) => ({ default: m.CustomerHistoryPage })))
-const ReportsPage = lazy(() => import('./features/reports/ReportsPage').then((m) => ({ default: m.ReportsPage })))
-const BillingPage = lazy(() => import('./features/billing/BillingPage').then((m) => ({ default: m.BillingPage })))
-const AccountsPage = lazy(() => import('./features/accounts/AccountsPage').then((m) => ({ default: m.AccountsPage })))
-const SettingsPage = lazy(() => import('./features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })))
+const ProductsPage = lazyRetry(() => import('./features/master/products/ProductsPage').then((m) => ({ default: m.ProductsPage })))
+const ProductEditorPage = lazyRetry(() => import('./features/master/products/ProductEditor').then((m) => ({ default: m.ProductEditorPage })))
+const MasterCostingPage = lazyRetry(() => import('./features/master/costing/MasterCostingPage').then((m) => ({ default: m.MasterCostingPage })))
+const SuppliersPage = lazyRetry(() => import('./features/master/suppliers/SuppliersPage').then((m) => ({ default: m.SuppliersPage })))
+const CustomersPage = lazyRetry(() => import('./features/master/customers/CustomersPage').then((m) => ({ default: m.CustomersPage })))
+const QuotationsPage = lazyRetry(() => import('./features/quotations/QuotationsPage').then((m) => ({ default: m.QuotationsPage })))
+const QuotationEditorPage = lazyRetry(() => import('./features/quotations/QuotationsPage').then((m) => ({ default: m.QuotationEditorPage })))
+const PlanningPage = lazyRetry(() => import('./features/planning/PlanningPage').then((m) => ({ default: m.PlanningPage })))
+const PlanEditorPage = lazyRetry(() => import('./features/planning/PlanEditor').then((m) => ({ default: m.PlanEditorPage })))
+const CostingListPage = lazyRetry(() => import('./features/costing/CostingListPage').then((m) => ({ default: m.CostingListPage })))
+const OrderCostingPage = lazyRetry(() => import('./features/costing/OrderCostingPage').then((m) => ({ default: m.OrderCostingPage })))
+const DispatchPage = lazyRetry(() => import('./features/dispatch/DispatchPage').then((m) => ({ default: m.DispatchPage })))
+const InvoicesPage = lazyRetry(() => import('./features/invoices/InvoicesPage').then((m) => ({ default: m.InvoicesPage })))
+const UnitsMonitorPage = lazyRetry(() => import('./features/units/UnitsMonitorPage').then((m) => ({ default: m.UnitsMonitorPage })))
+const UnitMonitorDetailPage = lazyRetry(() => import('./features/units/UnitsMonitorPage').then((m) => ({ default: m.UnitMonitorDetailPage })))
+const AdminHomePage = lazyRetry(() => import('./features/home/AdminHomePage').then((m) => ({ default: m.AdminHomePage })))
+const CustomerHistoryPage = lazyRetry(() => import('./features/customers/CustomerHistoryPage').then((m) => ({ default: m.CustomerHistoryPage })))
+const ReportsPage = lazyRetry(() => import('./features/reports/ReportsPage').then((m) => ({ default: m.ReportsPage })))
+const BillingPage = lazyRetry(() => import('./features/billing/BillingPage').then((m) => ({ default: m.BillingPage })))
+const AccountsPage = lazyRetry(() => import('./features/accounts/AccountsPage').then((m) => ({ default: m.AccountsPage })))
+const SettingsPage = lazyRetry(() => import('./features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })))
+
+function BootScreen() {
+  return (
+    <div className="flex min-h-[100dvh] items-center justify-center bg-paper" role="status" aria-live="polite">
+      <p className="text-sm text-muted">Opening Vertex ERP…</p>
+    </div>
+  )
+}
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { user } = useStore()
@@ -81,7 +90,10 @@ const page = (el: ReactNode) => (
 const guarded = (capability: Capability, el: ReactNode) => <RequirePermission capability={capability}>{page(el)}</RequirePermission>
 
 export default function App() {
-  const { user } = useStore()
+  const { user, ready } = useStore()
+  // Wait until a saved session has been checked: otherwise a signed-in user is briefly
+  // sent to the sign-in screen (its title flashes) and bounced back to the page asked for.
+  if (SERVER_MODE && !ready) return <BootScreen />
   return (
     <>
       <Routes>

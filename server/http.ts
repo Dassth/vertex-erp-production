@@ -70,9 +70,18 @@ export function createHttpServer(service: VertexService, options: HttpOptions = 
       res.writeHead(403)
       return res.end()
     }
-    if (!existsSync(file) || statSync(file).isDirectory()) file = join(root, 'index.html') // SPA route
+    const missing = !existsSync(file) || statSync(file).isDirectory()
+    // A missing script or style (an old file name after an update) is a 404 — never the app page,
+    // which the browser would refuse as a script ("screen could not be loaded").
+    if (missing && (path.startsWith('/assets/') || /\.(js|mjs|css|map|woff2?|ttf|png|svg|ico|json)$/i.test(path))) {
+      res.writeHead(404, { 'content-type': 'text/plain', 'cache-control': 'no-store' })
+      return res.end('Not found')
+    }
+    if (missing) file = join(root, 'index.html') // SPA route
     const type = MIME[extname(file)] ?? 'application/octet-stream'
-    res.writeHead(200, { 'content-type': type, 'cache-control': file.endsWith('index.html') ? 'no-cache' : 'public, max-age=31536000, immutable' })
+    // Only the hashed build files under /assets/ may be cached for good; everything else is checked each time.
+    const hashed = path.startsWith('/assets/') && !missing
+    res.writeHead(200, { 'content-type': type, 'cache-control': hashed ? 'public, max-age=31536000, immutable' : 'no-cache' })
     createReadStream(file).pipe(res)
   }
 
