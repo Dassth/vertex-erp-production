@@ -17,6 +17,7 @@ import { Picker } from '../../components/Picker'
 import { SizeInput } from '../../components/SizeInput'
 import { DocumentPreview, DownloadButton, quotationDoc, useLatestDb } from '../../components/DocumentPreview'
 import type { PreviewDoc } from '../../components/DocumentPreview'
+import { saleTaxLines } from '../../lib/gst'
 import { MaterialsTable, ProcessesTable } from '../costing/OrderCostingPage'
 
 /* ---------------------------------------------------------------------------
@@ -421,7 +422,8 @@ function QuotationEditor({ quotation }: { quotation?: Quotation }) {
                     ['Subtotal', totals.totalSelling],
                     ...(totals.discountAmount > 0 ? [['Less: discount', -totals.discountAmount]] : []),
                     ['Taxable value', totals.taxableValue],
-                    [`${totals.taxLabel} ${totals.taxPct}%`, totals.taxAmount],
+                    // Split as the invoice will be, for this customer's state.
+                    ...saleTaxLines(db.company, db.customers.find((c) => c.id === d.customerId) ?? {}, totals.taxPct, totals.taxAmount, totals.taxLabel).lines,
                   ] as Array<[string, number]>
                 ).map(([k, v]) => (
                   <div key={k} className="flex justify-between gap-3">

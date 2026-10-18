@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Activity, CalendarClock, CheckCircle2, Circle, Printer, Repeat2 } from 'lucide-react'
+import { Activity, CalendarClock, CheckCircle2, Circle, Play, Printer, Repeat2 } from 'lucide-react'
+import { ProcessActions } from './ProcessActions'
 import { useStore } from '../store/store'
 import type { JobProcess, Priority, ProductionOrder } from '../lib/types'
 import { PRIORITIES, isProcessDone, isStageDone, processBlockers, productionDates } from '../lib/schedule'
@@ -151,8 +152,12 @@ function JobDetail({ order }: { order: ProductionOrder }) {
 }
 
 export function StageMonitor({ order, unitName }: { order: ProductionOrder; unitName: (id: string) => string }) {
-  const { db } = useStore()
+  const { db, can } = useStore()
+  // Administrators who record production work (Administrator 1 and 2) update any unit's process.
+  const canUpdate = can('production.work') && order.status !== 'Completed'
+  const [acting, setActing] = useState<JobProcess | null>(null)
   return (
+    <>
     <ol className="space-y-2">
       {order.stages.map((s) => {
         const done = isStageDone(s)
@@ -196,10 +201,23 @@ export function StageMonitor({ order, unitName }: { order: ProductionOrder; unit
                 <ul className="mt-2 grid gap-2">
                   {s.processes.map((p) => (
                     <li key={p.id} className="flex items-start gap-1.5 rounded-sm bg-surface-2 px-2.5 py-2 text-xs text-ink-2">
-                      {isProcessDone(p) ? (
+                      {canUpdate && !isProcessDone(p) ? (
+                        <button
+                          type="button"
+                          onClick={() => setActing(p)}
+                          className="vx-focus -m-1 shrink-0 rounded-full p-1 text-faint hover:bg-accent-wash hover:text-accent-text"
+                          aria-label={`Update ${p.name}: start, complete or report a problem`}
+                          title="Start, complete or report a problem"
+                        >
+                          {p.status === 'In Progress' ? <Play className="h-3.5 w-3.5 text-live" aria-hidden="true" /> : <Circle className="h-3.5 w-3.5" aria-hidden="true" />}
+                        </button>
+                      ) : isProcessDone(p) ? (
                         <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ok" aria-label="Done" />
                       ) : (
-                        <Circle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-faint" aria-label="Open" />
+                        // No dead affordance: shown plain, with the reason.
+                        <span title={order.status === 'Completed' ? 'This order is complete.' : 'Only Administrator 1 or 2 can update production.'}>
+                          <Circle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-faint opacity-60" aria-label="Open — you cannot update production" />
+                        </span>
                       )}
                       <span className="min-w-0 flex-1">
                         <span className="flex flex-wrap items-center gap-1.5">
@@ -234,6 +252,8 @@ export function StageMonitor({ order, unitName }: { order: ProductionOrder; unit
         )
       })}
     </ol>
+    {acting ? <ProcessActions order={order} process={order.stages.flatMap((st) => st.processes).find((x) => x.id === acting.id) ?? acting} onClose={() => setActing(null)} /> : null}
+    </>
   )
 }
 

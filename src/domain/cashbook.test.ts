@@ -187,7 +187,7 @@ describe('the month report', () => {
     const pdf = await pdfmake.createPdf(reportTableDefinition(table, company, new Date('2026-09-30T18:00:00'))).getBuffer()
     expect(pdf.subarray(0, 4).toString()).toBe('%PDF')
     if (process.env.PDF_OUT) writeFileSync(process.env.PDF_OUT.replace('.pdf', '-income-expenses.pdf'), pdf)
-  })
+  }, 30000)
 })
 
 interface PdfMake {

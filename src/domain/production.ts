@@ -152,11 +152,16 @@ export const startProcess = command(
     if (process.status === 'In Progress') return ok(db, process)
     const blocked = blockedMessage(order, processId)
     if (blocked) return fail(blocked)
-    if (!process.responsiblePersonId)
+    // A person (and a machine, where the product needs one) is asked for only when the unit has
+    // any to choose from — an outside unit (job work) or a unit not set up yet is never stuck.
+    const unit = db.units.find((u) => u.id === process.unitId)
+    const hasPeople = !unit?.outside && db.people.some((p) => p.unitId === process.unitId && p.active)
+    const hasMachines = !unit?.outside && db.machines.some((m) => m.unitId === process.unitId && m.active)
+    if (!process.responsiblePersonId && hasPeople)
       return fail('Assign a responsible person before starting this process.', {
         fieldErrors: { responsiblePersonId: 'Assign a responsible person before starting.' },
       })
-    if (process.requiresMachine && !process.machineId)
+    if (process.requiresMachine && !process.machineId && !process.noMachineRequired && hasMachines)
       return fail('This process needs a machine before it can start.', { fieldErrors: { machineId: 'Select the machine.' } })
 
     const stamp = ctx.now.toISOString()
@@ -210,7 +215,9 @@ export const completeProcess = command(
       return ok(db, { process, stageCompleted: isStageDone(found.stage), orderCompleted: order.status === 'Completed' })
     const blocked = blockedMessage(order, processId)
     if (blocked) return fail(blocked)
-    if (!process.responsiblePersonId)
+    const unit = db.units.find((u) => u.id === process.unitId)
+    const hasPeople = !unit?.outside && db.people.some((p) => p.unitId === process.unitId && p.active)
+    if (!process.responsiblePersonId && hasPeople)
       return fail('Record the responsible person before completing this process.', {
         fieldErrors: { responsiblePersonId: 'Assign a responsible person.' },
       })

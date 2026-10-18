@@ -177,6 +177,9 @@ export const quotationToPlan = command(
       options: '',
       instructions: q.notes,
       processUnits: {},
+      // The material prices quoted for this order become the plan's own prices (shown under
+      // "Material prices for this order"); process rates and profit start the costing.
+      materialPrices: { ...(q.inputs.materialPrices ?? {}) },
     })(db, ctx)
     if (!made.ok) return made
     const plan: Plan = { ...made.value, quotationId: q.id }

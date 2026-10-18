@@ -71,7 +71,10 @@ export function planCostingSource(db: Pick<VertexDB, 'materials'>, plan: { size?
 function quotationInputs(db: VertexDB, quotationId: string | null | undefined, fresh: (prefix: string) => string): CostingInputs | null {
   const q = quotationId ? (db.quotations ?? []).find((x) => x.id === quotationId) : undefined
   if (!q) return null
-  const inputs: CostingInputs = { ...structuredClone(q.inputs), charges: q.inputs.charges.map((c) => ({ ...c, id: fresh('chg') })) }
+  // Material prices now live on the plan (copied when it was made), so a change there still wins.
+  const { materialPrices: _onPlan, ...rest } = structuredClone(q.inputs)
+  void _onPlan
+  const inputs: CostingInputs = { ...rest, charges: q.inputs.charges.map((c) => ({ ...c, id: fresh('chg') })) }
   // A round price typed by hand becomes the markup on cost that gives it.
   if (q.pricePerPiece !== null && q.totals.totalCost > 0) {
     const markup = ((q.pricePerPiece * q.quantity) / q.totals.totalCost - 1) * 100

@@ -10,6 +10,7 @@ import { Badge, Button, Card, CardHead, ConfirmDialog, EmptyState, Field, IconBu
 import { ConflictNotice, Detail, IssueList, LinkButton, NumberInput, PageHeader, useDocumentTitle, useUnsavedChanges } from '../../components/page'
 import { CostingStatusBadge, PlanStatusBadge } from '../../components/status'
 import { DocumentPreview, DownloadButton, ExcelButton, costingDoc, useLatestDb } from '../../components/DocumentPreview'
+import { saleTaxLines } from '../../lib/gst'
 import type { PreviewDoc } from '../../components/DocumentPreview'
 
 export function OrderCostingPage() {
@@ -347,6 +348,12 @@ function CostingWorkspace({ plan, costing, back }: { plan: Plan; costing: OrderC
                   <Mini label="Selling price / piece" value={moneyPaise(result.sellingPerPiece)} />
                   <Mini label="Total selling (before tax)" value={moneyPaise(result.totalSelling)} />
                   <Mini label={`${result.taxLabel} ${result.taxPct}%`} value={moneyPaise(result.taxAmount)} />
+                  {/* How the invoice will split it, for this customer's state. */}
+                  <div className="col-span-2 px-4 py-2 text-xs text-muted">
+                    {saleTaxLines(db.company, customer ?? {}, result.taxPct, result.taxAmount, result.taxLabel)
+                      .lines.map(([label, amount]) => `${label} ${moneyPaise(amount)}`)
+                      .join(' · ')}
+                  </div>
                 </dl>
                 <div className="space-y-1 p-5">
                   <p className="vx-mono-label">Internal — not shown on invoices</p>
