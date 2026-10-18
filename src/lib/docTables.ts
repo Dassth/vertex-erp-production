@@ -77,7 +77,7 @@ export function statementTable(order: ProductionOrder, st: ConsolidatedStatement
 /* ------------------------------ Purchase bill ----------------------------- */
 
 export function purchaseBillTable(bill: PurchaseBill, company: CompanySnapshot): ReportTable {
-  const t = purchaseTotals(bill, company.gstin)
+  const t = purchaseTotals(bill, company)
   const rows: ReportRow[] = bill.lines.map((l, i) => ({
     kind: 'row',
     cells: [String(i + 1), l.description, l.hsn, l.quantity, l.uom, l.rate, l.gstPct, t.lines[i]?.amount ?? 0],

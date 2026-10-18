@@ -97,8 +97,9 @@ export function monthLabel(month: string): string {
 }
 
 const kind = (supply: ResolvedSupply) => (supply === 'intra' ? 'LOCAL ' : '')
+/* A document whose state is still unknown is not guessed into IGST: it is listed on its own, saying what is missing. */
 const sectionTitle = (pct: number, supply: ResolvedSupply, what: 'PURCHASE' | 'SALES') =>
-  `GST ${pct}% ${kind(supply)}${what}${supply === null ? ' (GST NOT SPLIT)' : ''}`
+  `GST ${pct}% ${kind(supply)}${what}${supply === null ? (what === 'SALES' ? ' — PLACE OF SUPPLY MISSING' : ' — SUPPLIER STATE MISSING') : ''}`
 
 /* Sums in paise so a long register adds up to the paisa. */
 function sumOf<T>(list: T[], pick: (x: T) => number): number {
@@ -194,7 +195,7 @@ export function monthlyGstReport(db: VertexDB, month: string): MonthlyGstReport 
   const pRows: Array<GstRow & { key: string; title: string; order: number }> = []
   const pHsn = hsnBook()
   for (const bill of (db.purchases ?? []).filter((b) => inMonth(b.date))) {
-    const t = purchaseTotals(bill, db.company.gstin)
+    const t = purchaseTotals(bill, db.company)
     const byRate = new Map<number, { hsn: Set<string>; items: Set<string>; taxable: number; tax: number; cgst: number; sgst: number; igst: number }>()
     bill.lines.forEach((l, i) => {
       const amount = toPaise(t.lines[i]?.amount ?? 0)
@@ -306,12 +307,12 @@ export function gstReportTable(r: MonthlyGstReport, company: string, kind: Repor
     s.rows.forEach((x, i) =>
       rows.push({
         kind: 'row',
-        cells: [String(i + 1), x.party, x.items, x.billNo, x.date, x.gstin, x.hsn, x.taxable, x.cgstPct, x.cgst, x.sgstPct, x.sgst, x.igstPct, fromPaise(toPaise(x.igst) + toPaise(x.gst)), tax(x), x.total],
+        cells: [String(i + 1), x.party, x.items, x.billNo, x.date, x.gstin, x.hsn, x.taxable, x.cgstPct, x.cgst, x.sgstPct, x.sgst, x.igstPct, x.igst, tax(x), x.total],
       }),
     )
-    rows.push({ kind: 'total', cells: [null, `Total for ${s.title}`, ...blank(5), s.taxable, null, s.cgst, null, s.sgst, null, fromPaise(toPaise(s.igst) + toPaise(s.gst)), tax(s), s.total] })
+    rows.push({ kind: 'total', cells: [null, `Total for ${s.title}`, ...blank(5), s.taxable, null, s.cgst, null, s.sgst, null, s.igst, tax(s), s.total] })
   }
-  rows.push({ kind: 'grand', cells: [null, 'Grand Total', ...blank(5), reg.taxable, null, reg.cgst, null, reg.sgst, null, fromPaise(toPaise(reg.igst) + toPaise(reg.gst)), tax(reg), reg.total] })
+  rows.push({ kind: 'grand', cells: [null, 'Grand Total', ...blank(5), reg.taxable, null, reg.cgst, null, reg.sgst, null, reg.igst, tax(reg), reg.total] })
   return {
     name: `${kind === 'purchases' ? 'Purchase' : 'Sales'} GST ${r.label.replace('/', '-')}`,
     heading: ['ANNEXURE-I', company, `${REPORT_TITLE[kind]} during the month ${r.label}`],

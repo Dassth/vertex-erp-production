@@ -24,6 +24,8 @@
  * ------------------------------------------------------------------------- */
 
 import type { CostingResult, Dispatch, Invoice, ProductionOrder } from './types'
+import { buyerState, sellerState, splitRupees, supplyBetween } from './gst'
+import type { ResolvedSupply } from './gst'
 import { fromPaise, toPaise } from './costing'
 
 export interface OrderBalance {
@@ -136,22 +138,18 @@ export function isValidGstin(gstin: string): boolean {
 }
 
 /**
- * Same state for seller and buyer → CGST + SGST (half each, odd paisa to SGST).
- * Different states → IGST. Unknown → a single tax line.
+ * The invoice tax split, from the shared helper (lib/gst): same state for
+ * seller and buyer → CGST + SGST (CGST = half rounded, SGST = the rest);
+ * different states → IGST. `supply` is null when a state is not known — the
+ * caller must not issue the invoice then (no silent IGST).
  */
 export function splitTax(
   taxAmount: number,
-  sellerGstin: string,
-  buyerGstin: string,
-  placeOfSupply: string,
-): { cgst: number | null; sgst: number | null; igst: number | null } {
-  const seller = gstinState(sellerGstin)
-  const buyer = gstinState(buyerGstin) ?? (/^\d{2}$/.test(placeOfSupply.trim()) ? placeOfSupply.trim() : null)
-  if (!seller || !buyer) return { cgst: null, sgst: null, igst: null }
-  if (seller !== buyer) return { cgst: null, sgst: null, igst: taxAmount }
-  const paise = toPaise(taxAmount)
-  const cgst = Math.floor(paise / 2)
-  return { cgst: fromPaise(cgst), sgst: fromPaise(paise - cgst), igst: null }
+  company: { gstin: string; stateCode?: string | null },
+  buyer: { gstin?: string; placeOfSupply?: string; deliveryAddress?: string },
+): { supply: ResolvedSupply; cgst: number | null; sgst: number | null; igst: number | null } {
+  const supply = supplyBetween(sellerState(company), buyerState(buyer))
+  return { supply, ...splitRupees(taxAmount, supply) }
 }
 
 /* ------------------------- Consolidated statement ------------------------- */

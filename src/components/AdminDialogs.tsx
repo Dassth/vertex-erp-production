@@ -3,6 +3,8 @@ import { Building2, KeyRound, RotateCcw, UserCog } from 'lucide-react'
 import { useStore } from '../store/store'
 import { CLEAR_CONFIRMATION, clearBusinessData, resetPassword, saveCompanyProfile, updateDisplayName, validateCompany } from '../domain/system'
 import type { CompanyDraft } from '../domain/system'
+import { gstinState } from '../lib/billing'
+import { StateSelect } from './StateSelect'
 import { MIN_PASSWORD_LENGTH } from '../lib/auth'
 import { POWERED_BY } from '../lib/brand'
 import { fmtDateTime } from '../lib/format'
@@ -132,7 +134,23 @@ function CompanyProfileEditor({ open, onClose }: { open: boolean; onClose: () =>
           <Input type="email" name="email" autoComplete="email" spellCheck={false} value={draft.email} onChange={(e) => set({ email: e.target.value })} aria-invalid={!!errors.email || undefined} />
         </Field>
         <Field label="GSTIN" error={errors.gstin} hint="15 characters, e.g. 33AAACV1234C1ZW. Required when tax is charged.">
-          <Input name="gstin" spellCheck={false} autoComplete="off" maxLength={15} value={draft.gstin} onChange={(e) => set({ gstin: e.target.value.toUpperCase() })} aria-invalid={!!errors.gstin || undefined} />
+          <Input
+            name="gstin"
+            spellCheck={false}
+            autoComplete="off"
+            maxLength={15}
+            value={draft.gstin}
+            onChange={(e) => {
+              const gstin = e.target.value.toUpperCase()
+              // The first two digits of the GSTIN are the state.
+              const fromGstin = gstinState(gstin)
+              set({ gstin, ...(fromGstin ? { stateCode: fromGstin } : {}) })
+            }}
+            aria-invalid={!!errors.gstin || undefined}
+          />
+        </Field>
+        <Field label="State" error={errors.stateCode} hint={gstinState(draft.gstin) ? 'From the GSTIN.' : 'Set it when there is no GSTIN — it decides CGST + SGST or IGST.'} as="div">
+          <StateSelect aria-label="Company state" value={draft.stateCode ?? ''} onChange={(v) => set({ stateCode: v })} disabled={!!gstinState(draft.gstin)} invalid={!!errors.stateCode} />
         </Field>
         <Field label="Invoice number prefix" error={errors.invoicePrefix} hint="INV → INV/2026-27/0001">
           <Input name="invoice-prefix" spellCheck={false} value={draft.invoicePrefix} onChange={(e) => set({ invoicePrefix: e.target.value })} aria-invalid={!!errors.invoicePrefix || undefined} />

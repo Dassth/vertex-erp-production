@@ -3,7 +3,11 @@
  *
  *   Money in    receipts: customers paying invoices, other income.
  *   Money out   payments: suppliers' bills, salary, power, rent…
- *   Balance            money in − money out.
+ *   Balance            brought forward + money in + loans received
+ *                      − money out (expenses and loan repayments).
+ *   Loans              principal is cash but never income; an EMI's
+ *                      principal is never an expense — only its interest
+ *                      ("Loan interest") is.
  *   To collect         what customers still owe on sales invoices.
  *   To pay             what we still owe suppliers on purchase bills.
  *
@@ -14,7 +18,7 @@ import type { Debt, Invoice, MoneyDirection, MoneyEntry, MoneyMode, PurchaseBill
 import { fromPaise, toPaise } from './costing'
 import { purchaseTotals } from './gst'
 import { fmtDate } from './format'
-import type { ReportTable } from './reportTable'
+import type { CellValue, ReportTable } from './reportTable'
 
 export const CUSTOMER_PAYMENT = 'Customer payment'
 export const SUPPLIER_PAYMENT = 'Supplier payment'
@@ -34,35 +38,90 @@ const paise = (entries: MoneyEntry[]) => entries.reduce((s, e) => s + toPaise(e.
 /** `yyyy-MM` of an ISO date. */
 export const monthOf = (isoDate: string) => isoDate.slice(0, 7)
 
+export const LOAN_INTEREST = 'Loan interest'
+
 export interface MoneySummary {
+  /** Income: every receipt (loans are not income). */
   moneyIn: number
+  /** Expenses: every payment, except the principal part of loan repayments. */
   moneyOut: number
-  /** moneyIn − moneyOut. */
+  /** moneyIn − moneyOut: income less expenses. */
   balance: number
+  /** Loans received this period (cash in, not income). */
+  loanReceived: number
+  /** Principal paid back this period (cash out, not an expense). */
+  loanRepaid: number
+  /** What the cash really changed by: balance + loanReceived − loanRepaid. */
+  cashChange: number
   byCategory: Array<{ direction: MoneyDirection; category: string; amount: number; count: number }>
+  /** Every rupee by payment mode — loans received included. */
   byMode: Array<{ mode: MoneyMode; moneyIn: number; moneyOut: number }>
 }
 
-export function summarise(entries: MoneyEntry[]): MoneySummary {
+/**
+ * The parts of a payment that pays back a loan. Entries saved before the split
+ * existed count as all principal (they can be edited to split them).
+ */
+export function repaymentParts(e: Pick<MoneyEntry, 'amount' | 'direction' | 'repaysDebtId' | 'principal' | 'interest'>): { principal: number; interest: number } {
+  if (e.direction !== 'out' || !e.repaysDebtId) return { principal: 0, interest: 0 }
+  const total = toPaise(e.amount)
+  const interest = e.interest !== null && e.interest !== undefined && Number.isFinite(e.interest) ? Math.min(total, Math.max(0, toPaise(e.interest))) : 0
+  return { principal: fromPaise(total - interest), interest: fromPaise(interest) }
+}
+
+export function summarise(entries: MoneyEntry[], loans: Debt[] = []): MoneySummary {
   const ins = entries.filter((e) => e.direction === 'in')
   const outs = entries.filter((e) => e.direction === 'out')
   const groups = new Map<string, MoneySummary['byCategory'][number] & { p: number }>()
-  for (const e of entries) {
-    const key = `${e.direction}|${e.category}`
-    const g = groups.get(key) ?? { direction: e.direction, category: e.category, amount: 0, count: 0, p: 0 }
-    g.p += toPaise(e.amount)
+  const add = (direction: MoneyDirection, category: string, p: number) => {
+    const key = `${direction}|${category}`
+    const g = groups.get(key) ?? { direction, category, amount: 0, count: 0, p: 0 }
+    g.p += p
     g.count += 1
     groups.set(key, g)
+  }
+  let expenses = 0
+  let repaid = 0
+  for (const e of ins) add('in', e.category, toPaise(e.amount))
+  for (const e of outs) {
+    if (e.repaysDebtId) {
+      // An EMI: only the interest is an expense; the principal reduces the loan.
+      const parts = repaymentParts(e)
+      repaid += toPaise(parts.principal)
+      if (parts.interest) {
+        add('out', LOAN_INTEREST, toPaise(parts.interest))
+        expenses += toPaise(parts.interest)
+      }
+    } else {
+      add('out', e.category, toPaise(e.amount))
+      expenses += toPaise(e.amount)
+    }
   }
   const byCategory = [...groups.values()]
     .map(({ p, ...g }) => ({ ...g, amount: fromPaise(p) }))
     .sort((a, b) => (a.direction === b.direction ? b.amount - a.amount : a.direction === 'in' ? -1 : 1))
+  const received = loans.reduce((n, l) => n + toPaise(l.amount), 0)
   const byMode = MODES.map((mode) => ({
     mode,
-    moneyIn: fromPaise(paise(ins.filter((e) => e.mode === mode))),
+    moneyIn: fromPaise(paise(ins.filter((e) => e.mode === mode)) + loans.filter((l) => l.mode === mode).reduce((n, l) => n + toPaise(l.amount), 0)),
     moneyOut: fromPaise(paise(outs.filter((e) => e.mode === mode))),
   })).filter((m) => m.moneyIn || m.moneyOut)
-  return { moneyIn: fromPaise(paise(ins)), moneyOut: fromPaise(paise(outs)), balance: fromPaise(paise(ins) - paise(outs)), byCategory, byMode }
+  const income = paise(ins)
+  return {
+    moneyIn: fromPaise(income),
+    moneyOut: fromPaise(expenses),
+    balance: fromPaise(income - expenses),
+    loanReceived: fromPaise(received),
+    loanRepaid: fromPaise(repaid),
+    cashChange: fromPaise(income + received - paise(outs)),
+    byCategory,
+    byMode,
+  }
+}
+
+/** Loans received in one month. */
+export function loansOfMonth(db: { debts?: Debt[] }, month: string): Debt[] {
+  return (db.debts ?? []).filter((d) => monthOf(d.date) === month)
 }
 
 /** Entries of one month, newest first. */
@@ -70,13 +129,17 @@ export function entriesOfMonth(db: Pick<VertexDB, 'cashbook'>, month: string): M
   return (db.cashbook ?? []).filter((e) => monthOf(e.date) === month).sort((a, b) => b.date.localeCompare(a.date) || b.code.localeCompare(a.code))
 }
 
-/** Balance carried in from every month before `month`, and the balance at its end. */
-export function balances(db: Pick<VertexDB, 'cashbook'>, month: string): { opening: number; closing: number } {
+/**
+ * Balance carried in from every month before `month`, and the balance at its
+ * end: every receipt and every loan received in, every payment out (loan
+ * repayments and money spent from a loan included — the loan came in first).
+ */
+export function balances(db: Pick<VertexDB, 'cashbook'> & { debts?: Debt[] }, month: string): { opening: number; closing: number } {
   const all = db.cashbook ?? []
-  // Own money only: what was paid with a loan's money did not come out of it.
-  const signed = (e: MoneyEntry) => (e.direction === 'in' ? 1 : e.paidFromDebtId ? 0 : -1) * toPaise(e.amount)
-  const opening = all.filter((e) => monthOf(e.date) < month).reduce((s, e) => s + signed(e), 0)
-  const closing = all.filter((e) => monthOf(e.date) <= month).reduce((s, e) => s + signed(e), 0)
+  const signed = (e: MoneyEntry) => (e.direction === 'in' ? 1 : -1) * toPaise(e.amount)
+  const loans = (before: (m: string) => boolean) => (db.debts ?? []).filter((d) => before(monthOf(d.date))).reduce((s, d) => s + toPaise(d.amount), 0)
+  const opening = all.filter((e) => monthOf(e.date) < month).reduce((s, e) => s + signed(e), 0) + loans((m) => m < month)
+  const closing = all.filter((e) => monthOf(e.date) <= month).reduce((s, e) => s + signed(e), 0) + loans((m) => m <= month)
   return { opening: fromPaise(opening), closing: fromPaise(closing) }
 }
 
@@ -112,7 +175,7 @@ export function toCollect(db: Pick<VertexDB, 'cashbook' | 'invoices'>, all = fal
 export function toPay(db: Pick<VertexDB, 'cashbook' | 'purchases' | 'company'>, all = false, except?: string): Array<Due<PurchaseBill>> {
   return (db.purchases ?? [])
     .map((bill) => {
-      const total = purchaseTotals(bill, db.company.gstin).net
+      const total = purchaseTotals(bill, db.company).net
       const settled = paidFor(db, bill.id, except)
       return { record: bill, total, settled, due: fromPaise(toPaise(total) - toPaise(settled)) }
     })
@@ -150,14 +213,20 @@ export function monthDocsToRecord(db: Pick<VertexDB, 'cashbook' | 'invoices' | '
 }
 
 /** The month's report — the same rows in the Excel file and the PDF: balance brought forward, every entry oldest first, totals and month-end balance. */
-export function monthReportTable(db: Pick<VertexDB, 'cashbook' | 'invoices' | 'purchases' | 'company'>, month: string): ReportTable {
+export function monthReportTable(db: Pick<VertexDB, 'cashbook' | 'invoices' | 'purchases' | 'company'> & { debts?: Debt[] }, month: string): ReportTable {
   const entries = [...entriesOfMonth(db, month)].reverse()
-  const s = summarise(entries)
+  const loans = loansOfMonth(db, month)
+  const s = summarise(entries, loans)
   const b = balances(db, month)
   const [y, m] = month.split('-').map(Number)
   const monthLabel = new Date(y, m - 1, 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
   const doc = (e: MoneyEntry) => (e.invoiceId ? db.invoices.find((i) => i.id === e.invoiceId)?.number : e.purchaseId ? (db.purchases ?? []).find((p) => p.id === e.purchaseId)?.code : '') ?? ''
   const line = (label: string, moneyIn: number | null, moneyOut: number | null) => [label, '', '', '', '', '', '', moneyIn, moneyOut]
+  // Loans received are listed with the entries, in date order.
+  const lines = [
+    ...entries.map((e) => ({ date: e.date, cells: [fmtDate(e.date), e.code, e.direction === 'in' ? 'In' : 'Out', e.repaysDebtId ? `${e.category}${repaymentParts(e).interest ? ` (principal ${repaymentParts(e).principal.toFixed(2)} + interest ${repaymentParts(e).interest.toFixed(2)})` : ''}` : e.category, e.party, MODE_LABEL[e.mode], doc(e), e.direction === 'in' ? e.amount : null, e.direction === 'out' ? e.amount : null] as CellValue[] })),
+    ...loans.map((l) => ({ date: l.date, cells: [fmtDate(l.date), l.code, 'In', 'Loan received', l.lender, MODE_LABEL[l.mode], '', l.amount, null] as CellValue[] })),
+  ].sort((a, b) => a.date.localeCompare(b.date))
   return {
     name: `Income & expenses ${month}`,
     internal: true,
@@ -175,12 +244,15 @@ export function monthReportTable(db: Pick<VertexDB, 'cashbook' | 'invoices' | 'p
     ],
     rows: [
       { kind: 'total', cells: line('Balance brought forward', b.opening, null) },
-      ...entries.map((e) => ({
-        kind: 'row' as const,
-        cells: [fmtDate(e.date), e.code, e.direction === 'in' ? 'In' : 'Out', e.category, e.party, MODE_LABEL[e.mode], doc(e), e.direction === 'in' ? e.amount : null, e.direction === 'out' ? e.amount : null],
-      })),
-      { kind: 'grand', cells: line('Total this month', s.moneyIn, s.moneyOut) },
-      { kind: 'total', cells: line('This month (in − out)', s.balance, null) },
+      ...lines.map((l) => ({ kind: 'row' as const, cells: l.cells })),
+      { kind: 'grand', cells: line('Cash in / out this month', fromPaise(toPaise(s.moneyIn) + toPaise(s.loanReceived)), fromPaise(toPaise(s.moneyOut) + toPaise(s.loanRepaid))) },
+      ...(s.loanReceived || s.loanRepaid
+        ? [
+            { kind: 'total' as const, cells: line('— of which loan received / loan repaid (principal)', s.loanReceived || null, s.loanRepaid || null) },
+            { kind: 'total' as const, cells: line('— income / expenses', s.moneyIn, s.moneyOut) },
+          ]
+        : []),
+      { kind: 'total', cells: line('Income − expenses this month', s.balance, null) },
       { kind: 'total', cells: line('Balance at month end', b.closing, null) },
     ],
   }
@@ -188,17 +260,37 @@ export function monthReportTable(db: Pick<VertexDB, 'cashbook' | 'invoices' | 'p
 
 /* --------------------------------- Debts ---------------------------------- */
 
-/** Rupees already paid back on a loan (optionally leaving out one entry being edited). */
+/** Principal already paid back on a loan (optionally leaving out one entry being edited). Interest does not reduce what is owed. */
 export function repaidFor(db: Pick<VertexDB, 'cashbook'>, debtId: string, exceptEntryId?: string): number {
-  return (db.cashbook ?? []).filter((m) => m.direction === 'out' && m.repaysDebtId === debtId && m.id !== exceptEntryId).reduce((n, m) => n + toPaise(m.amount), 0) / 100
+  return (db.cashbook ?? []).filter((m) => m.direction === 'out' && m.repaysDebtId === debtId && m.id !== exceptEntryId).reduce((n, m) => n + toPaise(repaymentParts(m).principal), 0) / 100
+}
+
+/** Interest paid on a loan so far. */
+export function interestFor(db: Pick<VertexDB, 'cashbook'>, debtId: string): number {
+  return (db.cashbook ?? []).filter((m) => m.direction === 'out' && m.repaysDebtId === debtId).reduce((n, m) => n + toPaise(repaymentParts(m).interest), 0) / 100
+}
+
+/**
+ * The split a loan's own terms suggest for its next EMI: interest = what is
+ * still owed × the monthly rate; the rest of the amount is principal.
+ * Null when the loan has no interest rate.
+ */
+export function suggestEmiSplit(db: Pick<VertexDB, 'cashbook'> & { debts?: Debt[] }, debtId: string, amount: number, exceptEntryId?: string): { principal: number; interest: number } | null {
+  const debt = (db.debts ?? []).find((d) => d.id === debtId)
+  if (!debt || !debt.interestRatePct || !(amount > 0)) return null
+  const owed = toPaise(debt.amount) - toPaise(repaidFor(db, debtId, exceptEntryId))
+  const interest = Math.min(toPaise(amount), Math.max(0, Math.round((owed * debt.interestRatePct) / 1200)))
+  return { principal: fromPaise(toPaise(amount) - interest), interest: fromPaise(interest) }
 }
 
 export interface DebtRow {
   debt: Debt
   /** Spent from this loan's money. */
   used: number
-  /** Paid back. */
+  /** Principal paid back. */
   repaid: number
+  /** Interest paid (an expense, not a reduction of the loan). */
+  interest: number
   /** Still owed. */
   outstanding: number
   /** Borrowed money not spent yet. */
@@ -211,13 +303,13 @@ export function debtRows(db: Pick<VertexDB, 'cashbook'> & { debts?: Debt[] }): D
     .map((debt) => {
       const used = (db.cashbook ?? []).filter((m) => m.direction === 'out' && m.paidFromDebtId === debt.id).reduce((n, m) => n + toPaise(m.amount), 0) / 100
       const repaid = repaidFor(db, debt.id)
-      return { debt, used, repaid, outstanding: (toPaise(debt.amount) - toPaise(repaid)) / 100, unspent: (toPaise(debt.amount) - toPaise(used)) / 100 }
+      return { debt, used, repaid, interest: interestFor(db, debt.id), outstanding: (toPaise(debt.amount) - toPaise(repaid)) / 100, unspent: (toPaise(debt.amount) - toPaise(used)) / 100 }
     })
 }
 
 export function debtsTable(db: Pick<VertexDB, 'cashbook' | 'company'> & { debts?: Debt[] }): ReportTable {
   const rows = debtRows(db)
-  const sum = (k: 'used' | 'repaid' | 'outstanding') => rows.reduce((n, r) => n + toPaise(r[k]), 0) / 100
+  const sum = (k: 'used' | 'repaid' | 'interest' | 'outstanding') => rows.reduce((n, r) => n + toPaise(r[k]), 0) / 100
   const borrowed = rows.reduce((n, r) => n + toPaise(r.debt.amount), 0) / 100
   return {
     name: 'Debts',
@@ -230,12 +322,13 @@ export function debtsTable(db: Pick<VertexDB, 'cashbook' | 'company'> & { debts?
       { label: 'For', width: 26, wrap: true },
       { label: 'Borrowed', width: 14, numeric: true },
       { label: 'Spent from it', width: 14, numeric: true },
-      { label: 'Paid back', width: 14, numeric: true },
+      { label: 'Principal paid back', width: 14, numeric: true },
+      { label: 'Interest paid', width: 14, numeric: true },
       { label: 'Still owed', width: 14, numeric: true },
     ],
     rows: [
-      ...rows.map((r) => ({ kind: 'row' as const, cells: [fmtDate(r.debt.date), r.debt.code, r.debt.lender, r.debt.purpose, r.debt.amount, r.used, r.repaid, r.outstanding] })),
-      { kind: 'grand' as const, cells: ['Total', '', '', '', borrowed, sum('used'), sum('repaid'), sum('outstanding')] },
+      ...rows.map((r) => ({ kind: 'row' as const, cells: [fmtDate(r.debt.date), r.debt.code, r.debt.lender, r.debt.purpose, r.debt.amount, r.used, r.repaid, r.interest, r.outstanding] })),
+      { kind: 'grand' as const, cells: ['Total', '', '', '', borrowed, sum('used'), sum('repaid'), sum('interest'), sum('outstanding')] },
     ],
   }
 }

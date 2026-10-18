@@ -14,6 +14,7 @@ import { Badge, Button, Card, CardHead, ConfirmDialog, EmptyState, Field, Input,
 import { Detail, NumberInput, PageHeader, StatStrip, StatTile, useDocumentTitle } from '../../components/page'
 import { CompanyProfileDialog } from '../../components/AdminDialogs'
 import { DocumentPreview, DownloadButton, ExcelButton, InvoiceDocActions, statementDoc } from '../../components/DocumentPreview'
+import { saleTaxLines, sellerState } from '../../lib/gst'
 import type { PreviewDoc } from '../../components/DocumentPreview'
 
 const COMPANY_OWNER_NOTICE = 'Administrator 1 must complete the company profile before invoices can be issued.'
@@ -157,6 +158,10 @@ function OrderDispatch({ order, onPreview, companyBlocked }: { order: Production
   const balance = orderBalance(order, db.dispatches)
   const costing = finalizedCostingFor(db, order)
   const result = costing?.snapshot?.result
+  // The buyer as the invoice will see it: the snapshot, with today's Place of supply when the snapshot has none.
+  const live = db.customers.find((c) => c.id === costing?.snapshot?.customer.id)
+  const buyer = costing?.snapshot ? { ...costing.snapshot.customer, placeOfSupply: costing.snapshot.customer.placeOfSupply || live?.placeOfSupply || '' } : null
+  const taxLines = (pct: number, amount: number) => saleTaxLines(db.company, { ...buyer, deliveryAddress: req.deliveryAddress }, pct, amount, result?.taxLabel)
   const invoices = orderInvoices(db, order.id)
   const dispatches = db.dispatches.filter((d) => d.orderId === order.id).sort((a, b) => a.seq - b.seq)
   const dates = productionDates(order)
@@ -298,7 +303,11 @@ function OrderDispatch({ order, onPreview, companyBlocked }: { order: Production
               <dl className="mt-2 grid grid-cols-2 gap-2 text-sm">
                 <Detail label="Selling price / piece (before tax)">{moneyPaise(result.sellingPerPiece)}</Detail>
                 <Detail label="Taxable value">{moneyPaise(result.taxableValue)}</Detail>
-                <Detail label={`${result.taxLabel} ${result.taxPct}%`}>{moneyPaise(result.taxAmount)}</Detail>
+                {taxLines(result.taxPct, result.taxAmount).lines.map(([label, amount]) => (
+                  <Detail key={label} label={label}>
+                    {moneyPaise(amount)}
+                  </Detail>
+                ))}
                 <Detail label="Order total">{moneyPaise(result.grandTotal)}</Detail>
               </dl>
             ) : null}
@@ -377,11 +386,20 @@ function OrderDispatch({ order, onPreview, companyBlocked }: { order: Production
                     <Detail label="Rate">{moneyPaise(check.amounts.rate)}</Detail>
                     <Detail label="Line amount">{moneyPaise(check.amounts.subtotal)}</Detail>
                     <Detail label="Discount">{moneyPaise(check.amounts.discount)}</Detail>
-                    <Detail label={`Tax ${check.amounts.taxPct}%`}>{moneyPaise(check.amounts.taxAmount)}</Detail>
+                    {taxLines(check.amounts.taxPct, check.amounts.taxAmount).lines.map(([label, amount]) => (
+                      <Detail key={label} label={label}>
+                        {moneyPaise(amount)}
+                      </Detail>
+                    ))}
                     <Detail label="Invoice total">
                       <strong>{moneyPaise(check.amounts.total)}</strong>
                     </Detail>
                   </dl>
+                  {check.amounts.taxAmount > 0 && taxLines(check.amounts.taxPct, check.amounts.taxAmount).supply === null ? (
+                    <p className="mt-2 rounded-md bg-warn-wash px-3 py-2 text-sm text-warn ring-1 ring-inset ring-warn-edge" role="status">
+                      The invoice cannot be issued yet: set the Place of supply for {buyer?.company ?? 'this customer'} in Master → Customers{sellerState(db.company) ? '' : ', and your company’s State in Settings'} — it decides CGST + SGST or IGST.
+                    </p>
+                  ) : null}
                   <p className="mt-2 text-xs text-muted">
                     {check.amounts.isSingleFull
                       ? 'Full order in a single invoice — equals the finalized order total.'

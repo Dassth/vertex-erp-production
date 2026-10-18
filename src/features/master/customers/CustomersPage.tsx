@@ -6,6 +6,9 @@ import type { Customer } from '../../../lib/types'
 import type { CustomerDraft } from '../../../domain/master'
 import { blankCustomerDraft, deleteCustomer, saveCustomer, setCustomerActive } from '../../../domain/master'
 import { cx, fmtDate, money } from '../../../lib/format'
+import { gstinState } from '../../../lib/billing'
+import { stateCodeFrom } from '../../../lib/gstStates'
+import { StateSelect } from '../../../components/StateSelect'
 import { Badge, Button, Card, CardHead, ConfirmDialog, EmptyState, Field, Input, SearchInput, Select, Textarea } from '../../../components/ui'
 import { ConflictNotice, PageHeader, StatStrip, StatTile, focusFirstInvalid, useDocumentTitle, useUnsavedChanges } from '../../../components/page'
 import { ActiveBadge, PlanStatusBadge } from '../../../components/status'
@@ -30,6 +33,11 @@ const toDraft = (c?: Customer): CustomerDraft =>
       }
     : blankCustomerDraft()
 
+/** Details missing for invoicing: GSTIN (unless URD), billing address, or a Place of supply that is not a known state. */
+export function customerIncomplete(c: Customer): boolean {
+  return (!c.gstin && !c.unregistered) || !c.billingAddress || !(gstinState(c.gstin) ?? stateCodeFrom(c.placeOfSupply))
+}
+
 export function CustomersPage() {
   useDocumentTitle('Master · Customers')
   const { db } = useStore()
@@ -50,7 +58,7 @@ export function CustomersPage() {
   const list = useMemo(
     () =>
       db.customers
-        .filter((c) => (status === 'active' ? c.active : status === 'inactive' ? !c.active : status === 'incomplete' ? (!c.gstin && !c.unregistered) || !c.billingAddress : true))
+        .filter((c) => (status === 'active' ? c.active : status === 'inactive' ? !c.active : status === 'incomplete' ? customerIncomplete(c) : true))
         .filter((c) => !q.trim() || `${c.company} ${c.code} ${c.contactPerson} ${c.phone} ${c.email} ${c.gstin}`.toLowerCase().includes(q.trim().toLowerCase()))
         .sort((a, b) => a.company.localeCompare(b.company)),
     [db.customers, q, status],
@@ -76,7 +84,7 @@ export function CustomersPage() {
       <StatStrip className="grid-cols-2 lg:grid-cols-4">
         <StatTile label="Customers" value={String(db.customers.length)} icon={<Users className="h-4 w-4" />} tone="indigo" hint="In the master" onClick={() => set({ status: 'all' })} active={status === 'all'} />
         <StatTile label="Active" value={String(db.customers.filter((c) => c.active).length)} icon={<Building2 className="h-4 w-4" />} tone="green" hint="Selectable in planning" onClick={() => set({ status: 'active' })} active={status === 'active'} />
-        <StatTile label="Incomplete" value={String(db.customers.filter((c) => (!c.gstin && !c.unregistered) || !c.billingAddress).length)} icon={<FileWarning className="h-4 w-4" />} tone="amber" hint="GSTIN or billing address" onClick={() => set({ status: 'incomplete' })} active={status === 'incomplete'} />
+        <StatTile label="Incomplete" value={String(db.customers.filter(customerIncomplete).length)} icon={<FileWarning className="h-4 w-4" />} tone="amber" hint="GSTIN, billing address or place of supply" onClick={() => set({ status: 'incomplete' })} active={status === 'incomplete'} />
         <StatTile label="With orders" value={String(withOrders)} icon={<ReceiptText className="h-4 w-4" />} tone="slate" hint="Referenced by plans" />
       </StatStrip>
 
@@ -269,11 +277,22 @@ function CustomerForm({ customer, onSaved, onClosed }: { customer?: Customer; on
             <p className="mb-4 self-center text-sm text-muted">No GSTIN needed — invoices show “Unregistered (URD)”.</p>
           ) : (
             <Field label="GSTIN" error={e('gstin')} hint="Can be added later.">
-              <Input spellCheck={false} value={draft.gstin} onChange={(ev) => patch({ gstin: ev.target.value.toUpperCase() })} aria-invalid={!!e('gstin') || undefined} placeholder="15-character GSTIN…" />
+              <Input
+                spellCheck={false}
+                value={draft.gstin}
+                onChange={(ev) => {
+                  const gstin = ev.target.value.toUpperCase()
+                  // A registered customer's state is the first two digits of the GSTIN.
+                  const fromGstin = gstinState(gstin)
+                  patch({ gstin, ...(fromGstin ? { placeOfSupply: fromGstin } : {}) })
+                }}
+                aria-invalid={!!e('gstin') || undefined}
+                placeholder="15-character GSTIN…"
+              />
             </Field>
           )}
-          <Field label="Place of supply" hint="State name or 2-digit state code.">
-            <Input value={draft.placeOfSupply} onChange={(ev) => patch({ placeOfSupply: ev.target.value })} />
+          <Field label="Place of supply" error={e('placeOfSupply')} hint={gstinState(draft.gstin) ? 'From the GSTIN.' : 'Same state as yours → CGST + SGST; another state → IGST.'} as="div">
+            <StateSelect aria-label="Place of supply" value={draft.placeOfSupply} onChange={(v) => patch({ placeOfSupply: v })} invalid={!!e('placeOfSupply')} />
           </Field>
           <Field label="Payment terms" className="sm:col-span-2">
             <Input value={draft.paymentTerms} onChange={(ev) => patch({ paymentTerms: ev.target.value })} placeholder="e.g. 30 days from invoice…" />

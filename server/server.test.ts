@@ -398,3 +398,19 @@ describe('importing a backup through the app', () => {
     void token
   })
 })
+
+describe('data migrations on the first start of a new version', () => {
+  it('are pending on older data, saved once as their own change, then never again', async () => {
+    const { readState, writeState } = await import('./storage')
+    const row = (await readState(db))!
+    // Data saved by a version from before the migration.
+    await writeState(db, { revision: row.revision + 1, data: { ...row.data, migrations: [] }, actor: 'test', command: 'old version', at: new Date() })
+    expect(await service.pendingMigrations()).toEqual(['gst-state-split-v1'])
+    expect(await service.saveMigrations()).toEqual(['gst-state-split-v1'])
+    const saved = (await readState(db))!
+    expect(saved.data.migrations).toContain('gst-state-split-v1')
+    expect(await service.pendingMigrations()).toEqual([])
+    expect(await service.saveMigrations()).toEqual([])
+    expect((await readState(db))!.revision).toBe(saved.revision)
+  }, 120000)
+})

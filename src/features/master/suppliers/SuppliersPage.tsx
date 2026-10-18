@@ -20,7 +20,7 @@ import { DownloadButton, ExcelButton, reportTableDoc, useLatestDb } from '../../
 function supplierStats(db: VertexDB, s: Supplier) {
   const materials = db.materials.filter((m) => sameText(m.supplier, s.name))
   const bills = (db.purchases ?? []).filter((b) => sameText(b.supplierName, s.name))
-  const bought = bills.reduce((n, b) => n + purchaseTotals(b, db.company.gstin).net, 0)
+  const bought = bills.reduce((n, b) => n + purchaseTotals(b, db.company).net, 0)
   return { materials, bills, bought }
 }
 

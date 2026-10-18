@@ -5,6 +5,7 @@ import { useStore } from '../../store/store'
 import type { Invoice } from '../../lib/types'
 import { moneyPaise } from '../../lib/format'
 import { resolveSupply } from '../../lib/gst'
+import { StateSelect } from '../../components/StateSelect'
 import type { InvoiceTaxEdit } from '../../lib/gst'
 import { applyInvoiceDraft, editInvoice, invoiceToDraft, validateInvoiceDraft } from '../../domain/purchases'
 import type { InvoiceDraft, InvoiceLineDraft } from '../../domain/purchases'
@@ -44,7 +45,7 @@ function Editor({ invoice, onClose }: { invoice: Invoice; onClose: () => void })
   const errors = touched ? allErrors : {}
   const valid = Object.keys(allErrors).length === 0
   const preview = valid ? applyInvoiceDraft(invoice, d) : null
-  const autoSupply = resolveSupply('auto', invoice.company.gstin, d.customer.gstin, d.customer.placeOfSupply)
+  const autoSupply = resolveSupply('auto', invoice.company, { gstin: d.customer.gstin, placeOfSupply: d.customer.placeOfSupply, deliveryAddress: invoice.deliveryAddress })
 
   const set = (patch: Partial<InvoiceDraft>) => setD((x) => ({ ...x, ...patch }))
   const setCustomer = (patch: Partial<InvoiceDraft['customer']>) => setD((x) => ({ ...x, customer: { ...x.customer, ...patch } }))
@@ -124,8 +125,8 @@ function Editor({ invoice, onClose }: { invoice: Invoice; onClose: () => void })
           <Field label="GSTIN" error={errors.gstin} hint="First 2 digits decide CGST+SGST or IGST">
             <Input value={d.customer.gstin} spellCheck={false} onChange={(e) => setCustomer({ gstin: e.target.value.toUpperCase() })} />
           </Field>
-          <Field label="Place of supply">
-            <Input value={d.customer.placeOfSupply} onChange={(e) => setCustomer({ placeOfSupply: e.target.value })} />
+          <Field label="Place of supply" as="div">
+            <StateSelect aria-label="Place of supply" value={d.customer.placeOfSupply} onChange={(v) => setCustomer({ placeOfSupply: v })} />
           </Field>
           <Field label="Contact person">
             <Input value={d.customer.contactPerson} onChange={(e) => setCustomer({ contactPerson: e.target.value })} />

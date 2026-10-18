@@ -98,6 +98,11 @@ export interface CompanyProfile {
   phone: string
   email: string
   gstin: string
+  /**
+   * GST state code of the business (33 = Tamil Nadu). Filled from the GSTIN;
+   * set by hand when there is no GSTIN. Decides CGST + SGST or IGST.
+   */
+  stateCode?: string | null
   /** Invoice number prefix, e.g. INV → INV/2026-27/0001 */
   invoicePrefix: string
   bankDetails: string
@@ -852,6 +857,10 @@ export interface MoneyEntry extends Stamp {
   paidFromDebtId?: string | null
   /** Money out that pays back a loan (EMI, part or full repayment). */
   repaysDebtId?: string | null
+  /** Loan repayment only: the part that reduces the loan. Missing = the whole amount. */
+  principal?: number | null
+  /** Loan repayment only: the interest part — an expense ("Loan interest"). */
+  interest?: number | null
 }
 
 /** Money borrowed: from whom, how much, when and why. Kept apart from income. */
@@ -867,6 +876,10 @@ export interface Debt extends Stamp {
   mode: MoneyMode
   reference: string
   notes: string
+  /** Optional loan terms: yearly interest rate %, tenure in months and the EMI. */
+  interestRatePct?: number | null
+  tenureMonths?: number | null
+  emiAmount?: number | null
 }
 
 /** A supplier of materials: who they are and how to reach them. */

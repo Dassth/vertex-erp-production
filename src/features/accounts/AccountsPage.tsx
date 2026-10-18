@@ -4,7 +4,7 @@ import { addMonths, format, parse } from 'date-fns'
 import { ArrowDownLeft, ArrowUpRight, CalendarCheck, ChevronLeft, ChevronRight, Download, HandCoins, Landmark, Pencil, Plus, Scale, Trash2, Wallet } from 'lucide-react'
 import { useStore } from '../../store/store'
 import type { MoneyDirection, MoneyEntry, MoneyMode } from '../../lib/types'
-import { CATEGORIES, CUSTOMER_PAYMENT, MODE_LABEL, MODES, SUPPLIER_PAYMENT, balances, debtRows, entriesOfMonth, monthReportTable, summarise, sumDue, toCollect, toPay } from '../../lib/cashbook'
+import { CATEGORIES, CUSTOMER_PAYMENT, MODE_LABEL, MODES, SUPPLIER_PAYMENT, balances, debtRows, loansOfMonth, suggestEmiSplit, entriesOfMonth, monthReportTable, summarise, sumDue, toCollect, toPay } from '../../lib/cashbook'
 import { DebtEditor, DebtsCard, blankDebt } from './DebtsCard'
 import { MonthEndDialog } from './MonthEndDialog'
 import type { DebtDraft } from '../../domain/cashbook'
@@ -56,6 +56,9 @@ const toDraft = (m: MoneyEntry): MoneyDraft => ({
   notes: m.notes,
   paidFromDebtId: m.paidFromDebtId ?? null,
   repaysDebtId: m.repaysDebtId ?? null,
+  // An EMI saved before the split counts as all principal; it opens with that, ready to split.
+  principal: m.repaysDebtId ? (m.principal ?? (m.interest !== null && m.interest !== undefined ? m.amount - m.interest : m.amount)) : null,
+  interest: m.repaysDebtId ? (m.interest ?? 0) : null,
   expectedUpdatedAt: m.updatedAt,
 })
 
@@ -90,7 +93,8 @@ export function AccountsPage() {
   }, [wanted, params, setParams])
 
   const entries = useMemo(() => entriesOfMonth(db, month), [db, month])
-  const sum = useMemo(() => summarise(entries), [entries])
+  // Loans received this month are cash in (and shown by mode), never income.
+  const sum = useMemo(() => summarise(entries, loansOfMonth(db, month)), [entries, db, month])
   const bal = useMemo(() => balances(db, month), [db, month])
   const collect = useMemo(() => toCollect(db), [db])
   const pay = useMemo(() => toPay(db), [db])
@@ -134,10 +138,10 @@ export function AccountsPage() {
       </div>
 
       <StatStrip className="grid-cols-2 lg:grid-cols-4">
-        <StatTile label="Money in" value={moneyPaise(sum.moneyIn)} icon={<ArrowDownLeft className="h-4 w-4" />} tone="green" hint={`${entries.filter((e) => e.direction === 'in').length} receipt(s) in ${monthLabel}`} />
-        <StatTile label="Money out" value={moneyPaise(sum.moneyOut)} icon={<ArrowUpRight className="h-4 w-4" />} tone="amber" hint={`${entries.filter((e) => e.direction === 'out').length} payment(s) in ${monthLabel}`} />
-        <StatTile label="This month" value={moneyPaise(sum.balance)} icon={<Scale className="h-4 w-4" />} tone={sum.balance < 0 ? 'red' : 'indigo'} hint={sum.balance < 0 ? 'More went out than came in' : 'Money in − money out'} />
-        <StatTile label="Balance at month end" value={moneyPaise(bal.closing)} icon={<Wallet className="h-4 w-4" />} tone={bal.closing < 0 ? 'red' : 'blue'} hint={`Brought forward ${moneyPaise(bal.opening)}`} />
+        <StatTile label="Money in" value={moneyPaise(sum.moneyIn)} icon={<ArrowDownLeft className="h-4 w-4" />} tone="green" hint={`Income · ${entries.filter((e) => e.direction === 'in').length} receipt(s)${sum.loanReceived ? ` · loan received ${moneyPaise(sum.loanReceived)} kept apart` : ''}`} />
+        <StatTile label="Money out" value={moneyPaise(sum.moneyOut)} icon={<ArrowUpRight className="h-4 w-4" />} tone="amber" hint={`Expenses · ${entries.filter((e) => e.direction === 'out').length} payment(s)${sum.loanRepaid ? ` · loan principal ${moneyPaise(sum.loanRepaid)} kept apart` : ''}`} />
+        <StatTile label="This month" value={moneyPaise(sum.balance)} icon={<Scale className="h-4 w-4" />} tone={sum.balance < 0 ? 'red' : 'indigo'} hint={sum.balance < 0 ? 'Expenses were more than income' : 'Income − expenses'} />
+        <StatTile label="Balance at month end" value={moneyPaise(bal.closing)} icon={<Wallet className="h-4 w-4" />} tone={bal.closing < 0 ? 'red' : 'blue'} hint={`Brought forward ${moneyPaise(bal.opening)}${sum.loanReceived || sum.loanRepaid ? ` · loans included` : ''}`} />
       </StatStrip>
 
       <Segmented
@@ -272,8 +276,26 @@ export function AccountsPage() {
               </Card>
             )
           })}
+          {sum.loanReceived || sum.loanRepaid ? (
+            <Card className="vx-anim-up overflow-hidden lg:col-span-2">
+              <CardHead title="Loans" subtitle="Cash that came in or went out for loans — not income, not an expense. Interest is under money out." />
+              <ul className="divide-y divide-rule">
+                {(
+                  [
+                    ['Loan received', sum.loanReceived],
+                    ['Loan repaid (principal)', sum.loanRepaid],
+                  ] as Array<[string, number]>
+                ).map(([label, amount]) => (
+                  <li key={label} className="flex items-center justify-between gap-3 px-5 py-2.5 text-sm">
+                    <span className="text-ink">{label}</span>
+                    <span className="whitespace-nowrap font-semibold text-ink tabular-nums">{moneyPaise(amount)}</span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          ) : null}
           <Card className="vx-anim-up overflow-hidden lg:col-span-2">
-            <CardHead title="How the money moved" subtitle="By payment mode, this month" />
+            <CardHead title="How the money moved" subtitle="By payment mode, this month — loans included" />
             {sum.byMode.length === 0 ? (
               <p className="px-5 py-6 text-sm text-muted">Nothing recorded this month.</p>
             ) : (
@@ -449,6 +471,9 @@ function MoneyEditor({ draft, onClose, onLoan }: { draft: MoneyDraft; onClose: (
   const [newKind, setNewKind] = useState(false)
   const debts = useMemo(() => debtRows(db), [db])
   const repays = debts.find((x) => x.debt.id === d.repaysDebtId)
+  const isRepayment = d.direction === 'out' && !!d.repaysDebtId
+  // The split the loan's own interest rate suggests (interest = owed × rate ÷ 12).
+  const suggested = isRepayment && Number.isFinite(d.amount) ? suggestEmiSplit(db, d.repaysDebtId!, d.amount, d.id || undefined) : null
 
   // Documents still due — plus the one this entry already pays, when editing.
   const invoices = useMemo(() => toCollect(db, false, d.id || undefined), [db, d.id])
@@ -617,7 +642,12 @@ function MoneyEditor({ draft, onClose, onLoan }: { draft: MoneyDraft; onClose: (
                 value={d.repaysDebtId ?? ''}
                 onChange={(e) => {
                   const x = debts.find((y) => y.debt.id === e.target.value)
-                  set({ repaysDebtId: e.target.value || null, ...(x ? { party: d.party || x.debt.lender, category: kinds.includes('Loan EMI') ? 'Loan EMI' : d.category } : {}) })
+                  set({
+                    repaysDebtId: e.target.value || null,
+                    ...(x
+                      ? { party: d.party || x.debt.lender, category: kinds.includes('Loan EMI') ? 'Loan EMI' : d.category, principal: Number.isFinite(d.amount) ? d.amount : null, interest: 0, ...(!Number.isFinite(d.amount) && x.debt.emiAmount ? { amount: x.debt.emiAmount, principal: x.debt.emiAmount } : {}) }
+                      : { principal: null, interest: null }),
+                  })
                 }}
               >
                 <option value="">No</option>
@@ -634,8 +664,44 @@ function MoneyEditor({ draft, onClose, onLoan }: { draft: MoneyDraft; onClose: (
         ) : null}
 
         <Field label="Amount (₹)" required error={errors.amount} as="div">
-          <NumberInput value={d.amount} onChange={(v) => set({ amount: v ?? NaN })} invalid={!!errors.amount} aria-label="Amount in rupees" inputMode="decimal" placeholder="0.00" />
+          <NumberInput
+            value={d.amount}
+            onChange={(v) => {
+              const amount = v ?? NaN
+              // A loan repayment keeps its interest; the principal follows the amount.
+              set({ amount, ...(isRepayment && Number.isFinite(amount) ? { principal: Math.round((amount - (d.interest ?? 0)) * 100) / 100 } : {}) })
+            }}
+            invalid={!!errors.amount}
+            aria-label="Amount in rupees"
+            inputMode="decimal"
+            placeholder="0.00"
+          />
         </Field>
+        {isRepayment ? (
+          <div className="grid grid-cols-2 gap-x-3 sm:col-span-2 sm:grid-cols-[1fr_1fr_auto] sm:items-start">
+            <Field label="Principal (₹)" error={errors.principal} hint="Reduces what is still owed." as="div">
+              <NumberInput
+                aria-label="Principal in rupees"
+                value={d.principal ?? null}
+                invalid={!!errors.principal}
+                onChange={(v) => set({ principal: v, ...(v !== null && Number.isFinite(d.amount) ? { interest: Math.round((d.amount - v) * 100) / 100 } : {}) })}
+              />
+            </Field>
+            <Field label="Interest (₹)" error={errors.interest} hint="An expense — “Loan interest”." as="div">
+              <NumberInput
+                aria-label="Interest in rupees"
+                value={d.interest ?? null}
+                invalid={!!errors.interest}
+                onChange={(v) => set({ interest: v ?? 0, ...(Number.isFinite(d.amount) ? { principal: Math.round((d.amount - (v ?? 0)) * 100) / 100 } : {}) })}
+              />
+            </Field>
+            {suggested ? (
+              <Button type="button" variant="secondary" size="sm" className="col-span-2 mb-5 sm:col-span-1 sm:mt-6" onClick={() => set({ principal: suggested.principal, interest: suggested.interest })}>
+                From the loan’s rate
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
         <Field label="Date" required error={errors.date}>
           <Input type="date" name="date" value={d.date} onChange={(e) => set({ date: e.target.value })} />
         </Field>

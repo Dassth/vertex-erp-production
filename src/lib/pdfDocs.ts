@@ -22,7 +22,7 @@ import type { CompanySnapshot, CustomerSnapshot, Dispatch, Invoice, ProductionOr
 import type { ConsolidatedStatement } from './billing'
 import { rupeesInWords } from './billing'
 import { POWERED_BY } from './brand'
-import { purchaseTotals } from './gst'
+import { purchaseTotals, saleTaxLines } from './gst'
 import type { GstRegister, MonthlyGstReport, ReportKind } from './gstReport'
 import { ITEMS_HEAD, PARTY_HEAD, REPORT_TITLE } from './gstReport'
 import type { CellValue, ReportTable } from './reportTable'
@@ -364,7 +364,8 @@ export function quotationDefinition(q: Quotation, p: QuotationPrint, mark = fals
             ['Subtotal', rs(t.totalSelling)],
             ...(t.discountAmount > 0 ? ([['Less: discount', `− ${rs(t.discountAmount)}`]] as Array<[string, string]>) : []),
             ['Taxable value', rs(t.taxableValue)],
-            [`${t.taxLabel} @ ${t.taxPct}%`, rs(t.taxAmount)],
+            // Split as the invoice will be: CGST + SGST in the same state, IGST otherwise.
+            ...saleTaxLines(p.company, p.customer, t.taxPct, t.taxAmount, t.taxLabel).lines.map(([label, amount]): [string, string] => [label, rs(amount)]),
             ['Total', rs(t.grandTotal), true],
           ],
           { stack: [{ text: 'AMOUNT IN WORDS', style: 'label' }, { text: rupeesInWords(t.grandTotal) }] },
@@ -394,7 +395,7 @@ export function quotationDefinition(q: Quotation, p: QuotationPrint, mark = fals
  * GST rate and split CGST + SGST (same state) or IGST (other state).
  */
 export function purchaseBillDefinition(bill: PurchaseBill, company: CompanySnapshot, mark = false): TDocumentDefinitions {
-  const t = purchaseTotals(bill, company.gstin)
+  const t = purchaseTotals(bill, company)
   const header: TableCell[] = ['#', 'Description', 'HSN/SAC', 'Qty', 'Unit', 'Rate', 'GST %', 'Amount'].map((h, i) => ({
     text: h,
     style: 'th',
@@ -563,7 +564,19 @@ export function statementDefinition(
           ['Charges before discount', rs(st.subtotal)],
           ...(st.discount ? ([['Discount', `− ${rs(st.discount)}`]] as Array<[string, string]>) : []),
           ['Taxable value', rs(st.taxableValue)],
-          ['Tax', rs(st.taxAmount)],
+          // The listed invoices' own split, added up.
+          ...(() => {
+            const sum = (pick: (i: Invoice) => number | null) => st.invoices.reduce((n, i) => n + Math.round((pick(i) ?? 0) * 100), 0) / 100
+            const cgst = sum((i) => i.cgst)
+            const sgst = sum((i) => i.sgst)
+            const igst = sum((i) => i.igst)
+            const rest = Math.round((st.taxAmount - cgst - sgst - igst) * 100) / 100
+            const out: Array<[string, string]> = []
+            if (cgst || sgst) out.push(['CGST', rs(cgst)], ['SGST', rs(sgst)])
+            if (igst) out.push(['IGST', rs(igst)])
+            if (rest || !out.length) out.push([out.length ? 'Tax (state not set)' : 'Tax', rs(rest || st.taxAmount)])
+            return out
+          })(),
           ['Total of listed invoices', rs(st.total), true],
           ['Order quantity not yet covered', `${qty(st.remainingQty)} ${order.uom}`],
         ],
@@ -615,7 +628,7 @@ export function gstReportDefinition(report: MonthlyGstReport, company: CompanySn
     r(num(x.cgst), { bold: true, fillColor: fill }),
     { text: '', fillColor: fill },
     r(num(x.sgst), { bold: true, fillColor: fill }),
-    r(num(x.igst + x.gst), { bold: true, fillColor: fill }),
+    r(num(x.igst), { bold: true, fillColor: fill }),
     r(num(x.total), { bold: true, fillColor: fill }),
   ]
   const body: TableCell[][] = [head]
@@ -634,7 +647,7 @@ export function gstReportDefinition(report: MonthlyGstReport, company: CompanySn
         r(num(x.cgst)),
         r(pctText(x.sgstPct)),
         r(num(x.sgst)),
-        r(x.igstPct !== null ? `${num(x.igst)}\n@ ${x.igstPct}%` : num(x.igst + x.gst)),
+        r(x.igstPct !== null ? `${num(x.igst)}\n@ ${x.igstPct}%` : x.gst ? `${num(x.gst)}\nstate missing` : num(0)),
         r(num(x.total)),
       ]),
     )

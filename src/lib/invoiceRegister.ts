@@ -76,7 +76,7 @@ export function invoiceRegister(db: VertexDB, month: string, kind: ReportKind): 
       : (db.purchases ?? [])
           .filter((b) => inMonth(b.date))
           .map((bill) => {
-            const t = purchaseTotals(bill, db.company.gstin)
+            const t = purchaseTotals(bill, db.company)
             return {
               sourceId: bill.id,
               date: bill.date,
@@ -132,12 +132,12 @@ export function invoiceRegisterTable(r: InvoiceRegister, company: string): Repor
         d.taxable,
         d.cgst,
         d.sgst,
-        fromPaise(toPaise(d.igst) + toPaise(d.gst)),
+        d.igst,
         d.total,
       ],
     })
   })
-  rows.push({ kind: 'grand', cells: [null, null, null, `Grand total — ${r.docs.length} ${r.kind === 'sales' ? 'invoice(s)' : 'bill(s)'}`, ...blank(7), r.taxable, total((d) => d.cgst), total((d) => d.sgst), total((d) => d.igst + d.gst), r.total] })
+  rows.push({ kind: 'grand', cells: [null, null, null, `Grand total — ${r.docs.length} ${r.kind === 'sales' ? 'invoice(s)' : 'bill(s)'}`, ...blank(7), r.taxable, total((d) => d.cgst), total((d) => d.sgst), total((d) => d.igst), r.total] })
   return {
     name: `${r.kind === 'sales' ? 'Sales' : 'Purchase'} invoices ${r.label.replace('/', '-')}`,
     heading: [REGISTER_TITLE[r.kind].toUpperCase(), company, `${r.kind === 'sales' ? 'Invoices issued' : 'Bills received'} during the month ${r.label}`],

@@ -11,6 +11,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import type { User, VertexDB } from '../src/lib/types'
 import { buildEmptyDB } from '../src/lib/defaults'
 import { normalizeDB } from '../src/lib/db'
+import { pendingDataMigrations } from '../src/lib/dataMigrations'
 import { newSalt, passwordProblem, nodeHasher } from './passwords'
 import type { PasswordHasher } from './passwords'
 import { COMMANDS } from '../src/domain/registry'
@@ -87,6 +88,29 @@ export class VertexService {
       if (current) return
       const now = this.clock()
       await writeState(tx, { revision: 1, data: normalizeDB(buildEmptyDB(now)), actor: 'system', command: 'initialise', at: now })
+    })
+  }
+
+  /** Data migrations (lib/dataMigrations) the SAVED database has not had yet. */
+  async pendingMigrations(): Promise<string[]> {
+    const row = await readState(this.db)
+    return row ? pendingDataMigrations(row.data) : []
+  }
+
+  /**
+   * Save the migrated database once, as its own recorded change. Called at
+   * start-up after the pre-migration backup; reading already applies the same
+   * migrations, so this only makes them permanent (and their Activity-log entries).
+   */
+  async saveMigrations(): Promise<string[]> {
+    return this.db.transaction(async (tx) => {
+      const row = await readState(tx, true)
+      if (!row) return []
+      const pending = pendingDataMigrations(row.data)
+      if (!pending.length) return []
+      const now = this.clock()
+      await writeState(tx, { revision: row.revision + 1, data: normalizeDB(row.data), actor: 'System (update)', command: `migrate: ${pending.join(', ')}`, at: now })
+      return pending
     })
   }
 

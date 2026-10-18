@@ -64,6 +64,22 @@ export async function startServing(cfg: ServeConfig): Promise<{ stop: () => Prom
   const service = new VertexService(db)
   await service.ensureState()
   const b = cfg.backup
+
+  // A new version with data migrations: back up the data exactly as it is first, then save them once.
+  const pending = await service.pendingMigrations()
+  if (pending.length) {
+    if (b) {
+      try {
+        const { name } = await runBackup(db, fsBackupStore(b.dir), { passphrase: b.passphrase, appVersion: b.appVersion, keep: b.keep })
+        log(`backup before update written: ${join(b.dir, name)}`)
+      } catch (e) {
+        // Nothing is changed without a backup.
+        throw new Error(`The data could not be backed up before updating it (${e instanceof Error ? e.message : e}). Nothing was changed.`)
+      }
+    } else log('No backup folder set — updating the data without a backup first.')
+    const applied = await service.saveMigrations()
+    log(`data updated: ${applied.join(', ')}`)
+  }
   const server = createHttpServer(service, {
     staticDir: cfg.staticDir,
     secureCookies: !!cfg.secureCookies,

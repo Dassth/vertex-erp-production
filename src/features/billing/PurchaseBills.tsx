@@ -66,7 +66,7 @@ export function PurchaseBills({ q, onSearch, onPreview, openNew, onOpenedNew }: 
   const rows = useMemo(
     () =>
       (db.purchases ?? [])
-        .map((b) => ({ bill: b, t: purchaseTotals(b, db.company.gstin) }))
+        .map((b) => ({ bill: b, t: purchaseTotals(b, db.company) }))
         .sort((a, b) => b.bill.date.localeCompare(a.bill.date) || b.bill.code.localeCompare(a.bill.code)),
     [db.purchases, db.company.gstin],
   )
@@ -238,7 +238,7 @@ export function PurchaseEditor({ bill, onClose, onPreview }: { bill: PurchaseBil
   const inFlight = useRef(false)
 
   const errors = touched ? validatePurchase(d) : {}
-  const t = purchaseTotals(d, db.company.gstin)
+  const t = purchaseTotals(d, db.company)
   const set = (patch: Partial<PurchaseDraft>) => setD((x) => ({ ...x, ...patch }))
   const setLine = (i: number, patch: Partial<PurchaseLine>) => setD((x) => ({ ...x, lines: x.lines.map((l, j) => (j === i ? { ...l, ...patch } : l)) }))
 
@@ -254,7 +254,7 @@ export function PurchaseEditor({ bill, onClose, onPreview }: { bill: PurchaseBil
         setServerError(r.error)
         return
       }
-      pushToast({ title: `${r.value.code} saved`, message: `Net amount ${moneyPaise(purchaseTotals(r.value, db.company.gstin).net)}.`, level: 'success' })
+      pushToast({ title: `${r.value.code} saved`, message: `Net amount ${moneyPaise(purchaseTotals(r.value, db.company).net)}.`, level: 'success' })
       onClose()
       if (then === 'preview') onPreview(purchaseDoc(r.value, read))
     } finally {

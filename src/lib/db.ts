@@ -19,6 +19,7 @@
 
 import type { AuditEntry, VertexDB } from './types'
 import { DB_VERSION, DEFAULT_USERS, buildEmptyDB, defaultCompany, defaultSettings, emptyCounters } from './defaults'
+import { applyDataMigrations } from './dataMigrations'
 import { migrateToProcessAllocation, retireUnitAccounts } from './migrate'
 
 export const DB_KEY = 'vertex-erp-db-v2'
@@ -78,7 +79,8 @@ export function normalizeDB(db: VertexDB): VertexDB {
   }
   // Idempotent: stage-level allocation becomes process-level allocation, and
   // unit / Administrator 3 accounts are retired.
-  return retireUnitAccounts(migrateToProcessAllocation(filled))
+  // Data migrations run once each (lib/dataMigrations) and log what they changed.
+  return applyDataMigrations(retireUnitAccounts(migrateToProcessAllocation(filled)))
 }
 
 function describeLegacy(raw: string): string {

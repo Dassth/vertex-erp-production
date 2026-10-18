@@ -1,9 +1,11 @@
 import type { CompanyProfile, Notification, User } from '../lib/types'
-import { isValidGstin } from '../lib/billing'
+import { isValidGstin, gstinState } from '../lib/billing'
 import { audit, fail, hasFieldErrors, ok, requireCapability, staleRecord, validationFailure, command } from './common'
 import type { Ctx, Op } from './common'
 import { isVisibleTo } from '../lib/notify'
 import { initialsOf } from '../lib/format'
+
+import { stateCodeFrom, stateName } from '../lib/gstStates'
 
 export type CompanyDraft = Omit<CompanyProfile, 'updatedAt' | 'updatedBy'> & { expectedUpdatedAt?: string | null }
 
@@ -13,6 +15,9 @@ export function validateCompany(d: CompanyDraft): Record<string, string> {
   if (d.gstin.trim() && !isValidGstin(d.gstin)) e.gstin = `Enter a 15-character GSTIN: 2-digit state code, then 13 letters or digits (e.g. 33AAACV1234C1ZW). You entered ${d.gstin.trim().length} characters.`
   if (d.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email.trim())) e.email = 'Enter a valid email address.'
   if (!/^[A-Za-z0-9-]{1,12}$/.test(d.invoicePrefix.trim())) e.invoicePrefix = 'Use 1–12 letters, digits or hyphens.'
+  const fromGstin = gstinState(d.gstin)
+  const state = stateCodeFrom(d.stateCode)
+  if (fromGstin && state && fromGstin !== state) e.stateCode = `The GSTIN is for state ${fromGstin} (${stateName(fromGstin)}). Choose that state, or correct the GSTIN.`
   return e
 }
 
@@ -32,6 +37,8 @@ export const saveCompanyProfile = command(
       phone: d.phone.trim(),
       email: d.email.trim(),
       gstin: d.gstin.trim().toUpperCase(),
+      // The GSTIN's state wins; without a GSTIN the State chosen by hand is kept.
+      stateCode: gstinState(d.gstin) ?? stateCodeFrom(d.stateCode),
       invoicePrefix: d.invoicePrefix.trim(),
       bankDetails: d.bankDetails.trim(),
       invoiceTerms: d.invoiceTerms.trim(),

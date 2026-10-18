@@ -8,6 +8,8 @@ import { cx } from '../lib/format'
 import { Button, Field, Input, Modal, Textarea } from './ui'
 import { focusFirstInvalid } from './page'
 import { Picker } from './Picker'
+import { StateSelect } from './StateSelect'
+import { gstinState } from '../lib/billing'
 
 /**
  * A customer, chosen the same way as a supplier or a material: click to see
@@ -158,9 +160,22 @@ function NewCustomerDialog({ company, onClose, onSaved }: { company: string; onC
           <p className="mb-4 self-center text-sm text-muted">No GSTIN needed.</p>
         ) : (
           <Field label="GSTIN" error={errors.gstin} hint="Can be added later.">
-            <Input spellCheck={false} value={d.gstin} onChange={(e) => set({ gstin: e.target.value.toUpperCase() })} aria-invalid={!!errors.gstin || undefined} placeholder="15-character GSTIN…" />
+            <Input
+              spellCheck={false}
+              value={d.gstin}
+              onChange={(e) => {
+                const gstin = e.target.value.toUpperCase()
+                const fromGstin = gstinState(gstin)
+                set({ gstin, ...(fromGstin ? { placeOfSupply: fromGstin } : {}) })
+              }}
+              aria-invalid={!!errors.gstin || undefined}
+              placeholder="15-character GSTIN…"
+            />
           </Field>
         )}
+        <Field label="Place of supply" as="div" className="sm:col-span-2" hint="Decides CGST + SGST (your state) or IGST (another state) on invoices.">
+          <StateSelect aria-label="Place of supply" value={d.placeOfSupply} onChange={(v) => set({ placeOfSupply: v })} />
+        </Field>
       </form>
     </Modal>
   )

@@ -29,6 +29,9 @@ export interface MoneyDraft {
   paidFromDebtId?: string | null
   /** Money out that pays back this loan. */
   repaysDebtId?: string | null
+  /** Loan repayment: principal and interest; their sum must equal the amount. Interest blank = all principal. */
+  principal?: number | null
+  interest?: number | null
   expectedUpdatedAt?: string | null
 }
 
@@ -55,17 +58,24 @@ export function validateMoney(d: MoneyDraft, db: Pick<VertexDB, 'cashbook' | 'in
     const bill = (db.purchases ?? []).find((p) => p.id === d.purchaseId)
     if (!bill) e.purchaseId = 'That purchase bill no longer exists.'
     else if (!e.amount) {
-      const due = toPaise(purchaseTotals(bill, db.company.gstin).net) - toPaise(paidFor(db, bill.id, d.id || undefined))
+      const due = toPaise(purchaseTotals(bill, db.company).net) - toPaise(paidFor(db, bill.id, d.id || undefined))
       if (toPaise(d.amount) > due) e.amount = `Only ${rupees(due / 100)} is still due on ${bill.code}.`
     }
   }
   if (d.direction === 'out' && d.paidFromDebtId && !(db.debts ?? []).some((x) => x.id === d.paidFromDebtId)) e.paidFromDebtId = 'That loan no longer exists.'
   if (d.direction === 'out' && d.repaysDebtId) {
     const debt = (db.debts ?? []).find((x) => x.id === d.repaysDebtId)
+    const split = d.interest !== null && d.interest !== undefined
+    if (split && !(Number.isFinite(d.interest) && d.interest! >= 0)) e.interest = 'Interest must be 0 or more.'
+    else if (split && d.principal !== null && d.principal !== undefined && !e.amount && toPaise(d.principal) + toPaise(d.interest!) !== toPaise(d.amount))
+      e.principal = `Principal + interest must equal the amount (${rupees(d.amount)}).`
+    else if (split && !e.amount && toPaise(d.interest!) > toPaise(d.amount)) e.interest = 'Interest cannot be more than the amount.'
     if (!debt) e.repaysDebtId = 'That loan no longer exists.'
-    else if (!e.amount) {
+    else if (!e.amount && !e.principal && !e.interest) {
+      // Only the principal reduces what is owed.
+      const principal = toPaise(d.amount) - (split ? toPaise(d.interest!) : 0)
       const owed = toPaise(debt.amount) - toPaise(repaidFor(db, debt.id, d.id || undefined))
-      if (toPaise(d.amount) > owed) e.amount = `Only ${rupees(owed / 100)} is still owed on ${debt.code} (${debt.lender}).`
+      if (principal > owed) e[split ? 'principal' : 'amount'] = `Only ${rupees(owed / 100)} is still owed on ${debt.code} (${debt.lender}).`
     }
   }
   if (!d.party.trim() && !d.invoiceId && !d.purchaseId && (d.category === CUSTOMER_PAYMENT || d.category === SUPPLIER_PAYMENT))
@@ -95,6 +105,10 @@ function clean(d: MoneyDraft, db: Pick<VertexDB, 'invoices' | 'purchases'>) {
     notes: d.notes.trim(),
     paidFromDebtId: d.direction === 'out' ? d.paidFromDebtId || null : null,
     repaysDebtId: d.direction === 'out' ? d.repaysDebtId || null : null,
+    // A repayment keeps its split; anything else has none.
+    ...(d.direction === 'out' && d.repaysDebtId && d.interest !== null && d.interest !== undefined
+      ? { interest: toPaise(d.interest) / 100, principal: (toPaise(d.amount) - toPaise(d.interest)) / 100 }
+      : { interest: null, principal: null }),
   }
 }
 
@@ -219,6 +233,10 @@ export interface DebtDraft {
   mode: MoneyMode
   reference: string
   notes: string
+  /** Optional terms: yearly interest %, tenure in months, EMI. */
+  interestRatePct?: number | null
+  tenureMonths?: number | null
+  emiAmount?: number | null
   expectedUpdatedAt?: string | null
 }
 
@@ -230,6 +248,10 @@ export function validateDebt(d: DebtDraft, db: Pick<VertexDB, 'cashbook'>): Reco
   else if (Math.abs(d.amount * 100 - Math.round(d.amount * 100)) > 1e-6) e.amount = 'Use at most two decimals (paise).'
   else if (d.id && toPaise(d.amount) < toPaise(repaidFor(db, d.id))) e.amount = `${rupees(repaidFor(db, d.id))} is already paid back — the loan cannot be less.`
   if (!MODES.includes(d.mode)) e.mode = 'Choose cash, UPI, bank transfer or cheque.'
+  const optional = (v: number | null | undefined) => v === null || v === undefined
+  if (!optional(d.interestRatePct) && !(Number.isFinite(d.interestRatePct) && d.interestRatePct! >= 0 && d.interestRatePct! <= 100)) e.interestRatePct = 'Interest rate is a yearly % between 0 and 100.'
+  if (!optional(d.tenureMonths) && !(Number.isInteger(d.tenureMonths) && d.tenureMonths! > 0)) e.tenureMonths = 'Tenure is a whole number of months.'
+  if (!optional(d.emiAmount) && !(Number.isFinite(d.emiAmount) && d.emiAmount! > 0)) e.emiAmount = 'EMI must be more than 0.'
   return e
 }
 
@@ -254,6 +276,9 @@ export const saveDebt = command(
         mode: draft.mode,
         reference: draft.reference.trim(),
         notes: draft.notes.trim(),
+        interestRatePct: draft.interestRatePct ?? null,
+        tenureMonths: draft.tenureMonths ?? null,
+        emiAmount: draft.emiAmount === null || draft.emiAmount === undefined ? null : toPaise(draft.emiAmount) / 100,
       }
       if (current) {
         const stale = staleRecord(current.code, current, draft.expectedUpdatedAt)

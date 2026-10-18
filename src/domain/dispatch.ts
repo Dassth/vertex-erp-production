@@ -9,6 +9,8 @@ import {
   splitTax,
 } from '../lib/billing'
 import type { InvoiceAmounts } from '../lib/billing'
+import { buyerState, sellerState } from '../lib/gst'
+import { stateLabel } from '../lib/gstStates'
 import { audit, docCode, fail, isIsoDate, nextSeq, notify, ok, requireCapability, command } from './common'
 import type { Op } from './common'
 
@@ -158,7 +160,20 @@ export const confirmDispatch = command(
       createdBy: ctx.actor.name,
     }
 
-    const tax = splitTax(amounts.taxAmount, company.gstin, snapshot.customer.gstin, snapshot.customer.placeOfSupply)
+    // The customer's current Place of supply is used when the costing snapshot predates it.
+    const liveCustomer = db.customers.find((c) => c.id === snapshot.customer.id)
+    const { supply, ...tax } = splitTax(amounts.taxAmount, company, {
+      gstin: snapshot.customer.gstin,
+      placeOfSupply: snapshot.customer.placeOfSupply || liveCustomer?.placeOfSupply,
+      deliveryAddress: req.deliveryAddress,
+    })
+    // Never guess: an unknown state would otherwise land the whole tax under IGST (or no split at all).
+    if (amounts.taxAmount > 0 && supply === null)
+      return fail(
+        !sellerState(company)
+          ? 'Set your company’s State in Settings → Company (or add its GSTIN) — it decides CGST + SGST or IGST on this invoice.'
+          : `Set the Place of supply for ${snapshot.customer.company} in Master → Customers — it decides CGST + SGST or IGST on this invoice.`,
+      )
     const descriptionParts = [order.productName, order.dimensions, order.options].filter((s) => s && s.trim())
     const invoice: Invoice = {
       id: invoiceId,
@@ -168,7 +183,8 @@ export const confirmDispatch = command(
       dispatchId,
       requestId: req.requestId,
       company,
-      customer: snapshot.customer,
+      // Printed as "33 — Tamil Nadu": the state the tax was worked out for.
+      customer: { ...snapshot.customer, placeOfSupply: stateLabel(buyerState({ gstin: snapshot.customer.gstin, placeOfSupply: snapshot.customer.placeOfSupply || liveCustomer?.placeOfSupply, deliveryAddress: req.deliveryAddress }) ?? snapshot.customer.placeOfSupply) },
       deliveryAddress: dispatch.deliveryAddress,
       refs: {
         orderCode: order.code,
@@ -195,6 +211,8 @@ export const confirmDispatch = command(
       taxPct: amounts.taxPct,
       taxAmount: amounts.taxAmount,
       ...tax,
+      cgstPct: tax.cgst === null ? null : amounts.taxPct / 2,
+      sgstPct: tax.sgst === null ? null : amounts.taxPct / 2,
       total: amounts.total,
       partial: {
         seq,

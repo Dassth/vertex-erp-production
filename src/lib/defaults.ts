@@ -9,6 +9,7 @@
  * password — each account chooses its password on first sign-in.
  * ------------------------------------------------------------------------- */
 
+import { MIGRATION_GST_STATE_SPLIT } from './dataMigrations'
 import type { AdminTier, CompanyProfile, CostingSettings, ProductionUnit, User, VertexDB } from './types'
 
 export const DB_VERSION = 2 as const
@@ -94,7 +95,8 @@ export function buildEmptyDB(now: Date = new Date()): VertexDB {
     version: DB_VERSION,
     revision: 0,
     createdAt: now.toISOString(),
-    migrations: [],
+    // A new database starts with every data migration already in place.
+    migrations: [MIGRATION_GST_STATE_SPLIT],
     company: defaultCompany(),
     settings: defaultSettings(),
     units: DEFAULT_UNITS.map((u) => ({ ...u })),

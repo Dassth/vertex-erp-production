@@ -46,7 +46,7 @@ export function AdminHomePage() {
   const monthInvoices = db.invoices.filter((i) => i.issueDate.startsWith(month))
   const invoiced = fromPaise(monthInvoices.reduce((s, i) => s + toPaise(i.total), 0))
   const monthPurchases = (db.purchases ?? []).filter((b) => b.date.startsWith(month))
-  const purchased = fromPaise(monthPurchases.reduce((s, b) => s + toPaise(purchaseTotals(b, db.company.gstin).net), 0))
+  const purchased = fromPaise(monthPurchases.reduce((s, b) => s + toPaise(purchaseTotals(b, db.company).net), 0))
   const problems = active.flatMap((v) => v.order.stages.flatMap((s) => s.processes.filter((p) => p.problem && p.status !== 'Completed').map((p) => ({ order: v.order, process: p }))))
 
   const attention: Attention[] = [

@@ -17,7 +17,8 @@ import type {
   ProductStage,
   ProfitMethod,
 } from '../lib/types'
-import { isValidGstin } from '../lib/billing'
+import { gstinState, isValidGstin } from '../lib/billing'
+import { stateCodeFrom } from '../lib/gstStates'
 import {
   audit,
   docCode,
@@ -674,7 +675,8 @@ export const saveCustomer = command(
       // An unregistered (URD) customer has no GSTIN.
       gstin: draft.unregistered ? '' : draft.gstin.trim().toUpperCase(),
       unregistered: !!draft.unregistered,
-      placeOfSupply: draft.placeOfSupply.trim(),
+      // Stored as the 2-digit GST state code; a registered customer's comes from the GSTIN.
+      placeOfSupply: (draft.unregistered ? null : gstinState(draft.gstin)) ?? stateCodeFrom(draft.placeOfSupply) ?? draft.placeOfSupply.trim(),
       paymentTerms: draft.paymentTerms.trim(),
       notes: draft.notes.trim(),
     }

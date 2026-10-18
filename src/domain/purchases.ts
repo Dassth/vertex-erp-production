@@ -82,7 +82,7 @@ export const savePurchaseBill = command(
       const errors = validatePurchase(draft)
       if (hasFieldErrors(errors)) return validationFailure(errors)
       const purchases = db.purchases ?? []
-      const net = (b: PurchaseBill) => purchaseTotals(b, db.company.gstin).net.toFixed(2)
+      const net = (b: PurchaseBill) => purchaseTotals(b, db.company).net.toFixed(2)
 
       if (draft.id) {
         const current = purchases.find((p) => p.id === draft.id)
@@ -137,7 +137,7 @@ export const deletePurchaseBill = command(
         entity: 'Purchase',
         entityId: bill.id,
         entityLabel: `${bill.code} — ${bill.supplierName}`,
-        oldValue: `${bill.supplierInvoiceNo || 'no supplier number'}, ${purchaseTotals(bill, db.company.gstin).net.toFixed(2)}`,
+        oldValue: `${bill.supplierInvoiceNo || 'no supplier number'}, ${purchaseTotals(bill, db.company).net.toFixed(2)}`,
       })
       return ok(next, null)
     },

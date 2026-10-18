@@ -31,8 +31,8 @@ function Editor({ invoice, onClose }: { invoice: Invoice; onClose: () => void })
     cgstPct: invoice.cgstPct ?? invoice.taxPct / 2,
     sgstPct: invoice.sgstPct ?? invoice.taxPct / 2,
   })
-  // What "Auto" works out to, from the two GSTIN state codes.
-  const autoSupply = resolveSupply('auto', invoice.company.gstin, invoice.customer.gstin, invoice.customer.placeOfSupply)
+  // What "Auto" works out to: the company's state against the buyer's (GSTIN, else Place of supply).
+  const autoSupply = resolveSupply('auto', invoice.company, { gstin: invoice.customer.gstin, placeOfSupply: invoice.customer.placeOfSupply, deliveryAddress: invoice.deliveryAddress })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const inFlight = useRef(false)

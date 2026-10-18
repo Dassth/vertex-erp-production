@@ -53,9 +53,32 @@ describe('partial dispatch invoice allocation', () => {
 
 describe('tax split, numbering and words', () => {
   it('splits intra-state tax into CGST/SGST and inter-state into IGST', () => {
-    expect(splitTax(100.01, '33ABCDE1234F1Z5', '33PQRSX9876K1Z2', '')).toEqual({ cgst: 50, sgst: 50.01, igst: null })
-    expect(splitTax(100, '33ABCDE1234F1Z5', '29PQRSX9876K1Z2', '')).toEqual({ cgst: null, sgst: null, igst: 100 })
-    expect(splitTax(100, '', '', '')).toEqual({ cgst: null, sgst: null, igst: null })
+    const company = { gstin: '33ABCDE1234F1Z5' }
+    // Registered, same state: CGST = half rounded to the paisa, SGST = the rest.
+    expect(splitTax(100.01, company, { gstin: '33PQRSX9876K1Z2' })).toEqual({ supply: 'intra', cgst: 50.01, sgst: 50, igst: null })
+    // Registered, other state (29 Karnataka): IGST.
+    expect(splitTax(100, company, { gstin: '29PQRSX9876K1Z2' })).toEqual({ supply: 'inter', cgst: null, sgst: null, igst: 100 })
+    // Nothing known: no split, and the caller must not issue the invoice.
+    expect(splitTax(100, { gstin: '' }, { gstin: '' })).toEqual({ supply: null, cgst: null, sgst: null, igst: null })
+  })
+
+  it('treats an unregistered (URD) buyer in the same state as intra-state, from the Place of supply in any spelling', () => {
+    const company = { gstin: '33AAAAA0000A1Z5' }
+    for (const pos of ['Tamil Nadu', 'tamilnadu', 'TN', '33', '33 - Tamil Nadu']) expect(splitTax(35472.6, company, { gstin: '', placeOfSupply: pos })).toEqual({ supply: 'intra', cgst: 17736.3, sgst: 17736.3, igst: null })
+    expect(splitTax(100, company, { gstin: '', placeOfSupply: 'Karnataka' })).toMatchObject({ supply: 'inter', igst: 100 })
+    // No GSTIN on the company: its State decides.
+    expect(splitTax(100, { gstin: '', stateCode: '33' }, { placeOfSupply: 'Tamil Nadu' })).toMatchObject({ supply: 'intra', cgst: 50, sgst: 50 })
+    // Place of supply missing: a state named in the delivery address is used.
+    expect(splitTax(100, company, { gstin: '', placeOfSupply: '', deliveryAddress: '12 Mount Road, Chennai, Tamil Nadu 600002' })).toMatchObject({ supply: 'intra' })
+  })
+
+  it('always adds CGST and SGST up to the tax exactly, for odd-paisa totals', () => {
+    const company = { gstin: '33AAAAA0000A1Z5' }
+    for (const tax of [0.01, 0.03, 1.01, 99.99, 12345.67, 35472.61]) {
+      const s = splitTax(tax, company, { gstin: '33PQRSX9876K1Z2' })
+      expect(Math.round((s.cgst! + s.sgst!) * 100)).toBe(Math.round(tax * 100))
+      expect(Math.abs(Math.round(s.cgst! * 100) - Math.round(s.sgst! * 100))).toBeLessThanOrEqual(1)
+    }
   })
   it('numbers invoices by Indian financial year', () => {
     expect(financialYear('2026-09-15')).toBe('2026-27')

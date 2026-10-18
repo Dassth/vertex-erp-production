@@ -19,7 +19,7 @@ import { DownloadButton, ExcelButton, reportTableDoc, useLatestDb } from '../../
  * ------------------------------------------------------------------------- */
 
 export const blankDebt = (): DebtDraft => ({ id: '', lender: '', date: format(new Date(), 'yyyy-MM-dd'), amount: NaN, purpose: '', mode: 'bank', reference: '', notes: '' })
-const toDraft = (x: Debt): DebtDraft => ({ id: x.id, lender: x.lender, date: x.date, amount: x.amount, purpose: x.purpose, mode: x.mode, reference: x.reference, notes: x.notes, expectedUpdatedAt: x.updatedAt })
+const toDraft = (x: Debt): DebtDraft => ({ id: x.id, lender: x.lender, date: x.date, amount: x.amount, purpose: x.purpose, mode: x.mode, reference: x.reference, notes: x.notes, interestRatePct: x.interestRatePct ?? null, tenureMonths: x.tenureMonths ?? null, emiAmount: x.emiAmount ?? null, expectedUpdatedAt: x.updatedAt })
 
 export function DebtsCard() {
   const { db, run, pushToast } = useStore()
@@ -27,13 +27,13 @@ export function DebtsCard() {
   const rows = useMemo(() => debtRows(db), [db])
   const [editing, setEditing] = useState<DebtDraft | null>(null)
   const [deleting, setDeleting] = useState<Debt | null>(null)
-  const total = (k: 'used' | 'repaid' | 'outstanding') => rows.reduce((n, r) => n + r[k], 0)
+  const total = (k: 'used' | 'repaid' | 'interest' | 'outstanding') => rows.reduce((n, r) => n + r[k], 0)
 
   return (
     <Card className="vx-anim-up overflow-hidden">
       <CardHead
         title="Debts"
-        subtitle={rows.length ? `Borrowed ${moneyPaise(rows.reduce((n, r) => n + r.debt.amount, 0))} · paid back ${moneyPaise(total('repaid'))} · still owed ${moneyPaise(total('outstanding'))}` : 'Money borrowed — from whom, how much and why'}
+        subtitle={rows.length ? `Borrowed ${moneyPaise(rows.reduce((n, r) => n + r.debt.amount, 0))} · principal paid back ${moneyPaise(total('repaid'))} · interest ${moneyPaise(total('interest'))} · still owed ${moneyPaise(total('outstanding'))}` : 'Money borrowed — from whom, how much and why'}
         icon={<Landmark className="h-4 w-4" />}
         actions={
           <div className="flex flex-wrap gap-2">
@@ -63,7 +63,8 @@ export function DebtsCard() {
                 <th className="vx-th">For</th>
                 <th className="vx-th text-right">Borrowed</th>
                 <th className="vx-th text-right">Spent from it</th>
-                <th className="vx-th text-right">Paid back</th>
+                <th className="vx-th text-right">Principal paid back</th>
+                <th className="vx-th text-right">Interest paid</th>
                 <th className="vx-th text-right">Still owed</th>
                 <th className="vx-th">
                   <span className="sr-only">Actions</span>
@@ -82,6 +83,7 @@ export function DebtsCard() {
                   <td className="vx-td text-right tabular-nums">{moneyPaise(r.debt.amount)}</td>
                   <td className="vx-td text-right tabular-nums">{moneyPaise(r.used)}</td>
                   <td className="vx-td text-right tabular-nums">{moneyPaise(r.repaid)}</td>
+                  <td className="vx-td text-right tabular-nums text-muted">{moneyPaise(r.interest)}</td>
                   <td className={`vx-td text-right font-medium tabular-nums ${r.outstanding > 0 ? 'text-warn' : 'text-ok'}`}>{r.outstanding > 0 ? moneyPaise(r.outstanding) : 'Cleared'}</td>
                   <td className="vx-td">
                     <div className="flex justify-end gap-1">
@@ -191,8 +193,20 @@ export function DebtEditor({ draft, onClose }: { draft: DebtDraft; onClose: () =
         <Field label="Reference">
           <Input value={d.reference} onChange={(e) => set({ reference: e.target.value })} placeholder="Loan account / cheque no." spellCheck={false} />
         </Field>
+        <div className="grid grid-cols-3 gap-x-3 sm:col-span-2">
+          <Field label="Interest % a year" error={errors.interestRatePct} hint="Optional">
+            <NumberInput value={d.interestRatePct ?? null} onChange={(v) => set({ interestRatePct: v })} invalid={!!errors.interestRatePct} />
+          </Field>
+          <Field label="Tenure (months)" error={errors.tenureMonths} hint="Optional">
+            <NumberInput value={d.tenureMonths ?? null} onChange={(v) => set({ tenureMonths: v })} invalid={!!errors.tenureMonths} />
+          </Field>
+          <Field label="EMI (₹)" error={errors.emiAmount} hint="Optional">
+            <NumberInput value={d.emiAmount ?? null} onChange={(v) => set({ emiAmount: v })} invalid={!!errors.emiAmount} />
+          </Field>
+        </div>
+        <p className="-mt-2 mb-3 text-xs text-muted sm:col-span-2">With the interest rate, each EMI in Money out can split itself into principal and interest.</p>
         <Field label="Notes" className="sm:col-span-2">
-          <Textarea rows={2} value={d.notes} onChange={(e) => set({ notes: e.target.value })} placeholder="Interest rate, EMI, tenure…" />
+          <Textarea rows={2} value={d.notes} onChange={(e) => set({ notes: e.target.value })} placeholder="Anything else to remember…" />
         </Field>
       </form>
     </Modal>

@@ -131,7 +131,7 @@ export function ReportsPage() {
       <StatStrip className="grid-cols-2 lg:grid-cols-4">
         <StatTile label={kind === 'sales' ? 'Invoices' : 'Bills'} value={String(count)} icon={kind === 'sales' ? <ReceiptText className="h-4 w-4" /> : <ShoppingCart className="h-4 w-4" />} tone="indigo" hint={gst.label} />
         <StatTile label="Goods amount" value={moneyPaise(reg.taxable)} icon={<FileBarChart className="h-4 w-4" />} tone="slate" hint="Before GST" />
-        <StatTile label="GST" value={moneyPaise(gstTax(reg))} icon={<FileBarChart className="h-4 w-4" />} tone="amber" hint={`CGST ${moneyPaise(reg.cgst)} · SGST ${moneyPaise(reg.sgst)} · IGST ${moneyPaise(reg.igst + reg.gst)}`} />
+        <StatTile label="GST" value={moneyPaise(gstTax(reg))} icon={<FileBarChart className="h-4 w-4" />} tone="amber" hint={`CGST ${moneyPaise(reg.cgst)} · SGST ${moneyPaise(reg.sgst)} · IGST ${moneyPaise(reg.igst)}${reg.gst ? ` · ${moneyPaise(reg.gst)} state missing` : ''}`} />
         <StatTile label="Total" value={moneyPaise(register.total)} icon={<FileBarChart className="h-4 w-4" />} tone="green" hint={kind === 'purchases' ? 'Net of round off' : 'Goods + GST'} />
       </StatStrip>
 
@@ -332,7 +332,7 @@ function GstTable({ reg, kind, onEdit }: { reg: GstRegister; kind: ReportKind; o
                 <td className="vx-td vx-code text-right">{moneyPaise(x.taxable)}</td>
                 <td className="vx-td vx-code text-right">{x.cgstPct !== null ? `${x.cgstPct}% · ${moneyPaise(x.cgst)}` : '—'}</td>
                 <td className="vx-td vx-code text-right">{x.sgstPct !== null ? `${x.sgstPct}% · ${moneyPaise(x.sgst)}` : '—'}</td>
-                <td className="vx-td vx-code text-right">{x.igstPct !== null ? `${x.igstPct}% · ${moneyPaise(x.igst)}` : x.gst ? `${moneyPaise(x.gst)} (not split)` : '—'}</td>
+                <td className="vx-td vx-code text-right">{x.igstPct !== null ? `${x.igstPct}% · ${moneyPaise(x.igst)}` : '—'}</td>
                 <td className="vx-td vx-code text-right font-semibold">{moneyPaise(x.total)}</td>
                 <td className="vx-td text-right">
                   <EditButton label={x.billNo} onClick={() => onEdit(x.sourceId)} />
@@ -346,7 +346,7 @@ function GstTable({ reg, kind, onEdit }: { reg: GstRegister; kind: ReportKind; o
               <td className="vx-td vx-code text-right">{moneyPaise(s.taxable)}</td>
               <td className="vx-td vx-code text-right">{moneyPaise(s.cgst)}</td>
               <td className="vx-td vx-code text-right">{moneyPaise(s.sgst)}</td>
-              <td className="vx-td vx-code text-right">{moneyPaise(s.igst + s.gst)}</td>
+              <td className="vx-td vx-code text-right">{moneyPaise(s.igst)}</td>
               <td className="vx-td vx-code text-right">{moneyPaise(s.total)}</td>
               <td />
             </tr>
@@ -360,7 +360,7 @@ function GstTable({ reg, kind, onEdit }: { reg: GstRegister; kind: ReportKind; o
             <td className="vx-td vx-code text-right">{moneyPaise(reg.taxable)}</td>
             <td className="vx-td vx-code text-right">{moneyPaise(reg.cgst)}</td>
             <td className="vx-td vx-code text-right">{moneyPaise(reg.sgst)}</td>
-            <td className="vx-td vx-code text-right">{moneyPaise(reg.igst + reg.gst)}</td>
+            <td className="vx-td vx-code text-right">{moneyPaise(reg.igst)}</td>
             <td className="vx-td vx-code text-right">{moneyPaise(reg.total)}</td>
             <td />
           </tr>
