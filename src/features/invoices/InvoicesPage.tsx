@@ -4,7 +4,7 @@ import { ArrowLeft, Download, Eye, FileSpreadsheet, FileStack, PackageCheck, Rec
 import { useStore } from '../../store/store'
 import type { VertexDB } from '../../lib/types'
 import { fmtDate, fmtDateTime, moneyPaise, moneyShort } from '../../lib/format'
-import { DELIVERY_PENDING_MESSAGE, isReceived, orderInvoiceSummary } from '../../lib/billing'
+import { isReceived, orderInvoiceSummary } from '../../lib/billing'
 import { confirmDispatchReceived } from '../../domain/dispatch'
 import type { OrderInvoiceStatus, OrderInvoiceSummary } from '../../lib/billing'
 import { Badge, Button, Card, CardHead, EmptyState, ProgressBar, SearchInput, Select } from '../../components/ui'
@@ -174,9 +174,10 @@ export function InvoicesPage() {
 function OrderInvoices({ row, read, onBack, onPreview }: { row: OrderInvoiceSummary; read: () => VertexDB; onBack: () => void; onPreview: (d: PreviewDoc) => void }) {
   const { can, run, pushToast } = useStore()
   const pending = useDeliveryPendingMessage()
-  const { order, shipments, dispatchedQty, receivedQty, awaitingQty, remainingQty, billed, receivedBilled, status } = row
-  const receivedCount = shipments.filter((x) => isReceived(x.dispatch) && x.invoice).length
-  const eligible = receivedCount > 0
+  const { order, shipments, dispatchedQty, receivedQty, awaitingQty, remainingQty, billed, status } = row
+  // The summary lists every dispatch's invoice, delivery confirmed or not (owner's rule, 2026-10-11).
+  const invoicedCount = shipments.filter((x) => x.invoice).length
+  const eligible = invoicedCount > 0
   const summary = () => {
     const doc = summaryDoc(read, order.id)
     if (!doc) throw new Error('No shipment is confirmed received yet.')
@@ -244,12 +245,12 @@ function OrderInvoices({ row, read, onBack, onPreview }: { row: OrderInvoiceSumm
           </Button>
           {eligible ? (
             <p className="w-full text-xs text-muted">
-              Updated cumulative invoice summary of the {receivedCount} shipment(s) confirmed received: {qty(receivedQty, order.uom)}, {moneyShort(receivedBilled)} in total. It lists those invoices and is not an additional amount payable.
-              {awaitingQty > 0 ? ` ${qty(awaitingQty, order.uom)} dispatched but awaiting receipt are not included yet.` : ''}
+              Cumulative invoice summary of {invoicedCount} dispatch(es): {qty(dispatchedQty, order.uom)}, {moneyShort(billed)} in total. It lists those invoices and is not an additional amount payable.
+              {awaitingQty > 0 ? ` ${qty(awaitingQty, order.uom)} of it is still awaiting delivery confirmation.` : ''}
             </p>
           ) : (
             <p className="w-full text-sm text-warn" role="status">
-              {pending(DELIVERY_PENDING_MESSAGE)}
+              {pending('Nothing dispatched yet — the summary appears after the first dispatch.')}
             </p>
           )}
         </div>

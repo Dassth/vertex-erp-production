@@ -11,8 +11,8 @@ import type { InvoiceRegister } from '../../lib/invoiceRegister'
 import { tableFile } from '../../lib/reportTable'
 import type { ExportFormat } from '../../lib/reportTable'
 import { fromPaise, toPaise } from '../../lib/costing'
-import { Button, Card, CardHead, EmptyState, Field, Input, Modal, Segmented } from '../../components/ui'
-import { PageHeader, StatStrip, StatTile, useDocumentTitle } from '../../components/page'
+import { Button, Card, CardHead, EmptyState, Field, IconButton, Input, Modal, Segmented } from '../../components/ui'
+import { PageHeader, StatStrip, StatTile, openRow, useDocumentTitle } from '../../components/page'
 import { DocumentPreview, DownloadButton, gstReportDoc, invoiceRegisterDoc, useLatestDb } from '../../components/DocumentPreview'
 import type { PreviewDoc } from '../../components/DocumentPreview'
 import { HsnDatalist, PurchaseEditor } from '../billing/PurchaseBills'
@@ -215,18 +215,20 @@ function ExportSettings({ open, format, onChange, onClose }: { open: boolean; fo
   )
 }
 
+/** Dense report rows: an icon with its full name (the whole row also opens the document). */
 function EditButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <Button size="sm" variant="secondary" icon={<Pencil className="h-3.5 w-3.5" />} onClick={onClick} aria-label={`Edit ${label}`}>
-      Edit
-    </Button>
+    <IconButton label={`Edit ${label}`} onClick={onClick}>
+      <Pencil className="h-3.5 w-3.5" />
+    </IconButton>
   )
 }
 
 function InvoiceTable({ register, onEdit }: { register: InvoiceRegister; onEdit: (id: string) => void }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[880px] [&_.vx-td]:px-2.5 [&_.vx-th]:px-2.5">
+      {/* Fits a laptop screen: GST % sits under the rate and the GST under the total; nothing is left out. */}
+      <table className="w-full min-w-[760px] [&_.vx-td]:px-2 [&_.vx-th]:px-2">
         <thead>
           <tr>
             <th className="vx-th left-0 z-20">Date / No.</th>
@@ -234,27 +236,27 @@ function InvoiceTable({ register, onEdit }: { register: InvoiceRegister; onEdit:
             <th className="vx-th">Item</th>
             <th className="vx-th">HSN</th>
             <th className="vx-th whitespace-nowrap text-right">Qty</th>
-            <th className="vx-th whitespace-nowrap text-right">Rate</th>
-            <th className="vx-th whitespace-nowrap text-right">GST %</th>
+            <th className="vx-th whitespace-nowrap text-right">Rate · GST %</th>
             <th className="vx-th whitespace-nowrap text-right">Amount</th>
-            <th className="vx-th whitespace-nowrap text-right">GST</th>
-            <th className="vx-th whitespace-nowrap text-right">Total</th>
-            <th className="vx-th" />
+            <th className="vx-th whitespace-nowrap text-right">Total · GST</th>
+            <th className="vx-th w-8">
+              <span className="sr-only">Edit</span>
+            </th>
           </tr>
         </thead>
         {register.docs.map((d) => (
-          <tbody key={d.sourceId} className="border-t border-rule">
+          <tbody key={d.sourceId} {...openRow(() => onEdit(d.sourceId))} className="cursor-pointer border-t border-rule hover:bg-surface-2">
             {d.lines.map((l, i) => (
               <tr key={i} className={i ? '' : 'border-t border-rule'}>
                 <td className="vx-td sticky left-0 z-[1] whitespace-nowrap bg-surface align-top">
                   {i === 0 ? (
                     <>
-                      <span className="vx-code text-sm">{d.number}</span>
+                      <span className="vx-code text-xs">{d.number}</span>
                       <span className="block text-2xs text-faint">{fmtDate(d.date)}</span>
                     </>
                   ) : null}
                 </td>
-                <td className="vx-td min-w-[9rem] align-top text-sm">
+                <td className="vx-td vx-td-wrap min-w-[7.5rem] align-top text-sm">
                   {i === 0 ? (
                     <>
                       {d.party}
@@ -262,16 +264,26 @@ function InvoiceTable({ register, onEdit }: { register: InvoiceRegister; onEdit:
                     </>
                   ) : null}
                 </td>
-                <td className="vx-td min-w-[10rem] text-sm">{l.description}</td>
-                <td className="vx-td vx-code text-sm">{l.hsn || <span className="text-warn">missing</span>}</td>
+                <td className="vx-td vx-td-wrap min-w-[8rem] text-sm">{l.description}</td>
+                <td className="vx-td vx-code text-xs">{l.hsn || <span className="text-warn">missing</span>}</td>
                 <td className="vx-td vx-code whitespace-nowrap text-right text-sm">
                   {l.quantity.toLocaleString('en-IN', { maximumFractionDigits: 3 })} {l.uom}
                 </td>
-                <td className="vx-td vx-code whitespace-nowrap text-right text-sm">{moneyPaise(l.rate)}</td>
-                <td className="vx-td vx-code whitespace-nowrap text-right text-sm">{l.gstPct}%</td>
+                <td className="vx-td vx-code whitespace-nowrap text-right text-sm">
+                  {moneyPaise(l.rate)}
+                  <span className="block text-2xs text-faint">GST {l.gstPct}%</span>
+                </td>
                 <td className="vx-td vx-code whitespace-nowrap text-right text-sm">{moneyPaise(l.amount)}</td>
-                <td className="vx-td vx-code whitespace-nowrap text-right text-sm">{i === d.lines.length - 1 ? moneyPaise(d.cgst + d.sgst + d.igst + d.gst) : ''}</td>
-                <td className="vx-td vx-code whitespace-nowrap text-right text-sm font-semibold">{i === d.lines.length - 1 ? moneyPaise(d.total) : ''}</td>
+                <td className="vx-td vx-code whitespace-nowrap text-right text-sm font-semibold">
+                  {i === d.lines.length - 1 ? (
+                    <>
+                      {moneyPaise(d.total)}
+                      <span className="block text-2xs font-normal text-faint">GST {moneyPaise(d.cgst + d.sgst + d.igst + d.gst)}</span>
+                    </>
+                  ) : (
+                    ''
+                  )}
+                </td>
                 <td className="vx-td text-right align-top">{i === 0 ? <EditButton label={d.number} onClick={() => onEdit(d.sourceId)} /> : null}</td>
               </tr>
             ))}
@@ -279,12 +291,14 @@ function InvoiceTable({ register, onEdit }: { register: InvoiceRegister; onEdit:
         ))}
         <tfoot>
           <tr className="border-t-2 border-rule-2 bg-surface-2 font-semibold text-ink">
-            <td colSpan={7} className="vx-td text-right">
+            <td colSpan={6} className="vx-td text-right">
               Grand total — {register.docs.length} {register.kind === 'sales' ? 'invoice(s)' : 'bill(s)'}
             </td>
             <td className="vx-td vx-code whitespace-nowrap text-right text-sm">{moneyPaise(register.taxable)}</td>
-            <td className="vx-td vx-code whitespace-nowrap text-right text-sm">{moneyPaise(register.tax)}</td>
-            <td className="vx-td vx-code whitespace-nowrap text-right text-sm">{moneyPaise(register.total)}</td>
+            <td className="vx-td vx-code whitespace-nowrap text-right text-sm">
+              {moneyPaise(register.total)}
+              <span className="block text-2xs font-normal text-faint">GST {moneyPaise(register.tax)}</span>
+            </td>
             <td />
           </tr>
         </tfoot>
@@ -296,51 +310,72 @@ function InvoiceTable({ register, onEdit }: { register: InvoiceRegister; onEdit:
 function GstTable({ reg, kind, onEdit }: { reg: GstRegister; kind: ReportKind; onEdit: (id: string) => void }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[920px] [&_.vx-td]:px-2.5 [&_.vx-th]:px-2.5">
+      <table className="w-full min-w-[800px] [&_.vx-td]:px-2 [&_.vx-th]:px-2">
         <thead>
           <tr>
             <th className="vx-th left-0 z-20">{kind === 'sales' ? 'Buyer' : 'Seller'}</th>
             <th className="vx-th">{kind === 'sales' ? 'Products sold' : 'Materials purchased'}</th>
             <th className="vx-th">Bill no / date</th>
-            <th className="vx-th">GSTIN</th>
-            <th className="vx-th">HSN/SAC</th>
-            <th className="vx-th whitespace-nowrap text-right">Goods amount</th>
+            <th className="vx-th">HSN</th>
+            <th className="vx-th whitespace-nowrap text-right">Taxable</th>
             <th className="vx-th whitespace-nowrap text-right">CGST</th>
             <th className="vx-th whitespace-nowrap text-right">SGST</th>
             <th className="vx-th whitespace-nowrap text-right">IGST</th>
             <th className="vx-th whitespace-nowrap text-right">Total</th>
-            <th className="vx-th" />
           </tr>
         </thead>
         {reg.sections.map((s) => (
           <tbody key={s.title}>
             <tr className="border-t border-rule bg-surface-2">
-              <td colSpan={11} className="vx-td text-sm font-semibold text-ink">
+              <td colSpan={9} className="vx-td text-sm font-semibold text-ink">
                 {s.title}
               </td>
             </tr>
             {s.rows.map((x, i) => (
-              <tr key={`${x.sourceId}-${i}`} className="border-t border-rule">
-                <td className="vx-td sticky left-0 z-[1] min-w-[9rem] bg-surface text-sm">{x.party}</td>
-                <td className="vx-td min-w-[10rem] max-w-64 text-sm text-muted">{x.items}</td>
-                <td className="vx-td vx-code text-sm">
-                  {x.billNo}
+              <tr key={`${x.sourceId}-${i}`} {...openRow(() => onEdit(x.sourceId))} className="cursor-pointer border-t border-rule hover:bg-surface-2">
+                <td className="vx-td vx-td-wrap sticky left-0 z-[1] min-w-[8rem] bg-surface text-sm">
+                  {x.party}
+                  {x.gstin ? <span className="vx-code block text-2xs text-faint">{x.gstin}</span> : null}
+                </td>
+                <td className="vx-td vx-td-wrap min-w-[6.5rem] max-w-64 text-sm text-muted">{x.items}</td>
+                <td className="vx-td vx-code text-xs">
+                  {/* The keyboard way into the bill; the whole row opens it too. */}
+                  <button type="button" onClick={() => onEdit(x.sourceId)} className="vx-focus whitespace-nowrap rounded-xs text-accent-text hover:underline" aria-label={`Edit ${x.billNo}`}>
+                    {x.billNo}
+                  </button>
                   <span className="block text-2xs text-faint">{fmtDate(x.date)}</span>
                 </td>
-                <td className="vx-td vx-code text-sm">{x.gstin || '—'}</td>
-                <td className="vx-td vx-code text-sm">{x.hsn || <span className="text-warn">missing</span>}</td>
+                <td className="vx-td vx-code text-xs">{x.hsn || <span className="text-warn">missing</span>}</td>
                 <td className="vx-td vx-code whitespace-nowrap text-right text-sm">{moneyPaise(x.taxable)}</td>
-                <td className="vx-td vx-code whitespace-nowrap text-right text-sm">{x.cgstPct !== null ? `${x.cgstPct}% · ${moneyPaise(x.cgst)}` : '—'}</td>
-                <td className="vx-td vx-code whitespace-nowrap text-right text-sm">{x.sgstPct !== null ? `${x.sgstPct}% · ${moneyPaise(x.sgst)}` : '—'}</td>
-                <td className="vx-td vx-code whitespace-nowrap text-right text-sm">{x.igstPct !== null ? `${x.igstPct}% · ${moneyPaise(x.igst)}` : '—'}</td>
+                <td className="vx-td vx-code whitespace-nowrap text-right text-sm">{x.cgstPct !== null ? (
+                    <>
+                      {moneyPaise(x.cgst)}
+                      <span className="block text-2xs text-faint">{x.cgstPct}%</span>
+                    </>
+                  ) : (
+                    '—'
+                  )}</td>
+                <td className="vx-td vx-code whitespace-nowrap text-right text-sm">{x.sgstPct !== null ? (
+                    <>
+                      {moneyPaise(x.sgst)}
+                      <span className="block text-2xs text-faint">{x.sgstPct}%</span>
+                    </>
+                  ) : (
+                    '—'
+                  )}</td>
+                <td className="vx-td vx-code whitespace-nowrap text-right text-sm">{x.igstPct !== null ? (
+                    <>
+                      {moneyPaise(x.igst)}
+                      <span className="block text-2xs text-faint">{x.igstPct}%</span>
+                    </>
+                  ) : (
+                    '—'
+                  )}</td>
                 <td className="vx-td vx-code whitespace-nowrap text-right text-sm font-semibold">{moneyPaise(x.total)}</td>
-                <td className="vx-td text-right">
-                  <EditButton label={x.billNo} onClick={() => onEdit(x.sourceId)} />
-                </td>
               </tr>
             ))}
             <tr className="border-t border-rule font-semibold">
-              <td colSpan={5} className="vx-td text-right text-sm">
+              <td colSpan={4} className="vx-td text-right text-sm">
                 Total for {s.title}
               </td>
               <td className="vx-td vx-code whitespace-nowrap text-right text-sm">{moneyPaise(s.taxable)}</td>
@@ -348,13 +383,12 @@ function GstTable({ reg, kind, onEdit }: { reg: GstRegister; kind: ReportKind; o
               <td className="vx-td vx-code whitespace-nowrap text-right text-sm">{moneyPaise(s.sgst)}</td>
               <td className="vx-td vx-code whitespace-nowrap text-right text-sm">{moneyPaise(s.igst)}</td>
               <td className="vx-td vx-code whitespace-nowrap text-right text-sm">{moneyPaise(s.total)}</td>
-              <td />
             </tr>
           </tbody>
         ))}
         <tfoot>
           <tr className="border-t-2 border-rule-2 bg-surface-2 font-semibold text-ink">
-            <td colSpan={5} className="vx-td text-right">
+            <td colSpan={4} className="vx-td text-right">
               Grand total
             </td>
             <td className="vx-td vx-code whitespace-nowrap text-right text-sm">{moneyPaise(reg.taxable)}</td>
@@ -362,7 +396,6 @@ function GstTable({ reg, kind, onEdit }: { reg: GstRegister; kind: ReportKind; o
             <td className="vx-td vx-code whitespace-nowrap text-right text-sm">{moneyPaise(reg.sgst)}</td>
             <td className="vx-td vx-code whitespace-nowrap text-right text-sm">{moneyPaise(reg.igst)}</td>
             <td className="vx-td vx-code whitespace-nowrap text-right text-sm">{moneyPaise(reg.total)}</td>
-            <td />
           </tr>
         </tfoot>
       </table>

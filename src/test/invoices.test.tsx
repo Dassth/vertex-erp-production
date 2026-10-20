@@ -74,7 +74,7 @@ beforeEach(() => {
 })
 afterEach(() => cleanup())
 
-const PENDING = 'Confirm delivery received in Dispatch to enable invoice download.'
+const PENDING = 'Nothing dispatched yet — the summary appears after the first dispatch.'
 
 describe('Invoices page', () => {
   it.each(['Administrator 1', 'Administrator 2'])('%s sees dispatched / received / awaiting quantities and gated downloads', async (name) => {
@@ -93,7 +93,7 @@ describe('Invoices page', () => {
     // 300 received → the cumulative Download PDF is available.
     const download = await screen.findByRole('button', { name: 'Download PDF — cumulative invoice summary' })
     expect((download as HTMLButtonElement).disabled).toBe(false)
-    expect(screen.getByText(/5,000 pcs dispatched but awaiting receipt are not included yet/)).toBeTruthy()
+    expect(screen.getByText(/5,000 pcs of it is still awaiting delivery confirmation/)).toBeTruthy()
     const [first, second] = stored().invoices
     expect((screen.getByRole('button', { name: `Download this dispatch invoice — invoice ${first.number}` }) as HTMLButtonElement).disabled).toBe(false)
     // Owner's decision (2026-10-11): an invoice downloads without waiting for the delivery confirmation.
@@ -141,7 +141,9 @@ describe('Invoices page', () => {
 
     first.view.unmount()
     mount(`/invoices?order=${orderId}`)
-    expect(await screen.findByText(/Updated cumulative invoice summary of the 2 shipment\(s\) confirmed received: 5,300 pcs/, {}, { timeout: 5000 })).toBeTruthy()
+    expect(await screen.findByText(/Cumulative invoice summary of 2 dispatch\(es\): 5,300 pcs/, {}, { timeout: 5000 })).toBeTruthy()
+    // Both shipments are now confirmed: nothing is awaiting.
+    expect(screen.queryByText(/awaiting delivery confirmation/)).toBeNull()
     for (const inv of stored().invoices)
       expect((screen.getByRole('button', { name: `Download this dispatch invoice — invoice ${inv.number}` }) as HTMLButtonElement).disabled).toBe(false)
   }, 90000)
