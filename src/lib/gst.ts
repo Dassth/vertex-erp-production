@@ -245,3 +245,15 @@ export function saleTaxLines(
   if (supply === 'inter') return { supply, lines: [[`IGST @ ${taxPct}%`, s.igst!]] }
   return { supply, lines: [[`${taxLabel} @ ${taxPct}% (set the customer’s Place of supply)`, taxAmount]] }
 }
+
+/**
+ * A gentle hint (never a block) when a product's HSN looks unrelated to what it
+ * is: boxes, cartons and trays of paper or board are chapter 48 (usually 4819).
+ */
+export function hsnHint(hsn: string, words: string): string | null {
+  const code = hsn.replace(/\s/g, '')
+  if (!code) return null
+  const paperGoods = /\b(box|boxes|carton|cartons|tray|trays|pouch|bag|bags|label|labels|sleeve|packaging|rigid)\b/i.test(words)
+  if (paperGoods && !/^48/.test(code)) return `Boxes and cartons of paper or board are usually HSN 4819 (chapter 48). ${code} is in chapter ${code.slice(0, 2)} — check it before invoicing.`
+  return null
+}

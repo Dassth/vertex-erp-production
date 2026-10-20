@@ -36,6 +36,7 @@ import { FillFromFileButton } from './FillFromFileButton'
 import { Badge, Button, Card, CardHead, ConfirmDialog, EmptyState, Field, IconButton, Input, Select, Textarea } from '../../../components/ui'
 import { ConflictNotice, IssueList, LinkButton, NumberInput, PageHeader, focusFirstInvalid, useDocumentTitle, useUnsavedChanges } from '../../../components/page'
 import { NO_PRICING_INPUTS } from '../masterSelectors'
+import { hsnHint } from '../../../lib/gst'
 import type { OpResult } from '../../../domain/common'
 
 export function ProductEditorPage() {
@@ -549,8 +550,8 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
               <Field label="Category">
                 <Input value={draft.category} onChange={(e) => set({ category: e.target.value })} placeholder="e.g. Rigid box…" />
               </Field>
-              <Field label="HSN / SAC">
-                <Input spellCheck={false} value={draft.hsn} onChange={(e) => set({ hsn: e.target.value })} />
+              <Field label="HSN / SAC" hint={hsnHint(draft.hsn, `${draft.name} ${draft.category}`) ?? undefined}>
+                <Input spellCheck={false} inputMode="numeric" value={draft.hsn} onChange={(e) => set({ hsn: e.target.value })} />
               </Field>
               <Field label="Finished-goods unit" required error={err('uom')}>
                 <Input value={draft.uom} onChange={(e) => set({ uom: e.target.value })} aria-invalid={!!err('uom') || undefined} />

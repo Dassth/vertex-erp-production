@@ -90,3 +90,13 @@ describe('tax split, numbering and words', () => {
     expect(rupeesInWords(6608)).toBe('Rupees Six Thousand Six Hundred Eight Only')
   })
 })
+
+describe('HSN hint', () => {
+  it('flags an HSN outside chapter 48 for a box, and says nothing otherwise', async () => {
+    const { hsnHint } = await import('./gst')
+    expect(hsnHint('0823', 'Sweet Box 150x150x40mm TOP & BOTTOM RIGID')).toMatch(/4819/)
+    expect(hsnHint('48192020', 'Sweet Box')).toBeNull()
+    expect(hsnHint('', 'Sweet Box')).toBeNull()
+    expect(hsnHint('998912', 'Lamination job work')).toBeNull()
+  })
+})

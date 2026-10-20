@@ -67,11 +67,13 @@ export async function startServing(cfg: ServeConfig): Promise<{ stop: () => Prom
 
   // A new version with data migrations: back up the data exactly as it is first, then save them once.
   const pending = await service.pendingMigrations()
+  let updateBackupTaken = false
   if (pending.length) {
     if (b) {
       try {
         const { name } = await runBackup(db, fsBackupStore(b.dir), { passphrase: b.passphrase, appVersion: b.appVersion, keep: b.keep })
         log(`backup before update written: ${join(b.dir, name)}`)
+        updateBackupTaken = true
       } catch (e) {
         // Nothing is changed without a backup.
         throw new Error(`The data could not be backed up before updating it (${e instanceof Error ? e.message : e}). Nothing was changed.`)
@@ -114,7 +116,9 @@ export async function startServing(cfg: ServeConfig): Promise<{ stop: () => Prom
         log(`scheduled backup FAILED: ${e instanceof Error ? e.stack : e}`)
       }
     }
-    void run()
+    // A backup was just taken before the update: the schedule carries on from it (a second one in
+    // the same second would collide on the archive name).
+    if (!updateBackupTaken) void run()
     backups = setInterval(run, b.everyMin * 60_000)
   } else {
     log('Scheduled backups are OFF — set BACKUP_DIR (on separate storage) to enable them.')

@@ -226,7 +226,7 @@ function EditButton({ label, onClick }: { label: string; onClick: () => void }) 
 function InvoiceTable({ register, onEdit }: { register: InvoiceRegister; onEdit: (id: string) => void }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[880px]">
+      <table className="w-full min-w-[880px] [&_.vx-td]:px-2.5 [&_.vx-th]:px-2.5">
         <thead>
           <tr>
             <th className="vx-th left-0 z-20">Date / No.</th>
@@ -296,7 +296,7 @@ function InvoiceTable({ register, onEdit }: { register: InvoiceRegister; onEdit:
 function GstTable({ reg, kind, onEdit }: { reg: GstRegister; kind: ReportKind; onEdit: (id: string) => void }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[920px]">
+      <table className="w-full min-w-[920px] [&_.vx-td]:px-2.5 [&_.vx-th]:px-2.5">
         <thead>
           <tr>
             <th className="vx-th left-0 z-20">{kind === 'sales' ? 'Buyer' : 'Seller'}</th>
