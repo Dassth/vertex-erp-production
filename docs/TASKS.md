@@ -6,9 +6,10 @@
 ## Next up (priority order)
 - [ ] Collect feedback on size-based pricing, loans, suppliers, process allocation and price revision from the customer
 - [ ] Help the customer fill each product's usual size and each material's supplier (the Materials "No supplier" filter shows what's left)
-- [ ] Fix the 3 pre-existing failing UI tests (invoices ×2, login)
 
 ## Backlog
+- [ ] Customer data to correct in the app (not changed by updates): product with HSN 0823, Gum ₹3/g, material “Ribben”
+- [ ] Invoices page text still says shipments awaiting receipt are “not included” in the cumulative summary, but they now are (owner rule 2026-10-11) — reword (assumed - confirm)
 - [ ] Settings → People / Machines lists have no edit from the row yet (edit is in the unit's page) (assumed - confirm)
 - [ ] Same picker for smaller lists if the owner wants it: Planning unit/person/machine, order-charge templates, loan lender, HSN codes (assumed - confirm)
 - [ ] Update the stale Playwright acceptance spec (`e2e/acceptance.spec.ts`) to the new product/material flows
@@ -47,6 +48,7 @@
 - [x] 2026-10-12 - Quotations (QTN-0001…): price a product for a customer before planning — worked out from Master, round price by hand, PDF, Sent/Declined, “Customer agreed — make a plan” (costing starts at the quoted price)
 - [x] 2026-10-12 - Lists: tap a row to open/edit it (suppliers, money entries, loans, purchase bills, products, materials, plans, costings, quotations); icon-only pencils became “Edit” buttons
 - [x] 2026-10-14 - “Add manually” / “New plan” open a blank form (unfinished drafts are resumed from their card); a saved product no longer leaves an unfinished copy on the server; leftover copies say “already saved as PRD-…”
+- [x] 2026-10-20 - End-to-end fix list (see CHANGELOG.md): GST state split + migration, loans in the balance, EMI principal/interest, screen-loading retry, typing-safe fields, job-drawer process actions, quote prices into the plan, laptop-width layout, HSN hint; all 270 tests green
 
 ## Blocked
 - [ ] Cloud stored backups on Cloudflare - R2 is not enabled on the account

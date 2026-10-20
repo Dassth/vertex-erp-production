@@ -141,3 +141,21 @@ Append-only log. Newest at the bottom.
 - **Impact:** `ProductEditor.tsx`, `ProductsPage.tsx`, `PlanningPage.tsx`, `MasterCostingPage.tsx`
 - **Note:** copies already left on a customer's server are not deleted automatically (never delete data); the card labels them “already saved as PRD-…” so the owner can Discard them.
 
+## 2026-10-20 - GST is decided by states, never guessed
+- **Context:** URD invoices in Tamil Nadu were saved with no split and reports showed them as IGST / "(GST NOT SPLIT)".
+- **Decision / finding:** `lib/gst.ts` is the one helper: seller state = company GSTIN else `company.stateCode`; buyer state = GSTIN, else Place of supply (`lib/gstStates.stateCodeFrom` accepts names, short forms, codes), else a state named in the delivery address. CGST = round(tax/2), SGST = rest. Unknown state blocks invoicing. Place of supply is stored as a 2-digit code.
+- **Impact:** `lib/gst.ts`, `lib/gstStates.ts`, `lib/billing.ts` (`splitTax`), `domain/dispatch.ts`, reports and PDFs, `components/StateSelect.tsx`
+
+## 2026-10-20 - Data migrations: run once, logged, backed up first
+- **Decision / finding:** `lib/dataMigrations.ts` holds record-changing migrations (marker in `db.migrations`, Activity-log entry per change). `normalizeDB` applies them on read; the server saves them once at start-up after a backup with the existing backup code (`server/serve.ts`, `VertexService.saveMigrations`). New databases start with the marker. A scheduled backup must not run in the same second as that backup (archive names are per second).
+- **Impact:** `lib/dataMigrations.ts`, `lib/db.ts`, `lib/defaults.ts`, `server/serve.ts`, `server/service.ts`
+
+## 2026-10-20 - Loans are cash, not income; EMI interest is the expense
+- **Decision / finding:** Balance = brought forward + receipts + loans received − every payment (computed from `debts`, no extra entries). Summary income excludes loans; expenses exclude EMI principal (`repaymentParts`). `MoneyEntry.principal/interest`; missing = all principal. Replaces the 2026-10-11 rule that money spent from a loan stays out of the balance.
+- **Impact:** `lib/cashbook.ts`, `domain/cashbook.ts`, `AccountsPage.tsx`, `DebtsCard.tsx`
+
+## 2026-10-20 - Text fields are typing-safe; screens retry their download
+- **Decision / finding:** `Input`/`Textarea` (via `components/typingSafe.ts`) and `NumberInput` never take an outside value while focused; on blur the typed text is sent again. Route chunks load with `lib/lazyRetry.ts` (retry, then one guarded reload); the server 404s missing `/assets/*` instead of returning index.html; the server-mode app waits for `ready` before routing.
+- **Impact:** `components/ui.tsx`, `components/page.tsx`, `App.tsx`, `RouteBoundary.tsx`, `server/http.ts`
+- **Gotcha:** this PC often has little free memory; run `tsc` with `NODE_OPTIONS=--max-old-space-size=2048` and stop preview servers before PGlite-heavy steps.
+
