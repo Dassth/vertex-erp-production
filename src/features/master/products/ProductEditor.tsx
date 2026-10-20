@@ -31,6 +31,7 @@ import { GstRateSelect } from '../../../components/GstRateSelect'
 import { SizeInput } from '../../../components/SizeInput'
 import { AddMaterialDialog } from './AddMaterialDialog'
 import { Picker } from '../../../components/Picker'
+import type { PickOption } from '../../../components/Picker'
 import type { UsageInput } from './AddMaterialDialog'
 import { FillFromFileButton } from './FillFromFileButton'
 import { Badge, Button, Card, CardHead, ConfirmDialog, EmptyState, Field, IconButton, Input, Select, Textarea } from '../../../components/ui'
@@ -495,6 +496,26 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
   // Typing the name of a product that already exists (often one saved earlier as a draft): offer to open it.
   const sameName = draft.name.trim() ? db.products.find((p) => p.id !== product?.id && p.name.trim().toLowerCase() === draft.name.trim().toLowerCase()) : undefined
   const activeCharges = db.settings.processCharges
+  // Stages and processes already set up on other products, picked like a material: newest product first, one per name.
+  const { stageOptions, processOptions } = useMemo(() => {
+    const stages = new Map<string, PickOption<ProductStage>>()
+    const processes = new Map<string, PickOption<ProductProcess>>()
+    const others = db.products.filter((p) => p.active && p.id !== product?.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    for (const p of others)
+      for (const s of p.stages) {
+        const sk = s.name.trim().toLowerCase()
+        if (sk && !stages.has(sk)) stages.set(sk, { id: `${p.id}:${s.id}`, label: s.name.trim(), detail: `${s.processes.length} process${s.processes.length === 1 ? '' : 'es'} · ${p.name}`, keywords: p.code, item: s })
+        for (const pr of s.processes) {
+          const pk = pr.name.trim().toLowerCase()
+          if (!pk || processes.has(pk)) continue
+          const charge = pr.chargeId ? activeCharges.find((c) => c.id === pr.chargeId) : undefined
+          const rate = charge ? charge.name : pr.rate === null ? 'rate not set' : `₹${pr.rate} ${COST_BASIS_LABEL[pr.costBasis]}`
+          processes.set(pk, { id: `${p.id}:${pr.id}`, label: pr.name.trim(), detail: `${rate} · ${p.name}`, keywords: `${p.code} ${s.name}`, item: pr })
+        }
+      }
+    const byName = <T,>(m: Map<string, PickOption<T>>) => [...m.values()].sort((a, b) => a.label.localeCompare(b.label))
+    return { stageOptions: byName(stages), processOptions: byName(processes) }
+  }, [db.products, product?.id, activeCharges])
 
   return (
     <div className="space-y-6 pb-20">
@@ -726,7 +747,17 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
                   </div>
                   <div className="grid gap-x-4 px-4 pt-4 sm:grid-cols-2">
                     <Field label="Stage name" required error={err(`stage.${stage.id}.name`)}>
-                      <Input value={stage.name} onChange={(e) => updateStage(stage.id, { name: e.target.value })} aria-invalid={!!err(`stage.${stage.id}.name`) || undefined} placeholder="e.g. Printing…" />
+                      <Picker
+                        noun="stage"
+                        aria-label={`Stage ${si + 1} name`}
+                        value={stage.name}
+                        options={stageOptions}
+                        onText={(name) => updateStage(stage.id, { name })}
+                        onPick={(o) => updateStage(stage.id, { name: o.label, description: o.item.description })}
+                        invalid={!!err(`stage.${stage.id}.name`)}
+                        emptyHint="No stages on other products yet — type a new name."
+                        placeholder="Choose or type a stage, e.g. Printing…"
+                      />
                     </Field>
                     <Field label="Description">
                       <Input value={stage.description} onChange={(e) => updateStage(stage.id, { description: e.target.value })} />
@@ -763,7 +794,31 @@ function ProductEditor({ product, scopeId }: { product?: Product; scopeId: strin
                             </div>
                             <div className="grid gap-x-3 sm:grid-cols-2 lg:grid-cols-6">
                               <Field label="Process name" required error={k('name')} className="sm:col-span-2">
-                                <Input value={proc.name} onChange={(e) => updateProcess(stage.id, proc.id, { name: e.target.value })} aria-invalid={!!k('name') || undefined} />
+                                <Picker
+                                  noun="process"
+                                  aria-label={`Process ${si + 1}.${pi + 1} name`}
+                                  value={proc.name}
+                                  options={processOptions}
+                                  onText={(name) => updateProcess(stage.id, proc.id, { name })}
+                                  onPick={({ label, item: from }) =>
+                                    // Its setup comes along, as a picked material's does; this process keeps its own id and material uses.
+                                    updateProcess(stage.id, proc.id, {
+                                      name: label,
+                                      description: from.description,
+                                      method: from.method ?? '',
+                                      setupHours: from.setupHours,
+                                      runHoursPer1000: from.runHoursPer1000,
+                                      chargeId: from.chargeId,
+                                      costBasis: from.costBasis,
+                                      rate: from.rate,
+                                      setupCharge: from.setupCharge,
+                                      requiresMachine: from.requiresMachine,
+                                    })
+                                  }
+                                  invalid={!!k('name')}
+                                  emptyHint="No processes on other products yet — type a new name."
+                                  placeholder="Choose or type a process…"
+                                />
                               </Field>
                               <Field label="Production method" className="sm:col-span-2 lg:col-span-4" hint="e.g. in-house digital print, outsourced lamination. Blank = not selected yet.">
                                 <Input value={proc.method ?? ''} onChange={(e) => updateProcess(stage.id, proc.id, { method: e.target.value })} />

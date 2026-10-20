@@ -51,7 +51,7 @@ describe('product editor drafts', () => {
 
     await user.type(screen.getByLabelText(/Product name/), 'Draft jewel box')
     await user.click(screen.getByRole('button', { name: /Generate 3 stage sections/ }))
-    const stageNames = screen.getAllByPlaceholderText('e.g. Printing…')
+    const stageNames = screen.getAllByPlaceholderText('Choose or type a stage, e.g. Printing…')
     await user.type(stageNames[0], 'Printing')
     // Autosave writes a recovery copy.
     await waitFor(() => expect(draftKeys()).toHaveLength(1), { timeout: 3000 })
@@ -62,7 +62,7 @@ describe('product editor drafts', () => {
     mount(url)
     expect(await screen.findByText(/Restored your unsaved entries/, {}, { timeout: 5000 })).toBeTruthy()
     expect((screen.getByLabelText(/Product name/) as HTMLInputElement).value).toBe('Draft jewel box')
-    expect((screen.getAllByPlaceholderText('e.g. Printing…')[0] as HTMLInputElement).value).toBe('Printing')
+    expect((screen.getAllByPlaceholderText('Choose or type a stage, e.g. Printing…')[0] as HTMLInputElement).value).toBe('Printing')
 
     // Saving a half-filled product as a draft works: stages and processes left unnamed are numbered,
     // rates and times stay blank — nothing typed is refused or lost.
